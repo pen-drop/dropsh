@@ -12,7 +12,7 @@ export interface UpdateDeps {
   emit: (v: unknown) => void;
 }
 
-const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+\/[a-z0-9-]+$/;
+const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+\/[a-f0-9-]{8,}$/;
 
 export async function runUpdate(args: UpdateArgs, deps: UpdateDeps): Promise<void> {
   if (!TARGET_RE.test(args.target)) {
