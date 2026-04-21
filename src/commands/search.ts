@@ -1,5 +1,5 @@
+import { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import type { JsonApiClient } from "../core/jsonapi/client.js";
-import type { FilterSpec } from "../core/jsonapi/query.js";
 import { ValidationError } from "../errors.js";
 
 export interface SearchArgs {
@@ -14,7 +14,13 @@ export interface SearchDeps {
   emit: (v: unknown) => void;
 }
 
-export function parseFilterFlag(raw: string): FilterSpec {
+export interface ParsedFilter {
+  key: string;
+  value: string;
+  operator?: string;
+}
+
+export function parseFilterFlag(raw: string): ParsedFilter {
   const parts = raw.split(":");
   if (parts.length === 2) {
     const [key, value] = parts;
@@ -30,8 +36,14 @@ export function parseFilterFlag(raw: string): FilterSpec {
 }
 
 export async function runSearch(args: SearchArgs, deps: SearchDeps): Promise<void> {
-  const filters = args.filters.map(parseFilterFlag);
+  const params = new DrupalJsonApiParams();
+  for (const raw of args.filters) {
+    const f = parseFilterFlag(raw);
+    if (f.operator) params.addFilter(f.key, f.value, f.operator);
+    else params.addFilter(f.key, f.value);
+  }
+  params.addPageLimit(args.limit);
   const path = args.bundle ? `${args.entityType}/${args.bundle}` : args.entityType;
-  const res = await deps.client.get(path, { filter: filters, page: { limit: args.limit } });
+  const res = await deps.client.get(path, params);
   deps.emit(res);
 }

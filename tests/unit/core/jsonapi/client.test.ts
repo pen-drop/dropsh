@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import { createJsonApiClient } from "../../../../src/core/jsonapi/client.js";
 import type { HttpClient, HttpRequest } from "../../../../src/core/http.js";
 import type { AuthAdapter } from "../../../../src/core/auth/types.js";
@@ -10,14 +11,15 @@ function httpStub(respond: (req: HttpRequest) => { status: number; body: string 
 const passthroughAuth: AuthAdapter = { apply: async (r) => r };
 
 describe("JsonApiClient", () => {
-  it("GET builds full URL with prefix and query string", async () => {
+  it("GET builds full URL with prefix and query string from params", async () => {
     const http = httpStub((req) => {
       expect(req.method).toBe("GET");
-      expect(req.url).toBe("https://site/jsonapi/node/article?filter%5Btitle%5D%5Bvalue%5D=X");
+      expect(req.url).toBe("https://site/jsonapi/node/article?filter%5Btitle%5D=X");
       return { status: 200, body: '{"data":[]}' };
     });
     const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
-    const res = await client.get("node/article", { filter: [{ key: "title", value: "X" }] });
+    const params = new DrupalJsonApiParams().addFilter("title", "X");
+    const res = await client.get("node/article", params);
     expect(res).toEqual({ data: [] });
   });
 

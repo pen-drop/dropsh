@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import { runSearch, parseFilterFlag } from "../../../src/commands/search.js";
 import type { JsonApiClient } from "../../../src/core/jsonapi/client.js";
 import { ValidationError } from "../../../src/errors.js";
@@ -31,16 +32,24 @@ describe("runSearch", () => {
       { entityType: "node", bundle: "article", filters: ["title:Hello"], limit: 10 },
       { client: c, emit: (v) => emitted.push(v) },
     );
-    expect(c.get).toHaveBeenCalledWith("node/article", {
-      filter: [{ key: "title", value: "Hello" }],
-      page: { limit: 10 },
-    });
+    expect(c.get).toHaveBeenCalledTimes(1);
+    const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(path).toBe("node/article");
+    expect(params).toBeInstanceOf(DrupalJsonApiParams);
+    expect((params as DrupalJsonApiParams).getQueryString({ encode: false }))
+      .toBe("filter[title]=Hello&page[limit]=10");
     expect(emitted).toHaveLength(1);
   });
 
-  it("works without bundle", async () => {
+  it("works without bundle and passes operator filters", async () => {
     const c = client();
-    await runSearch({ entityType: "node", filters: [], limit: 50 }, { client: c, emit: () => {} });
-    expect(c.get).toHaveBeenCalledWith("node", { filter: [], page: { limit: 50 } });
+    await runSearch(
+      { entityType: "node", filters: ["status:!=:1"], limit: 50 },
+      { client: c, emit: () => {} },
+    );
+    const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(path).toBe("node");
+    expect((params as DrupalJsonApiParams).getQueryString({ encode: false }))
+      .toBe("filter[status][value]=1&filter[status][operator]=!=&page[limit]=50");
   });
 });

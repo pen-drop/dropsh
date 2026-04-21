@@ -1,9 +1,9 @@
+import type { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import type { HttpClient } from "../http.js";
 import type { AuthAdapter } from "../auth/types.js";
-import { buildQueryString, type QueryParams } from "./query.js";
 
 export interface JsonApiClient {
-  get(path: string, query?: QueryParams): Promise<unknown>;
+  get(path: string, params?: DrupalJsonApiParams): Promise<unknown>;
   post(path: string, body: unknown): Promise<unknown>;
   patch(path: string, body: unknown): Promise<unknown>;
   delete(path: string): Promise<unknown>;
@@ -51,9 +51,9 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
   }
 
   return {
-    async get(path, query) {
-      const url = joinUrl(opts.baseUrl, opts.prefix, path) + (query ? buildQueryString(query) : "");
-      return send("GET", url);
+    async get(path, params) {
+      const qs = params ? `?${params.getQueryString()}` : "";
+      return send("GET", joinUrl(opts.baseUrl, opts.prefix, path) + qs);
     },
     async post(path, body) {
       return send("POST", joinUrl(opts.baseUrl, opts.prefix, path), JSON.stringify(body));

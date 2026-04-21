@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "drupal-cli": "./bin/drupal-cli" },
+  "bin": {
+    "drupal-cli": "./bin/drupal-cli"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -13,6 +15,7 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
+    "drupal-jsonapi-params": "^3.0.1",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
@@ -22,5 +25,7 @@
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
