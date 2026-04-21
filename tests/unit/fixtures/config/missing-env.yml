@@ -1,0 +1,5 @@
+site:
+  base_url: https://example.com
+  auth:
+    type: jwt
+    token: ${TEST_MISSING_JWT}
