@@ -1,0 +1,11 @@
+site:
+  base_url: https://my-drupal.example.com
+  jsonapi_prefix: /jsonapi
+  auth:
+    type: basic
+    username: ${DRUPAL_USER}
+    password: ${DRUPAL_PASSWORD}
+
+defaults:
+  dry_run: false
+  timeout_ms: 30000
