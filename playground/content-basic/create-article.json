@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "node--article_test",
+    "attributes": {
+      "title": "Playground Artikel",
+      "field_test_text": "Hallo aus dem Playground"
+    }
+  }
+}

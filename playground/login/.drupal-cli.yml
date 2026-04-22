@@ -1,0 +1,12 @@
+site:
+  base_url: http://drupal-cli-test-98be050f.ddev.site
+  jsonapi_prefix: /jsonapi
+  auth:
+    type: oauth2_authcode
+    client_id: tests-authcode
+    scope: integration:content
+    redirect_port: 7432
+
+defaults:
+  dry_run: false
+  timeout_ms: 30000

@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:integration": "npm run build && vitest run -c vitest.config.integration.ts",
+    "test:integration:https-insecure": "npm run build && NODE_TLS_REJECT_UNAUTHORIZED=0 vitest run -c vitest.config.integration.ts",
     "typecheck": "tsc --noEmit",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh"

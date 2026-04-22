@@ -16,6 +16,7 @@ $permissions = [
   'create article_test content',
   'edit any article_test content',
   'delete any article_test content',
+  'grant simple_oauth codes',
 ];
 
 foreach ($permissions as $permission) {

@@ -13,6 +13,10 @@ function ensure_scope(): Oauth2Scope {
     'name' => 'integration:content',
     'description' => 'Integration test content access',
     'grant_types' => [
+      'authorization_code' => [
+        'status' => TRUE,
+        'description' => 'Integration test authorization code scope',
+      ],
       'password' => [
         'status' => TRUE,
         'description' => 'Integration test password grant scope',
@@ -99,10 +103,25 @@ $cc_id = ensure_consumer(
   ],
 );
 
+$authcode_id = ensure_consumer(
+  'tests-authcode',
+  'Integration Test (auth code + pkce)',
+  ['authorization_code', 'refresh_token'],
+  '',
+  [
+    'confidential' => FALSE,
+    'pkce' => TRUE,
+    'automatic_authorization' => TRUE,
+    'redirect' => ['http://localhost:7432/callback'],
+    'authorization_code_scopes' => [$scope->id()],
+  ],
+);
+
 echo 'CONSUMER_JSON:' . json_encode([
   'scope' => $scope->getName(),
   'password_client_id' => $password_id,
   'password_client_secret' => $password_secret,
   'cc_client_id' => $cc_id,
   'cc_client_secret' => $cc_secret,
+  'authcode_client_id' => $authcode_id,
 ]) . "\n";

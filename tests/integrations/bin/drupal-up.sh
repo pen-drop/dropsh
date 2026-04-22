@@ -37,7 +37,7 @@ if [ -z "$OAUTH_JSON" ]; then
   exit 1
 fi
 
-URL="$(ddev describe -j | python3 -c 'import json, sys; print(json.load(sys.stdin)["raw"]["services"]["web"]["host_http_url"])')"
+URL="$(ddev describe -j | python3 -c 'import json, sys; print(json.load(sys.stdin)["raw"]["services"]["web"]["http_url"])')"
 
 cat > .test-config.json <<EOF
 {

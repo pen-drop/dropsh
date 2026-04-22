@@ -1,0 +1,11 @@
+site:
+  base_url: http://drupal-cli-test-98be050f.ddev.site
+  jsonapi_prefix: /jsonapi
+  auth:
+    type: basic
+    username: tester
+    password: tester-pw
+
+defaults:
+  dry_run: false
+  timeout_ms: 30000

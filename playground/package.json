@@ -1,0 +1,8 @@
+{
+  "name": "drupal-cli-playground",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "drupal-cli": "file:.."
+  }
+}
