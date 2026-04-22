@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#ddev-generated
+
+# localtunnel share provider example for DDEV
+# Documentation: https://github.com/localtunnel/localtunnel
+#
+# To customize: remove the 'ddev-generated' line above and edit as needed.
+#
+# To use this provider:
+# 1. Copy or symlink this file to .ddev/share-providers/localtunnel.sh
+# 2. Install localtunnel: brew install localtunnel, or npm install -g localtunnel
+# 3. Run: ddev share --provider=localtunnel
+#
+# This is an EXAMPLE file - it will not be executed until you remove .example
+
+set -euo pipefail
+
+# Enable debug output if DDEV_DEBUG or DDEV_VERBOSE is set
+if [[ "${DDEV_DEBUG:-}" == "true" ]] || [[ "${DDEV_VERBOSE:-}" == "true" ]]; then
+  set -x
+fi
+
+# Validate localtunnel is installed
+if ! command -v lt >/dev/null 2>&1; then
+  echo "Error: localtunnel (lt) not found in PATH." >&2
+  echo "Install from https://github.com/localtunnel/localtunnel#installation" >&2
+  exit 1
+fi
+
+# Validate required environment variables
+if [[ -z "${DDEV_LOCAL_URL:-}" ]]; then
+  echo "Error: DDEV_LOCAL_URL not set" >&2
+  exit 1
+fi
+
+# Extract port from DDEV_LOCAL_URL (e.g., http://127.0.0.1:8080 -> 8080)
+PORT=$(echo "$DDEV_LOCAL_URL" | sed -E 's/.*:([0-9]+).*/\1/')
+if [[ -z "$PORT" ]]; then
+  echo "Error: Could not extract port from DDEV_LOCAL_URL: $DDEV_LOCAL_URL" >&2
+  exit 1
+fi
+
+echo "Starting localtunnel..." >&2
+echo >&2
+echo "Running command: lt --port $PORT ${DDEV_SHARE_ARGS:-}" >&2
+echo >&2
+
+URL_FOUND=""
+lt --port "$PORT" ${DDEV_SHARE_ARGS:-} 2>&1 | while IFS= read -r line; do
+  # Look for the URL line: "your url is: https://xxx.loca.lt"
+  if [[ -z "$URL_FOUND" ]] && [[ "$line" =~ https://[a-z0-9-]+\.loca\.lt ]]; then
+    URL_FOUND="${BASH_REMATCH[0]}"
+    echo "$URL_FOUND" # Output to stdout - CRITICAL: This is captured by DDEV
+    PASSWORD=$(curl -s --max-time 5 https://loca.lt/mytunnelpassword 2>/dev/null || true)
+    if [[ -n "$PASSWORD" ]]; then
+      echo "your password is: $PASSWORD" >&2
+    fi
+  fi
+  # Show all localtunnel output to user
+  echo "$line" >&2
+done

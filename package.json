@@ -11,12 +11,16 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "test:integration": "npm run build && vitest run -c vitest.config.integration.ts",
+    "typecheck": "tsc --noEmit",
+    "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
+    "drupal:down": "bash tests/integrations/bin/drupal-down.sh"
   },
   "dependencies": {
     "commander": "^12.1.0",
     "drupal-jsonapi-params": "^3.0.1",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "open": "^11.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

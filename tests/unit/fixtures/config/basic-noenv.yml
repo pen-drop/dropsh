@@ -1,0 +1,10 @@
+site:
+  base_url: https://example.com
+  auth:
+    type: basic
+    username: testuser
+    password: testpass
+
+defaults:
+  dry_run: false
+  timeout_ms: 30000

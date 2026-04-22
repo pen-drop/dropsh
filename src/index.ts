@@ -12,6 +12,7 @@ import { runCreate } from "./commands/create.js";
 import { runUpdate } from "./commands/update.js";
 import { runDelete } from "./commands/delete.js";
 import { runUploadFile } from "./commands/upload-file.js";
+import { runLogin } from "./commands/login.js";
 
 export interface CommandContext {
   client: JsonApiClient;
@@ -119,6 +120,18 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       const args = { target: o.target, file: o.file } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
       run((ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }));
+    });
+
+  program
+    .command("login")
+    .description("Authenticate via OAuth 2.0 Authorization Code + PKCE")
+    .action(async () => {
+      try {
+        await runLogin({ stdout: (s) => process.stdout.write(`${s}\n`) });
+      } catch (err) {
+        output.fail(err);
+        setExitCode(exitCodeFor(err));
+      }
     });
 
   program.exitOverride();

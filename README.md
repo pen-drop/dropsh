@@ -46,4 +46,14 @@ npm run typecheck
 npm run build
 ```
 
+### Integration tests
+
+Local-only, requires DDEV. See `tests/integrations/README.md`.
+
+```bash
+npm run drupal:up
+npm run test:integration
+npm run drupal:down
+```
+
 See `docs/superpowers/specs/2026-04-21-drupal-cli-design.md` for the full design.

@@ -12,10 +12,15 @@ export async function runUploadFile(args: UploadArgs, deps: UploadDeps): Promise
   if (!TARGET_RE.test(args.target)) {
     throw new ValidationError(`target must be <entity_type>/<bundle>/<uuid>/<field>, got "${args.target}"`);
   }
+  let fileSize = 0;
+  try {
+    fileSize = (await stat(args.file)).size;
+  } catch {
+    throw new ValidationError(`file does not exist: ${args.file}`);
+  }
   const filename = path.basename(args.file);
   if (args.dryRun) {
-    const s = await stat(args.file);
-    deps.emit({ dry_run: true, method: "POST-upload", path: args.target, filename, bytes: s.size });
+    deps.emit({ dry_run: true, method: "POST-upload", path: args.target, filename, bytes: fileSize });
     return;
   }
   const data = await readFile(args.file);

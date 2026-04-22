@@ -367,8 +367,8 @@ defaults:
 - `basic` — username + password via HTTP Basic
 - `oauth2_password` — Simple OAuth, password grant, token cached under `~/.cache/drupal-cli/tokens.json`
 - `oauth2_client_credentials` — service accounts
-- `jwt` — static token (e.g. `token: ${DRUPAL_JWT}`)
-- `api_key` — custom header (header name configurable)
+
+> **History:** JWT and API-Key adapters were removed on 2026-04-22 because editorial workflows did not use them. See `docs/superpowers/specs/2026-04-22-integration-tests-design.md` §2.
 
 **`${ENV}` expansion:** The CLI substitutes `${VAR}` references at load time. Missing variables are a loud error, not a silent skip.
 
@@ -446,9 +446,9 @@ Fast, Drupal-free:
 
 ### 13.2 Integration tests against DDEV Drupal
 
-- Live Drupal 11 instance brought up by DDEV in `tests/drupal/`.
-- Fixture script installs required modules (JSON:API, Canvas, Display Builder, Media, Pathauto, Metatag, Content Moderation, `drupal_cli_info`), creates demo content types, vocabulary, Canvas page bundle, Display Builder templates.
-- Tests exercise `discover`, `schema`, `search`, `create`, `upload-file`, `update`, `delete` and assert both CLI response and live DB state.
+- Live Drupal 11 instance brought up by DDEV in `tests/integrations/drupal/`.
+- Fixture scripts install the required modules for the CLI MVP, create the `article_test` content type, create OAuth2 consumers, and provision a dedicated test editor user.
+- Tests exercise `read`, `search`, `create`, `upload-file`, `update`, and `delete` and assert both CLI response and live Drupal state.
 
 ### 13.3 Skill dry-run snapshot tests
 
@@ -469,16 +469,13 @@ The test Drupal must support multiple git worktrees running in parallel without 
 **Layout:**
 
 ```
-tests/drupal/
+tests/integrations/drupal/
   .ddev/
     config.yaml          # committed, no hard-coded project name
-  bin/
-    ddev-up.sh           # derives unique project name, writes .ddev/config.local.yaml,
-                         # runs ddev start + fixtures
-    ddev-down.sh         # ddev delete -Oy <project_name>
   fixtures/
-    install.sh           # drush site:install + module enable + demo content
-    content-types.yml    # field definitions for test bundles
+    setup-content-type.php
+    setup-oauth.php
+    setup-users.php
   composer.json          # Drupal 11 + contrib modules
 ```
 
@@ -524,8 +521,6 @@ drupal-cli/
       auth/
         basic.ts
         oauth2.ts
-        jwt.ts
-        api-key.ts
       jsonapi/
         client.ts             # low-level GET/POST/PATCH/DELETE
         query.ts              # filter builder

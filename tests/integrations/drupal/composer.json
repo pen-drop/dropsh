@@ -1,0 +1,54 @@
+{
+  "name": "drupal-cli/integration-fixture",
+  "description": "Drupal 11 fixture for drupal-cli integration tests. Local-only.",
+  "type": "project",
+  "license": "GPL-2.0-or-later",
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://packages.drupal.org/8"
+    }
+  ],
+  "require": {
+    "composer/installers": "^2",
+    "drupal/core-composer-scaffold": "^11",
+    "drupal/core-recommended": "^11",
+    "drupal/simple_oauth": "^6",
+    "drupal/simple_oauth_password_grant": "^2.1",
+    "drush/drush": "^13"
+  },
+  "config": {
+    "allow-plugins": {
+      "composer/installers": true,
+      "drupal/core-composer-scaffold": true,
+      "cweagans/composer-patches": true
+    },
+    "sort-packages": true
+  },
+  "extra": {
+    "drupal-scaffold": {
+      "locations": {
+        "web-root": "web/"
+      }
+    },
+    "installer-paths": {
+      "web/core": [
+        "type:drupal-core"
+      ],
+      "web/libraries/{$name}": [
+        "type:drupal-library"
+      ],
+      "web/modules/contrib/{$name}": [
+        "type:drupal-module"
+      ],
+      "web/profiles/contrib/{$name}": [
+        "type:drupal-profile"
+      ],
+      "web/themes/contrib/{$name}": [
+        "type:drupal-theme"
+      ]
+    }
+  }
+}

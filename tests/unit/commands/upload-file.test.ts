@@ -37,6 +37,15 @@ describe("runUploadFile", () => {
       .rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("validates missing files", async () => {
+    await expect(
+      runUploadFile(
+        { target: "node/article/abcdef01-abcd-abcd-abcd-abcdef012345/field_image", file: "/does/not/exist.png" },
+        { client: client(), emit: () => {} },
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
   it("dry-run emits plan without uploading", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "up-"));
     const p = path.join(dir, "a.txt");

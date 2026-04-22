@@ -3,7 +3,7 @@ import yaml from "js-yaml";
 import { ConfigError } from "../errors.js";
 
 export interface AuthConfig {
-  type: "basic" | "oauth2_password" | "oauth2_client_credentials" | "jwt" | "api_key";
+  type: "basic" | "oauth2_password" | "oauth2_client_credentials" | "oauth2_authcode";
   [key: string]: unknown;
 }
 

@@ -16,7 +16,7 @@ describe("buildProgram", () => {
   it("registers all subcommands", () => {
     const p = buildProgram({ contextFactory: async () => ({ client: fakeClient() }) });
     const names = p.commands.map((c) => c.name()).sort();
-    expect(names).toEqual(["create", "delete", "read", "search", "update", "upload-file"]);
+    expect(names).toEqual(["create", "delete", "login", "read", "search", "update", "upload-file"]);
   });
 
   it("read subcommand runs via parseAsync and writes JSON to stdout", async () => {
