@@ -1,11 +1,17 @@
 {
   "name": "drupal-cli",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1-alpha.0",
+  "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the drupal-cli Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
     "drupal-cli": "./bin/drupal-cli"
   },
+  "files": [
+    "bin",
+    "dist/src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -15,7 +21,23 @@
     "test:integration:https-insecure": "npm run build && NODE_TLS_REJECT_UNAUTHORIZED=0 vitest run -c vitest.config.integration.ts",
     "typecheck": "tsc --noEmit",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
-    "drupal:down": "bash tests/integrations/bin/drupal-down.sh"
+    "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "keywords": [
+    "drupal",
+    "drupal11",
+    "jsonapi",
+    "cli",
+    "claude",
+    "claude-skill",
+    "editorial"
+  ],
+  "author": "Christian Wiedemann <gitlab@keytec.de>",
+  "license": "(MIT OR GPL-2.0-or-later)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.drupal.org/project/drupal_cli.git"
   },
   "dependencies": {
     "commander": "^12.1.0",
