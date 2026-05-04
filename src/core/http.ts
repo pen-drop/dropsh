@@ -33,9 +33,7 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
 
   async function attempt(req: HttpRequest): Promise<HttpResponse> {
     const controller = new AbortController();
-    const timeout = opts.timeoutMs
-      ? setTimeout(() => controller.abort(), opts.timeoutMs)
-      : null;
+    const timeout = opts.timeoutMs ? setTimeout(() => controller.abort(), opts.timeoutMs) : null;
     try {
       const init: RequestInit = {
         method: req.method,
@@ -46,7 +44,7 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
       const res = await f(req.url, init);
       const text = await res.text();
       const headers: Record<string, string> = {};
-      res.headers.forEach((v, k) => (headers[k] = v));
+      for (const [k, v] of res.headers.entries()) headers[k] = v;
       return { status: res.status, headers, body: text };
     } finally {
       if (timeout) clearTimeout(timeout);
@@ -67,7 +65,11 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
           if (res.status >= 200 && res.status < 300) return res;
           if (!RETRY_STATUSES.has(res.status) || attemptIdx === maxRetries) {
             let parsedBody: unknown = res.body;
-            try { parsedBody = JSON.parse(res.body); } catch { /* keep text */ }
+            try {
+              parsedBody = JSON.parse(res.body);
+            } catch {
+              /* keep text */
+            }
             throw new HttpError(res.status, `HTTP ${res.status}`, parsedBody);
           }
         } catch (err) {
@@ -75,9 +77,11 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
           lastErr = err;
           if (attemptIdx === maxRetries) break;
         }
-        await sleep(retryDelayMs * Math.pow(2, attemptIdx));
+        await sleep(retryDelayMs * 2 ** attemptIdx);
       }
-      throw new HttpError(0, `Network failure after ${maxRetries + 1} attempts`, { cause: String(lastErr) });
+      throw new HttpError(0, `Network failure after ${maxRetries + 1} attempts`, {
+        cause: String(lastErr),
+      });
     },
   };
 }

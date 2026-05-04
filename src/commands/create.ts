@@ -6,19 +6,24 @@ export interface CreateArgs {
   bundle: string;
   dataArg: string;
   dryRun?: boolean;
+  noValidate?: boolean;
 }
 export interface CreateDeps {
   client: JsonApiClient;
   emit: (v: unknown) => void;
+  validate?: (payload: unknown, target: string) => void | Promise<void>;
 }
 
 export async function runCreate(args: CreateArgs, deps: CreateDeps): Promise<void> {
   const payload = await readDataArg(args.dataArg);
-  const path = `${args.entityType}/${args.bundle}`;
+  const target = `${args.entityType}/${args.bundle}`;
+  if (!args.noValidate && deps.validate) {
+    await deps.validate(payload, target);
+  }
   if (args.dryRun) {
-    deps.emit({ dry_run: true, method: "POST", path, payload });
+    deps.emit({ dry_run: true, method: "POST", path: target, payload });
     return;
   }
-  const res = await deps.client.post(path, payload);
+  const res = await deps.client.post(target, payload);
   deps.emit(res);
 }

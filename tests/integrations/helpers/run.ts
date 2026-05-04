@@ -77,7 +77,11 @@ export async function runCli(opts: RunOptions): Promise<RunResult> {
 
   return await new Promise<RunResult>((resolve) => {
     const child = spawn("node", ["bin/drupal-cli", ...opts.args], {
-      env: { ...process.env, DRUPAL_CLI_CONFIG: cfgPath },
+      env: {
+        ...process.env,
+        DRUPAL_CLI_CONFIG: cfgPath,
+        NODE_TLS_REJECT_UNAUTHORIZED: "0",
+      },
     });
 
     let stdout = "";

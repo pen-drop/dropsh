@@ -37,7 +37,12 @@ describe("integration: update", () => {
     const uuid = await createTestNode(original);
 
     const result = await runCli({
-      args: ["update", `node/article_test/${uuid}`, `--data=${patchPayload(uuid, updated)}`, "--dry-run"],
+      args: [
+        "update",
+        `node/article_test/${uuid}`,
+        `--data=${patchPayload(uuid, updated)}`,
+        "--dry-run",
+      ],
     });
     expect(result.code).toBe(0);
     expect(await readTitle(uuid)).toBe(original);

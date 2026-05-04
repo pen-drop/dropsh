@@ -16,7 +16,9 @@ describe("integration: read", () => {
   });
 
   it("returns exit 5 for an unknown UUID", async () => {
-    const result = await runCli({ args: ["read", "node/article_test/00000000-0000-0000-0000-000000000000"] });
+    const result = await runCli({
+      args: ["read", "node/article_test/00000000-0000-0000-0000-000000000000"],
+    });
     expect(result.code).toBe(5);
     expect(parseError(result.stderr).error.code).toBe("E_HTTP");
   });

@@ -13,14 +13,20 @@ export interface OutputOptions {
 export function createOutput(opts: OutputOptions): Output {
   return {
     emit(value) {
-      opts.stdout(JSON.stringify(value) + "\n");
+      opts.stdout(`${JSON.stringify(value)}\n`);
     },
     fail(err) {
       const payload =
         err instanceof CliError
           ? { error: { code: err.code, message: err.message, details: err.details } }
-          : { error: { code: "E_UNKNOWN", message: (err as Error).message ?? String(err), details: {} } };
-      opts.stderr(JSON.stringify(payload) + "\n");
+          : {
+              error: {
+                code: "E_UNKNOWN",
+                message: (err as Error).message ?? String(err),
+                details: {},
+              },
+            };
+      opts.stderr(`${JSON.stringify(payload)}\n`);
     },
   };
 }

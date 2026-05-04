@@ -13,6 +13,28 @@
 Conversations with the human operator may be held in any language, but
 everything that ends up committed to this repository must be English.
 
+## Before committing
+
+Run these commands and fix all failures before every commit:
+
+```bash
+npm run lint        # Biome lint + format check
+npm run typecheck   # TypeScript type-check (no emit)
+npm test            # unit tests (vitest, Node 20+)
+```
+
+To auto-fix lint and formatting issues: `npm run lint:fix`
+
+The CI pipeline (`validate` stage) runs all three checks: `lint` (Node 20 only), `typecheck` and `test` (Node 20 + 22). A commit that breaks any of them will fail the pipeline.
+
+Integration tests (`npm run test:integration`) require a live DDEV instance and are **not** run in CI. Run them locally when touching schema, auth, or HTTP logic:
+
+```bash
+npm run drupal:up          # provision DDEV + Drupal (once)
+npm run test:integration   # requires running DDEV
+npm run drupal:down        # tear down when done
+```
+
 ## Architecture (brief)
 
 - **CLI** (Node.js + TypeScript): entity-agnostic helper for Drupal 11

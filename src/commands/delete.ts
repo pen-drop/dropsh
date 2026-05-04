@@ -1,8 +1,14 @@
 import type { JsonApiClient } from "../core/jsonapi/client.js";
 import { ValidationError } from "../errors.js";
 
-export interface DeleteArgs { target: string; dryRun?: boolean; }
-export interface DeleteDeps { client: JsonApiClient; emit: (v: unknown) => void; }
+export interface DeleteArgs {
+  target: string;
+  dryRun?: boolean;
+}
+export interface DeleteDeps {
+  client: JsonApiClient;
+  emit: (v: unknown) => void;
+}
 
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+\/[a-f0-9-]{8,}$/;
 

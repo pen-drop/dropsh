@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { testConfig } from "./helpers/config.js";
-import { createTestNode, oauth2ClientCred, parseError, parseJson, runCli, type Auth } from "./helpers/run.js";
+import {
+  type Auth,
+  createTestNode,
+  oauth2ClientCred,
+  parseError,
+  parseJson,
+  runCli,
+} from "./helpers/run.js";
 
 describe("integration: auth oauth2 client_credentials grant", () => {
   it("reads a node using a client-credentials token", async () => {

@@ -1,0 +1,11 @@
+{
+  "jsonapi": { "version": "1.0" },
+  "data": [],
+  "links": {
+    "node--article": { "href": "https://ex/jsonapi/node/article", "meta": { "title": "Article" } },
+    "node--page":    { "href": "https://ex/jsonapi/node/page",    "meta": { "title": "Basic page" } },
+    "taxonomy_term--tags": { "href": "https://ex/jsonapi/taxonomy_term/tags" },
+    "user--user":    { "href": "https://ex/jsonapi/user/user" },
+    "self":          { "href": "https://ex/jsonapi" }
+  }
+}

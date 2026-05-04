@@ -1,6 +1,6 @@
+import { AuthError } from "../../errors.js";
 import type { AuthConfig } from "../config.js";
 import type { HttpRequest } from "../http.js";
-import { AuthError } from "../../errors.js";
 import type { AuthAdapter } from "./types.js";
 
 export function createBasicAuth(cfg: AuthConfig): AuthAdapter {

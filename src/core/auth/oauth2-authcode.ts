@@ -1,8 +1,8 @@
+import { AuthError, HttpError } from "../../errors.js";
 import type { AuthConfig } from "../config.js";
 import type { HttpClient, HttpRequest } from "../http.js";
-import { AuthError, HttpError } from "../../errors.js";
-import type { AuthAdapter } from "./types.js";
 import { readToken, writeToken } from "./token-store.js";
+import type { AuthAdapter } from "./types.js";
 
 export interface OAuth2AuthCodeDeps {
   http: HttpClient;
@@ -22,7 +22,10 @@ function requireString(cfg: AuthConfig, key: string): string {
 export function createOAuth2AuthCodeAuth(cfg: AuthConfig, deps: OAuth2AuthCodeDeps): AuthAdapter {
   const now = deps.now ?? Date.now;
   const clientId = requireString(cfg, "client_id");
-  const tokenUrl = typeof cfg.token_url === "string" ? cfg.token_url : `${deps.baseUrl.replace(/\/$/, "")}/oauth/token`;
+  const tokenUrl =
+    typeof cfg.token_url === "string"
+      ? cfg.token_url
+      : `${deps.baseUrl.replace(/\/$/, "")}/oauth/token`;
 
   return {
     async apply(req: HttpRequest): Promise<HttpRequest> {
@@ -65,7 +68,8 @@ export function createOAuth2AuthCodeAuth(cfg: AuthConfig, deps: OAuth2AuthCodeDe
         const ttlSec = typeof body.expires_in === "number" ? body.expires_in : 3600;
         const refreshed = {
           access_token: body.access_token,
-          refresh_token: typeof body.refresh_token === "string" ? body.refresh_token : stored.refresh_token,
+          refresh_token:
+            typeof body.refresh_token === "string" ? body.refresh_token : stored.refresh_token,
           expires_at: now() + ttlSec * 1000 - 5000,
         };
         await writeToken(deps.baseUrl, refreshed, deps.tokenDir);
@@ -76,7 +80,10 @@ export function createOAuth2AuthCodeAuth(cfg: AuthConfig, deps: OAuth2AuthCodeDe
       } catch (err) {
         if (err instanceof AuthError) throw err;
         if (err instanceof HttpError) {
-          throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.", { status: err.status, body: err.body });
+          throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.", {
+            status: err.status,
+            body: err.body,
+          });
         }
         throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.");
       }

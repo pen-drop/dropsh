@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildProgram } from "../../src/index.js";
+import { buildProgram, type CommandContext } from "../../src/index.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 
 function fakeClient(): JsonApiClient {
@@ -14,9 +14,9 @@ function fakeClient(): JsonApiClient {
 
 describe("buildProgram", () => {
   it("registers all subcommands", () => {
-    const p = buildProgram({ contextFactory: async () => ({ client: fakeClient() }) });
+    const p = buildProgram({ contextFactory: async () => ({ client: fakeClient() } as CommandContext) });
     const names = p.commands.map((c) => c.name()).sort();
-    expect(names).toEqual(["create", "delete", "login", "read", "search", "update", "upload-file"]);
+    expect(names).toEqual(["create", "delete", "login", "read", "schema", "search", "update", "upload-file"]);
   });
 
   it("read subcommand runs via parseAsync and writes JSON to stdout", async () => {
@@ -24,7 +24,7 @@ describe("buildProgram", () => {
     const out: string[] = [];
     const err: string[] = [];
     const p = buildProgram({
-      contextFactory: async () => ({ client: c }),
+      contextFactory: async () => ({ client: c } as CommandContext),
       stdout: (s) => out.push(s),
       stderr: (s) => err.push(s),
     });
@@ -37,7 +37,7 @@ describe("buildProgram", () => {
     const err: string[] = [];
     const exitCodes: number[] = [];
     const p = buildProgram({
-      contextFactory: async () => ({ client: fakeClient() }),
+      contextFactory: async () => ({ client: fakeClient() } as CommandContext),
       stdout: () => {},
       stderr: (s) => err.push(s),
       setExitCode: (code) => exitCodes.push(code),

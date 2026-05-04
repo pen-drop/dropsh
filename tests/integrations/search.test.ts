@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createTestNode, parseJson, runCli } from "./helpers/run.js";
 
-type SearchResponse = { data: Array<{ id: string; attributes: { title: string; status: boolean } }> };
+type SearchResponse = {
+  data: Array<{ id: string; attributes: { title: string; status: boolean } }>;
+};
 
 describe("integration: search", () => {
   it("returns up to --limit results", async () => {

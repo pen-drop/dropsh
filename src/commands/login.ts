@@ -32,7 +32,7 @@ export interface LoginDeps {
 
 export async function runLogin(deps: LoginDeps = {}): Promise<void> {
   const stdout = deps.stdout ?? ((s) => process.stdout.write(`${s}\n`));
-  const configPath = deps.configPath ?? (process.env.DRUPAL_CLI_CONFIG ?? ".drupal-cli.yml");
+  const configPath = deps.configPath ?? process.env.DRUPAL_CLI_CONFIG ?? ".drupal-cli.yml";
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const now = deps.now ?? Date.now;
   const http = deps.http ?? createHttpClient();
@@ -109,10 +109,12 @@ export async function runLogin(deps: LoginDeps = {}): Promise<void> {
       stdout("Opening browser for login...");
       stdout(`If the browser does not open, visit:\n${authUrl.toString()}`);
 
-      const openBrowser = deps.openBrowser ?? (async (url: string) => {
-        const { default: open } = await import("open");
-        await open(url);
-      });
+      const openBrowser =
+        deps.openBrowser ??
+        (async (url: string) => {
+          const { default: open } = await import("open");
+          await open(url);
+        });
 
       openBrowser(authUrl.toString()).catch(() => {
         // The URL is printed above, so the user still has a manual fallback.

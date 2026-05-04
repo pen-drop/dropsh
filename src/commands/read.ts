@@ -1,8 +1,13 @@
 import type { JsonApiClient } from "../core/jsonapi/client.js";
 import { ValidationError } from "../errors.js";
 
-export interface ReadArgs { target: string; }
-export interface ReadDeps { client: JsonApiClient; emit: (v: unknown) => void; }
+export interface ReadArgs {
+  target: string;
+}
+export interface ReadDeps {
+  client: JsonApiClient;
+  emit: (v: unknown) => void;
+}
 
 // Allow short test UUIDs (e.g. "u1") and full Drupal UUIDs (36 chars)
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+\/[a-z0-9_-]+$/;

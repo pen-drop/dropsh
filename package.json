@@ -18,8 +18,9 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:integration": "npm run build && vitest run -c vitest.config.integration.ts",
-    "test:integration:https-insecure": "npm run build && NODE_TLS_REJECT_UNAUTHORIZED=0 vitest run -c vitest.config.integration.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
+    "lint:fix": "biome check --write src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
     "prepublishOnly": "npm run typecheck && npm run build"
@@ -40,12 +41,14 @@
     "url": "git+https://git.drupal.org/project/drupal_cli.git"
   },
   "dependencies": {
+    "ajv": "^8.18.0",
     "commander": "^12.1.0",
     "drupal-jsonapi-params": "^3.0.1",
     "js-yaml": "^4.1.0",
     "open": "^11.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.14",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.0",
     "tsx": "^4.19.0",

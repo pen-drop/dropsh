@@ -1,6 +1,6 @@
+import { AuthError, HttpError } from "../../errors.js";
 import type { AuthConfig } from "../config.js";
 import type { HttpClient, HttpRequest } from "../http.js";
-import { AuthError, HttpError } from "../../errors.js";
 import type { AuthAdapter } from "./types.js";
 
 export interface OAuth2Deps {
@@ -21,7 +21,10 @@ export function createOAuth2Auth(cfg: AuthConfig, deps: OAuth2Deps): AuthAdapter
   const now = deps.now ?? Date.now;
   const clientId = requireString(cfg, "client_id");
   const clientSecret = requireString(cfg, "client_secret");
-  const tokenUrl = typeof cfg.token_url === "string" ? cfg.token_url : `${deps.baseUrl.replace(/\/$/, "")}/oauth/token`;
+  const tokenUrl =
+    typeof cfg.token_url === "string"
+      ? cfg.token_url
+      : `${deps.baseUrl.replace(/\/$/, "")}/oauth/token`;
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -56,7 +59,8 @@ export function createOAuth2Auth(cfg: AuthConfig, deps: OAuth2Deps): AuthAdapter
       const ttlSec = typeof body.expires_in === "number" ? body.expires_in : 3600;
       return { token: body.access_token, expiresAt: now() + ttlSec * 1000 - 5000 };
     } catch (err) {
-      if (err instanceof HttpError) throw new AuthError(`Token request failed: HTTP ${err.status}`, { body: err.body });
+      if (err instanceof HttpError)
+        throw new AuthError(`Token request failed: HTTP ${err.status}`, { body: err.body });
       if (err instanceof AuthError) throw err;
       throw new AuthError(`Token request failed: ${(err as Error).message}`);
     }
@@ -65,7 +69,10 @@ export function createOAuth2Auth(cfg: AuthConfig, deps: OAuth2Deps): AuthAdapter
   return {
     async apply(req: HttpRequest): Promise<HttpRequest> {
       if (!cached || cached.expiresAt <= now()) cached = await fetchToken();
-      return { ...req, headers: { ...(req.headers ?? {}), Authorization: `Bearer ${cached.token}` } };
+      return {
+        ...req,
+        headers: { ...(req.headers ?? {}), Authorization: `Bearer ${cached.token}` },
+      };
     },
   };
 }

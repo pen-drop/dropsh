@@ -38,4 +38,36 @@ describe("runUpdate", () => {
     expect(c.patch).not.toHaveBeenCalled();
     expect(emitted[0]).toMatchObject({ dry_run: true, method: "PATCH", path: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });
   });
+
+  it("validates payload against schema before patching", async () => {
+    const validate = vi.fn();
+    const c = client();
+    await runUpdate(
+      { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: JSON.stringify({ data: { type: "node--article", id: "00000000-0000-0000-0000-000000000001", attributes: { title: "new" } } }) },
+      { client: c, emit: () => {}, validate },
+    );
+    expect(validate).toHaveBeenCalledWith(expect.anything(), "node/article");
+    expect(c.patch).toHaveBeenCalled();
+  });
+
+  it("throws ValidationError without patching when validator fails", async () => {
+    const validate = vi.fn(() => { throw new ValidationError("bad"); });
+    const c = client();
+    await expect(runUpdate(
+      { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: "{}" },
+      { client: c, emit: () => {}, validate },
+    )).rejects.toBeInstanceOf(ValidationError);
+    expect(c.patch).not.toHaveBeenCalled();
+  });
+
+  it("skips validation when noValidate=true", async () => {
+    const validate = vi.fn(() => { throw new ValidationError("would fail"); });
+    const c = client();
+    await runUpdate(
+      { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: "{}", noValidate: true },
+      { client: c, emit: () => {}, validate },
+    );
+    expect(validate).not.toHaveBeenCalled();
+    expect(c.patch).toHaveBeenCalled();
+  });
 });

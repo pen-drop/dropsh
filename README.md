@@ -31,11 +31,30 @@ All commands write JSON to stdout, structured errors to stderr, and use exit cod
 ```bash
 drupal-cli read <entity_type>/<bundle>/<uuid>
 drupal-cli search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N]
-drupal-cli create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run]
-drupal-cli update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run]
+drupal-cli create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
+drupal-cli update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
 drupal-cli delete <entity_type>/<bundle>/<uuid> [--dry-run]
 drupal-cli upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
+drupal-cli schema [--refresh]
+drupal-cli schema <entity_type>/<bundle> [--for=create|update] [--refresh]
 ```
+
+### `schema`
+
+Without a target, prints the list of available `<entity_type>/<bundle>` targets on the site.
+
+With a target (e.g. `node/article`), prints a JSON Schema document that validates a JSON:API request body for that resource.
+
+- `--for=create` (default) / `--for=update` — operation variant (update clears required fields)
+- `--refresh` — bypass the cache for this call
+
+If the site has `drupal/schemata` + `drupal/schemata_json_schema` installed, the schema is authoritative (required fields, constraints). Otherwise, a shallow schema is returned from sample records with a warning on stderr (field names only, no required fields, no constraints). The output carries `x-drupal-cli-source: "schemata" | "heuristic" | "heuristic-empty"` so consumers can tell how strict the schema is.
+
+Schemas are cached under `.drupal-cli/cache/` next to your `.drupal-cli.yml`. The `.drupal-cli/` directory is gitignored.
+
+### Client-side validation in `create` / `update`
+
+`drupal-cli create` and `drupal-cli update` run the payload through the bundle's schema before sending it. A validation failure exits with code 4 (`E_VALIDATION`) and emits the Ajv errors on stderr without issuing an HTTP request. Pass `--no-validate` to skip the check.
 
 ## Development
 

@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "node--article",
+    "attributes": {
+      "title": "Hello",
+      "body": { "value": "Content", "format": "plain_text" }
+    }
+  }
+}

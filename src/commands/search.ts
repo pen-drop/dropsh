@@ -23,12 +23,12 @@ export interface ParsedFilter {
 export function parseFilterFlag(raw: string): ParsedFilter {
   const parts = raw.split(":");
   if (parts.length === 2) {
-    const [key, value] = parts;
-    return { key: key!, value: value! };
+    const [key, value] = parts as [string, string];
+    return { key, value };
   }
   if (parts.length >= 3) {
-    const key = parts[0]!;
-    const operator = parts[1]!;
+    const key = parts[0] as string;
+    const operator = parts[1] as string;
     const value = parts.slice(2).join(":");
     return { key, operator, value };
   }

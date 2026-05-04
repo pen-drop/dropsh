@@ -35,7 +35,7 @@ describe("smoke: read command against fake Drupal", () => {
     const auth = createAuthAdapter({ type: "basic", username: "a", password: "b" }, { http, baseUrl });
     const client = createJsonApiClient({ baseUrl, prefix: "/jsonapi", http, auth });
     const p = buildProgram({
-      contextFactory: async () => ({ client }),
+      contextFactory: async () => ({ client, http, auth, baseUrl, jsonapiPrefix: "/jsonapi", cwd: process.cwd() }),
       stdout: (s) => out.push(s),
       stderr: () => {},
     });

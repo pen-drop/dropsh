@@ -1,3 +1,4 @@
+name: drupal-cli-test-schemata
 type: drupal11
 docroot: web
 php_version: "8.3"

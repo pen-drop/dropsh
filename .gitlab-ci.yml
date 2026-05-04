@@ -15,6 +15,14 @@ stages:
     paths:
       - .npm/
 
+lint:
+  extends: .node_cache
+  stage: validate
+  image: node:20-alpine
+  script:
+    - npm ci --cache .npm
+    - npm run lint
+
 typecheck:
   extends: .node_cache
   stage: validate

@@ -1,21 +1,34 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { createHttpClient } from "./core/http.js";
-import { loadConfig } from "./core/config.js";
-import { createAuthAdapter } from "./core/auth/factory.js";
-import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
-import { createOutput } from "./core/cli/output.js";
-import { exitCodeFor } from "./errors.js";
-import { runRead } from "./commands/read.js";
-import { runSearch } from "./commands/search.js";
 import { runCreate } from "./commands/create.js";
-import { runUpdate } from "./commands/update.js";
 import { runDelete } from "./commands/delete.js";
-import { runUploadFile } from "./commands/upload-file.js";
 import { runLogin } from "./commands/login.js";
+import { runRead } from "./commands/read.js";
+import { runSchema } from "./commands/schema.js";
+import { runSearch } from "./commands/search.js";
+import { runUpdate } from "./commands/update.js";
+import { runUploadFile } from "./commands/upload-file.js";
+import { createAuthAdapter } from "./core/auth/factory.js";
+import type { AuthAdapter } from "./core/auth/types.js";
+import { createFileStore } from "./core/cache/file-store.js";
+import { createOutput } from "./core/cli/output.js";
+import { loadConfig } from "./core/config.js";
+import type { HttpClient } from "./core/http.js";
+import { createHttpClient } from "./core/http.js";
+import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
+import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
+import type { Operation } from "./core/schema/to-jsonschema.js";
+import { toOperationVariant } from "./core/schema/to-jsonschema.js";
+import { validatePayload } from "./core/schema/validate.js";
+import { exitCodeFor } from "./errors.js";
 
 export interface CommandContext {
   client: JsonApiClient;
+  http: HttpClient;
+  auth: AuthAdapter;
+  baseUrl: string;
+  jsonapiPrefix: string;
+  cwd: string;
 }
 
 export interface ProgramOptions {
@@ -35,18 +48,30 @@ async function defaultContext(): Promise<CommandContext> {
     http,
     auth,
   });
-  return { client };
+  return {
+    client,
+    http,
+    auth,
+    baseUrl: cfg.site.base_url,
+    jsonapiPrefix: cfg.site.jsonapi_prefix,
+    cwd: process.cwd(),
+  };
 }
 
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
-  program.name("drupal-cli").description("Entity-agnostic CLI for Drupal 11 JSON:API").version("0.0.0");
+  program
+    .name("drupal-cli")
+    .description("Entity-agnostic CLI for Drupal 11 JSON:API")
+    .version("0.0.0");
 
   const stdout = opts.stdout ?? ((s) => process.stdout.write(s));
   const stderr = opts.stderr ?? ((s) => process.stderr.write(s));
-  const setExitCode = opts.setExitCode ?? ((c) => {
-    process.exitCode = c;
-  });
+  const setExitCode =
+    opts.setExitCode ??
+    ((c) => {
+      process.exitCode = c;
+    });
   const contextFactory = opts.contextFactory ?? defaultContext;
   const output = createOutput({ stdout, stderr });
 
@@ -60,10 +85,45 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     }
   }
 
+  async function loadOrFetchSchema(
+    ctx: CommandContext,
+    target: string,
+    op: "create" | "update",
+  ): Promise<unknown> {
+    const store = createFileStore({
+      rootDir: `${ctx.cwd}/.drupal-cli/cache`,
+      warn: (m) => stderr(`${m}\n`),
+    });
+    const [entity, bundle] = target.split("/", 2) as [string, string];
+    const key = `schema/${entity}--${bundle}.${op}.json`;
+    const hit = await store.read<unknown>(key);
+    if (hit !== undefined) return hit;
+    const { schema: raw, source } = await fetchJsonSchema({
+      http: ctx.http,
+      auth: ctx.auth,
+      baseUrl: ctx.baseUrl,
+      jsonapiPrefix: ctx.jsonapiPrefix,
+      entity,
+      bundle,
+      warn: (m) => stderr(`${m}\n`),
+    });
+    const transformed = toOperationVariant(raw, op);
+    const tagged = {
+      ...(transformed as Record<string, unknown>),
+      "x-drupal-cli-source": source,
+      "x-drupal-cli-target": { entity_type: entity, bundle },
+      "x-drupal-cli-operation": op,
+    };
+    await store.write(key, tagged);
+    return tagged;
+  }
+
   program
     .command("read <target>")
     .description("Read entity_type/bundle/uuid")
-    .action((target: string) => run((ctx) => runRead({ target }, { client: ctx.client, emit: output.emit })));
+    .action((target: string) =>
+      run((ctx) => runRead({ target }, { client: ctx.client, emit: output.emit })),
+    );
 
   program
     .command("search <entity_type>")
@@ -72,6 +132,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .option("--filter <kv...>", "filter in key:value or key:op:value form", [])
     .option("--limit <n>", "max results", (v) => parseInt(v, 10), 50)
     .action((entityType: string, o: { bundle?: string; filter: string[]; limit: number }) => {
+      // biome-ignore lint/suspicious/noExplicitAny: optional bundle added conditionally
       const args = { entityType, filters: o.filter, limit: o.limit } as any;
       if (o.bundle !== undefined) args.bundle = o.bundle;
       run((ctx) => runSearch(args, { client: ctx.client, emit: output.emit }));
@@ -83,21 +144,67 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .requiredOption("--bundle <bundle>")
     .requiredOption("--data <json>", "inline JSON or @path")
     .option("--dry-run")
-    .action((entityType: string, o: { bundle: string; data: string; dryRun?: boolean }) => {
-      const args = { entityType, bundle: o.bundle, dataArg: o.data } as any;
-      if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run((ctx) => runCreate(args, { client: ctx.client, emit: output.emit }));
-    });
+    .option("--no-validate", "skip client-side schema validation")
+    .action(
+      (
+        entityType: string,
+        o: { bundle: string; data: string; dryRun?: boolean; validate?: boolean },
+      ) => {
+        const args: {
+          entityType: string;
+          bundle: string;
+          dataArg: string;
+          dryRun?: boolean;
+          noValidate?: boolean;
+        } = { entityType, bundle: o.bundle, dataArg: o.data };
+        if (o.dryRun !== undefined) args.dryRun = o.dryRun;
+        if (o.validate === false) args.noValidate = true;
+        run(async (ctx) => {
+          const deps: {
+            client: JsonApiClient;
+            emit: (v: unknown) => void;
+            validate?: (payload: unknown, target: string) => void | Promise<void>;
+          } = { client: ctx.client, emit: output.emit };
+          if (!args.noValidate) {
+            deps.validate = async (payload: unknown, target: string) => {
+              const schema = await loadOrFetchSchema(ctx, target, "create");
+              validatePayload(schema, payload, target);
+            };
+          }
+          await runCreate(args, deps);
+        });
+      },
+    );
 
   program
     .command("update <target>")
     .description("Update an existing entity")
     .requiredOption("--data <json>", "inline JSON or @path")
     .option("--dry-run")
-    .action((target: string, o: { data: string; dryRun?: boolean }) => {
-      const args = { target, dataArg: o.data } as any;
+    .option("--no-validate", "skip client-side schema validation")
+    .action((target: string, o: { data: string; dryRun?: boolean; validate?: boolean }) => {
+      const args: {
+        target: string;
+        dataArg: string;
+        dryRun?: boolean;
+        noValidate?: boolean;
+      } = { target, dataArg: o.data };
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run((ctx) => runUpdate(args, { client: ctx.client, emit: output.emit }));
+      if (o.validate === false) args.noValidate = true;
+      run(async (ctx) => {
+        const deps: {
+          client: JsonApiClient;
+          emit: (v: unknown) => void;
+          validate?: (payload: unknown, target: string) => void | Promise<void>;
+        } = { client: ctx.client, emit: output.emit };
+        if (!args.noValidate) {
+          deps.validate = async (payload: unknown, t: string) => {
+            const schema = await loadOrFetchSchema(ctx, t, "update");
+            validatePayload(schema, payload, t);
+          };
+        }
+        await runUpdate(args, deps);
+      });
     });
 
   program
@@ -105,6 +212,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .description("Delete an entity")
     .option("--dry-run")
     .action((target: string, o: { dryRun?: boolean }) => {
+      // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
       run((ctx) => runDelete(args, { client: ctx.client, emit: output.emit }));
@@ -117,6 +225,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .requiredOption("--file <path>")
     .option("--dry-run")
     .action((o: { target: string; file: string; dryRun?: boolean }) => {
+      // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target: o.target, file: o.file } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
       run((ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }));
@@ -132,6 +241,30 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         output.fail(err);
         setExitCode(exitCodeFor(err));
       }
+    });
+
+  program
+    .command("schema [target]")
+    .description("Catalog (no target) or JSON Schema for <entity>/<bundle>")
+    .option("--for <op>", "create|update", "create")
+    .option("--refresh", "bypass cache for this call")
+    .action((target: string | undefined, o: { for?: string; refresh?: boolean }) => {
+      const operation: Operation = o.for === "update" ? "update" : "create";
+      const schemaArgs =
+        target !== undefined
+          ? { target, operation, refresh: Boolean(o.refresh) }
+          : { operation, refresh: Boolean(o.refresh) };
+      run((ctx) =>
+        runSchema(schemaArgs, {
+          http: ctx.http,
+          auth: ctx.auth,
+          baseUrl: ctx.baseUrl,
+          jsonapiPrefix: ctx.jsonapiPrefix,
+          cwd: ctx.cwd,
+          emit: output.emit,
+          warn: (m) => stderr(`${m}\n`),
+        }),
+      );
     });
 
   program.exitOverride();

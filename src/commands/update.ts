@@ -6,10 +6,12 @@ export interface UpdateArgs {
   target: string;
   dataArg: string;
   dryRun?: boolean;
+  noValidate?: boolean;
 }
 export interface UpdateDeps {
   client: JsonApiClient;
   emit: (v: unknown) => void;
+  validate?: (payload: unknown, target: string) => void | Promise<void>;
 }
 
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+\/[a-f0-9-]{8,}$/;
@@ -19,6 +21,11 @@ export async function runUpdate(args: UpdateArgs, deps: UpdateDeps): Promise<voi
     throw new ValidationError(`target must be <entity_type>/<bundle>/<uuid>, got "${args.target}"`);
   }
   const payload = await readDataArg(args.dataArg);
+  const [entity, bundle] = args.target.split("/", 3) as [string, string, string];
+  const schemaTarget = `${entity}/${bundle}`;
+  if (!args.noValidate && deps.validate) {
+    await deps.validate(payload, schemaTarget);
+  }
   if (args.dryRun) {
     deps.emit({ dry_run: true, method: "PATCH", path: args.target, payload });
     return;

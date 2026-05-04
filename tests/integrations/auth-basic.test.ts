@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { testConfig } from "./helpers/config.js";
-import { parseError, runCli, type Auth } from "./helpers/run.js";
+import { type Auth, parseError, runCli } from "./helpers/run.js";
 
 describe("integration: auth basic", () => {
   it("returns exit 5 with wrong password", async () => {

@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["node--article"] },
+        "id": { "type": "string" },
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string", "maxLength": 255 },
+            "body": { "type": "object" }
+          },
+          "required": ["title"]
+        },
+        "relationships": { "type": "object", "properties": { "field_tags": { "type": "object" } } }
+      },
+      "required": ["type", "attributes"]
+    }
+  },
+  "required": ["data"]
+}

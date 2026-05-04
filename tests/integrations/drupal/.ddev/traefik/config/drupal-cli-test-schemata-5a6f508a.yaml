@@ -1,0 +1,98 @@
+#ddev-generated
+# If you remove the ddev-generated line above you
+# are responsible for maintaining this file. DDEV will not then
+# update it, for example if you add `additional_hostnames`, etc.
+
+http:
+  routers:
+    drupal-cli-test-schemata-5a6f508a-web-80-http:
+      entrypoints:
+        - http-80
+      rule: HostRegexp(`^drupal-cli-test-schemata-5a6f508a\.ddev\.site$`)
+      
+      service: "drupal-cli-test-schemata-5a6f508a-web-80"
+      tls: false
+      # middlewares:
+      #   - "drupal-cli-test-schemata-5a6f508a-redirectHttps"
+    drupal-cli-test-schemata-5a6f508a-web-8025-http:
+      entrypoints:
+        - http-8025
+      rule: HostRegexp(`^drupal-cli-test-schemata-5a6f508a\.ddev\.site$`)
+      
+      service: "drupal-cli-test-schemata-5a6f508a-web-8025"
+      tls: false
+      # middlewares:
+      #   - "drupal-cli-test-schemata-5a6f508a-redirectHttps"
+    drupal-cli-test-schemata-5a6f508a-xhgui-80-http:
+      entrypoints:
+        - http-8143
+      rule: HostRegexp(`^drupal-cli-test-schemata-5a6f508a\.ddev\.site$`)
+      
+      service: "drupal-cli-test-schemata-5a6f508a-xhgui-80"
+      tls: false
+      # middlewares:
+      #   - "drupal-cli-test-schemata-5a6f508a-redirectHttps"
+    
+    
+    
+    drupal-cli-test-schemata-5a6f508a-web-80-https:
+      entrypoints:
+        - http-443
+      rule: HostRegexp(`^drupal-cli-test-schemata-5a6f508a\.ddev\.site$`)
+      
+      service: "drupal-cli-test-schemata-5a6f508a-web-80"
+      
+      tls: true
+      
+    drupal-cli-test-schemata-5a6f508a-web-8025-https:
+      entrypoints:
+        - http-8026
+      rule: HostRegexp(`^drupal-cli-test-schemata-5a6f508a\.ddev\.site$`)
+      
+      service: "drupal-cli-test-schemata-5a6f508a-web-8025"
+      
+      tls: true
+      
+    
+    drupal-cli-test-schemata-5a6f508a-xhgui-80-https:
+      entrypoints:
+        - http-8142
+      rule: HostRegexp(`^drupal-cli-test-schemata-5a6f508a\.ddev\.site$`)
+      
+      service: "drupal-cli-test-schemata-5a6f508a-xhgui-80"
+      
+      tls: true
+      
+    
+
+  middlewares:
+    drupal-cli-test-schemata-5a6f508a-redirectHttps:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  services:
+    drupal-cli-test-schemata-5a6f508a-web-80:
+      loadbalancer:
+        servers:
+          - url: http://ddev-drupal-cli-test-schemata-5a6f508a-web:80
+        
+    drupal-cli-test-schemata-5a6f508a-web-8025:
+      loadbalancer:
+        servers:
+          - url: http://ddev-drupal-cli-test-schemata-5a6f508a-web:8025
+        
+    
+    
+    drupal-cli-test-schemata-5a6f508a-xhgui-80:
+      loadbalancer:
+        servers:
+          - url: http://ddev-drupal-cli-test-schemata-5a6f508a-xhgui:80
+        
+    
+    
+
+tls:
+  certificates:
+    - certFile: /mnt/ddev-global-cache/traefik/certs/drupal-cli-test-schemata-5a6f508a.crt
+      keyFile: /mnt/ddev-global-cache/traefik/certs/drupal-cli-test-schemata-5a6f508a.key

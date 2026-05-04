@@ -1,10 +1,10 @@
+import { AuthError } from "../../errors.js";
 import type { AuthConfig } from "../config.js";
 import type { HttpClient } from "../http.js";
-import { AuthError } from "../../errors.js";
-import type { AuthAdapter } from "./types.js";
 import { createBasicAuth } from "./basic.js";
-import { createOAuth2AuthCodeAuth } from "./oauth2-authcode.js";
 import { createOAuth2Auth } from "./oauth2.js";
+import { createOAuth2AuthCodeAuth } from "./oauth2-authcode.js";
+import type { AuthAdapter } from "./types.js";
 
 export interface AuthFactoryDeps {
   http: HttpClient;

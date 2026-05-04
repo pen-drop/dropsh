@@ -1,6 +1,6 @@
 import type { DrupalJsonApiParams } from "drupal-jsonapi-params";
-import type { HttpClient } from "../http.js";
 import type { AuthAdapter } from "../auth/types.js";
+import type { HttpClient } from "../http.js";
 
 export interface JsonApiClient {
   get(path: string, params?: DrupalJsonApiParams): Promise<unknown>;
@@ -41,9 +41,7 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
       url,
       headers: { ...JSONAPI_HEADERS, ...extraHeaders },
     };
-    const req = body !== undefined
-      ? { ...reqBase, body }
-      : reqBase;
+    const req = body !== undefined ? { ...reqBase, body } : reqBase;
     const withAuth = await opts.auth.apply(req);
     const res = await opts.http.send(withAuth);
     if (res.status === 204 || res.body.length === 0) return { ok: true };
@@ -65,15 +63,10 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
       return send("DELETE", joinUrl(opts.baseUrl, opts.prefix, path));
     },
     async upload(path, filename, data) {
-      return send(
-        "POST",
-        joinUrl(opts.baseUrl, opts.prefix, path),
-        data,
-        {
-          "Content-Type": "application/octet-stream",
-          "Content-Disposition": `file; filename="${filename}"`,
-        },
-      );
+      return send("POST", joinUrl(opts.baseUrl, opts.prefix, path), data, {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `file; filename="${filename}"`,
+      });
     },
   };
 }
