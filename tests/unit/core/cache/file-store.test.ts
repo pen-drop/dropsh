@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createFileStore } from "../../../../src/core/cache/file-store.js";
 
 function freshDir(): string {
-  return mkdtempSync(join(tmpdir(), "drupal-cli-cache-"));
+  return mkdtempSync(join(tmpdir(), "dropsh-cache-"));
 }
 
 describe("createFileStore", () => {

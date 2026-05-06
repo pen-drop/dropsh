@@ -9,7 +9,7 @@ describe("integration: schema cache", () => {
     const path = ".drupal-cli/cache/schema/node--article_test.create.json";
     expect(existsSync(path)).toBe(true);
     const content = JSON.parse(readFileSync(path, "utf8"));
-    expect(content["x-drupal-cli-operation"]).toBe("create");
+    expect(content["x-dropsh-operation"]).toBe("create");
     rmSync(".drupal-cli", { recursive: true, force: true });
   });
 });

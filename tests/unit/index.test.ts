@@ -29,7 +29,7 @@ describe("buildProgram", () => {
       stdout: (s) => out.push(s),
       stderr: (s) => err.push(s),
     });
-    await p.parseAsync(["node", "drupal-cli", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
+    await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
     expect(c.get).toHaveBeenCalledWith("node/article/abcdef01-abcd-abcd-abcd-abcdef012345");
     expect(JSON.parse(out.join(""))).toEqual({ data: { id: "u1" } });
   });
@@ -54,7 +54,7 @@ describe("buildProgram", () => {
       stdout: () => {},
       stderr: () => {},
     });
-    await p.parseAsync(["node", "drupal-cli", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
+    await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
     expect(capturedAuth).toBe(mockAdapter);
   });
 
@@ -67,7 +67,7 @@ describe("buildProgram", () => {
       stderr: (s) => err.push(s),
       setExitCode: (code) => exitCodes.push(code),
     });
-    await p.parseAsync(["node", "drupal-cli", "read", "bad"]);
+    await p.parseAsync(["node", "dropsh", "read", "bad"]);
     const parsed = JSON.parse(err.join(""));
     expect(parsed.error.code).toBe("E_VALIDATION");
     expect(exitCodes).toContain(4);

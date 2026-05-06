@@ -114,15 +114,15 @@ export async function runCli(opts: RunOptions): Promise<RunResult> {
   const url = opts.url ?? cfg.url;
   const auth = opts.auth ?? basicAuth();
 
-  const dir = mkdtempSync(join(tmpdir(), "drupal-cli-it-"));
-  const cfgPath = join(dir, "drupal-cli.config.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "dropsh-it-"));
+  const cfgPath = join(dir, "dropsh.config.mjs");
   writeFileSync(cfgPath, renderConfig(url, auth), "utf8");
 
   return await new Promise<RunResult>((resolve) => {
-    const child = spawn("node", ["--import", "tsx/esm", "bin/drupal-cli-src", ...opts.args], {
+    const child = spawn("node", ["--import", "tsx/esm", "bin/dropsh-src", ...opts.args], {
       env: {
         ...process.env,
-        DRUPAL_CLI_CONFIG: cfgPath,
+        DROPSH_CONFIG: cfgPath,
         NODE_TLS_REJECT_UNAUTHORIZED: "0",
       },
     });

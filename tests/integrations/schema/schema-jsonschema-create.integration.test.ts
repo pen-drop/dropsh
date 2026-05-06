@@ -10,7 +10,7 @@ describe("integration: schema (schemata path, --for=create)", () => {
     expect(result.stderr).toBe(""); // no "no 'schemata' module" warning
     // biome-ignore lint/suspicious/noExplicitAny: runtime schema shape from schemata
     const schema = parseJson<any>(result.stdout);
-    expect(schema["x-drupal-cli-source"]).toBe("schemata");
+    expect(schema["x-dropsh-source"]).toBe("schemata");
     const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false, logger: false });
     ajv.removeKeyword("id");
     if (!ajv.getSchema("http://json-schema.org/draft-06/schema#")) ajv.addMetaSchema(draft6);

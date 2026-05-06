@@ -39,7 +39,7 @@ describe("smoke: read command against fake Drupal", () => {
       stdout: (s) => out.push(s),
       stderr: () => {},
     });
-    await p.parseAsync(["node", "drupal-cli", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
+    await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
     const res = JSON.parse(out.join(""));
     expect(res.data.attributes.title).toBe("Hi");
   });

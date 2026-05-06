@@ -7,6 +7,6 @@ describe("integration: schema empty bundle", () => {
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
     const schema = parseJson<{ [k: string]: unknown }>(result.stdout);
-    expect(schema["x-drupal-cli-source"]).toBe("schemata");
+    expect(schema["x-dropsh-source"]).toBe("schemata");
   });
 });
