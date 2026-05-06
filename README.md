@@ -1,6 +1,6 @@
-# drupal-cli
+# dropsh
 
-Entity-agnostic helper CLI for Drupal 11 JSON:API. Written in TypeScript, used directly by the `drupal-cli` Claude skill for editorial publishing workflows.
+Entity-agnostic helper CLI for Drupal 11 JSON:API. Written in TypeScript, used directly by the `dropsh` Claude skill for editorial publishing workflows.
 
 This is the foundation CLI. Discovery, schema generation, and the skill layer are delivered by follow-up plans.
 
@@ -13,15 +13,16 @@ npm run build
 
 ## Configure
 
-Copy `.drupal-cli.yml.example` to `.drupal-cli.yml` in your project and set the auth fields. Secrets are referenced as `${ENV_VAR}` and expanded at load time.
+Copy `dropsh.config.example.js` to `dropsh.config.js` in your project and set the auth fields.
 
-```yaml
-site:
-  base_url: https://my-drupal.example.com
-  auth:
-    type: basic
-    username: ${DRUPAL_USER}
-    password: ${DRUPAL_PASSWORD}
+```js
+import { basicAuthPlugin } from "dropsh";
+
+export default {
+  site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
+  defaults: { dry_run: false, timeout_ms: 30000 },
+  plugins: [basicAuthPlugin({ username: "admin", password: "secret" })],
+};
 ```
 
 ## Commands
@@ -29,14 +30,14 @@ site:
 All commands write JSON to stdout, structured errors to stderr, and use exit codes 0-5.
 
 ```bash
-drupal-cli read <entity_type>/<bundle>/<uuid>
-drupal-cli search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N]
-drupal-cli create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
-drupal-cli update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
-drupal-cli delete <entity_type>/<bundle>/<uuid> [--dry-run]
-drupal-cli upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
-drupal-cli schema [--refresh]
-drupal-cli schema <entity_type>/<bundle> [--for=create|update] [--refresh]
+dropsh read <entity_type>/<bundle>/<uuid>
+dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N]
+dropsh create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
+dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
+dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
+dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
+dropsh schema [--refresh]
+dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
 ```
 
 ### `schema`
@@ -48,13 +49,13 @@ With a target (e.g. `node/article`), prints a JSON Schema document that validate
 - `--for=create` (default) / `--for=update` — operation variant (update clears required fields)
 - `--refresh` — bypass the cache for this call
 
-If the site has `drupal/schemata` + `drupal/schemata_json_schema` installed, the schema is authoritative (required fields, constraints). Otherwise, a shallow schema is returned from sample records with a warning on stderr (field names only, no required fields, no constraints). The output carries `x-drupal-cli-source: "schemata" | "heuristic" | "heuristic-empty"` so consumers can tell how strict the schema is.
+If the site has `drupal/schemata` + `drupal/schemata_json_schema` installed, the schema is authoritative (required fields, constraints). Otherwise, a shallow schema is returned from sample records with a warning on stderr (field names only, no required fields, no constraints). The output carries `x-dropsh-source: "schemata" | "heuristic" | "heuristic-empty"` so consumers can tell how strict the schema is.
 
-Schemas are cached under `.drupal-cli/cache/` next to your `.drupal-cli.yml`. The `.drupal-cli/` directory is gitignored.
+Schemas are cached under `.dropsh/cache/`. Override the config path via `DROPSH_CONFIG` or `--config`.
 
 ### Client-side validation in `create` / `update`
 
-`drupal-cli create` and `drupal-cli update` run the payload through the bundle's schema before sending it. A validation failure exits with code 4 (`E_VALIDATION`) and emits the Ajv errors on stderr without issuing an HTTP request. Pass `--no-validate` to skip the check.
+`dropsh create` and `dropsh update` run the payload through the bundle's schema before sending it. A validation failure exits with code 4 (`E_VALIDATION`) and emits the Ajv errors on stderr without issuing an HTTP request. Pass `--no-validate` to skip the check.
 
 ## Development
 
@@ -74,5 +75,3 @@ npm run drupal:up
 npm run test:integration
 npm run drupal:down
 ```
-
-See `docs/superpowers/specs/2026-04-21-drupal-cli-design.md` for the full design.

@@ -1,4 +1,4 @@
-# drupal-cli — Project Conventions
+# dropsh — Project Conventions
 
 ## Language
 
