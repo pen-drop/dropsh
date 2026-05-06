@@ -17,6 +17,7 @@ $permissions = [
   'edit any article_test content',
   'delete any article_test content',
   'grant simple_oauth codes',
+  'access schemata data models',
 ];
 
 foreach ($permissions as $permission) {

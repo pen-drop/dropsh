@@ -1,21 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { createBasicAuth } from "../../../../src/core/auth/basic.js";
-import { AuthError } from "../../../../src/errors.js";
+import { basicAuthPlugin } from "../../../../src/core/auth/basic.js";
+import { ConfigError } from "../../../../src/errors.js";
 
-describe("basic auth", () => {
-  it("adds Basic Authorization header", async () => {
-    const adapter = createBasicAuth({ type: "basic", username: "alice", password: "s3cret" });
-    const req = await adapter.apply({ method: "GET", url: "https://x/y" });
-    expect(req.headers?.Authorization).toBe("Basic " + Buffer.from("alice:s3cret").toString("base64"));
+describe("basicAuthPlugin", () => {
+  it("throws ConfigError when username is empty", () => {
+    expect(() => basicAuthPlugin({ username: "", password: "pw" }))
+      .toThrow(ConfigError);
+  });
+
+  it("throws ConfigError when password is empty", () => {
+    expect(() => basicAuthPlugin({ username: "user", password: "" }))
+      .toThrow(ConfigError);
+  });
+
+  it("returns a plugin with id 'basic'", () => {
+    const p = basicAuthPlugin({ username: "u", password: "p" });
+    expect(p.id).toBe("basic");
+    expect(p.requiredModules).toEqual([]);
+  });
+
+  it("createAuthAdapter returns an adapter with correct Basic header", async () => {
+    const p = basicAuthPlugin({ username: "alice", password: "s3cret" });
+    const adapter = p.createAuthAdapter!();
+    const req = await adapter.apply({ method: "GET", url: "https://x" });
+    expect(req.headers?.Authorization).toBe(
+      `Basic ${Buffer.from("alice:s3cret").toString("base64")}`,
+    );
   });
 
   it("preserves existing headers", async () => {
-    const adapter = createBasicAuth({ type: "basic", username: "a", password: "b" });
-    const req = await adapter.apply({ method: "GET", url: "https://x", headers: { "X-Foo": "1" } });
-    expect(req.headers?.["X-Foo"]).toBe("1");
+    const p = basicAuthPlugin({ username: "u", password: "p" });
+    const adapter = p.createAuthAdapter!();
+    const req = await adapter.apply({ method: "GET", url: "https://x", headers: { "X-Foo": "bar" } });
+    expect(req.headers?.["X-Foo"]).toBe("bar");
   });
 
-  it("throws AuthError if username missing", () => {
-    expect(() => createBasicAuth({ type: "basic", password: "x" } as any)).toThrow(AuthError);
+  it("extendSchema returns schema unchanged", async () => {
+    const p = basicAuthPlugin({ username: "u", password: "p" });
+    const schema = { type: "object" };
+    expect(await p.extendSchema("node", "article", schema, {} as any)).toBe(schema);
   });
 });

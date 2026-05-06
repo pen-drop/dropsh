@@ -47,14 +47,14 @@ describe("runSchema", () => {
     const emitted: unknown[] = [];
     const warnings: string[] = [];
     const http = seqHttp([
-      { status: 200, body: JSON.stringify({ properties: { data: { type: "object" } } }) },
+      { status: 200, body: JSON.stringify({ data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }] }) },
     ]);
     await runSchema(
       { target: "node/article", operation: "create", refresh: false },
       { http, auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", cwd: tempDir(), emit: (v) => emitted.push(v), warn: (m) => warnings.push(m) },
     );
     const out = emitted[0] as any;
-    expect(out["x-drupal-cli-source"]).toBe("schemata");
+    expect(out["x-drupal-cli-source"]).toBe("heuristic");
     expect(out["x-drupal-cli-target"]).toEqual({ entity_type: "node", bundle: "article" });
     expect(out["x-drupal-cli-operation"]).toBe("create");
   });
@@ -68,7 +68,7 @@ describe("runSchema", () => {
   });
 
   it("--refresh bypasses the cache", async () => {
-    const body = JSON.stringify({ properties: { data: { type: "object" } } });
+    const body = JSON.stringify({ data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }] });
     const http = seqHttp([
       { status: 200, body },
       { status: 200, body },

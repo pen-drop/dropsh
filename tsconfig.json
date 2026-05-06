@@ -12,6 +12,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": false,
+    "baseUrl": ".",
+    "paths": {
+      "drupal-cli/plugin": ["./src/plugin-api.ts"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true
   },

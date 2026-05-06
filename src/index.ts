@@ -1,14 +1,13 @@
 #!/usr/bin/env node
+import { parseArgs } from "node:util";
 import { Command } from "commander";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
-import { runLogin } from "./commands/login.js";
 import { runRead } from "./commands/read.js";
 import { runSchema } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
-import { createAuthAdapter } from "./core/auth/factory.js";
 import type { AuthAdapter } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
@@ -16,11 +15,12 @@ import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
+import type { DrupalCliPlugin } from "./core/plugin.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
-import { exitCodeFor } from "./errors.js";
+import { ConfigError, exitCodeFor } from "./errors.js";
 
 export interface CommandContext {
   client: JsonApiClient;
@@ -29,6 +29,7 @@ export interface CommandContext {
   baseUrl: string;
   jsonapiPrefix: string;
   cwd: string;
+  plugins: DrupalCliPlugin[];
 }
 
 export interface ProgramOptions {
@@ -36,12 +37,23 @@ export interface ProgramOptions {
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
   setExitCode?: (code: number) => void;
+  plugins?: DrupalCliPlugin[];
 }
 
-async function defaultContext(): Promise<CommandContext> {
-  const cfg = await loadConfig(process.env.DRUPAL_CLI_CONFIG ?? ".drupal-cli.yml");
+function resolveConfigPath(override?: string): string {
+  return override ?? process.env.DRUPAL_CLI_CONFIG ?? "drupal-cli.config.js";
+}
+
+async function defaultContext(configPath: string): Promise<CommandContext> {
+  const cfg = await loadConfig(configPath);
   const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
-  const auth = createAuthAdapter(cfg.site.auth, { http, baseUrl: cfg.site.base_url });
+  const authPlugin = cfg.plugins.find((p) => p.createAuthAdapter);
+  if (!authPlugin?.createAuthAdapter) {
+    throw new ConfigError(
+      "No auth plugin configured. Add basicAuthPlugin() or oauth2Plugin() to config.plugins.",
+    );
+  }
+  const auth = authPlugin.createAuthAdapter();
   const client = createJsonApiClient({
     baseUrl: cfg.site.base_url,
     prefix: cfg.site.jsonapi_prefix,
@@ -55,6 +67,7 @@ async function defaultContext(): Promise<CommandContext> {
     baseUrl: cfg.site.base_url,
     jsonapiPrefix: cfg.site.jsonapi_prefix,
     cwd: process.cwd(),
+    plugins: cfg.plugins,
   };
 }
 
@@ -63,7 +76,8 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
   program
     .name("drupal-cli")
     .description("Entity-agnostic CLI for Drupal 11 JSON:API")
-    .version("0.0.0");
+    .version("0.0.0")
+    .option("--config <path>", "path to config file (overrides DRUPAL_CLI_CONFIG)");
 
   const stdout = opts.stdout ?? ((s) => process.stdout.write(s));
   const stderr = opts.stderr ?? ((s) => process.stderr.write(s));
@@ -72,7 +86,9 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     ((c) => {
       process.exitCode = c;
     });
-  const contextFactory = opts.contextFactory ?? defaultContext;
+  const contextFactory =
+    opts.contextFactory ??
+    (() => defaultContext(resolveConfigPath(program.opts().config as string | undefined)));
   const output = createOutput({ stdout, stderr });
 
   async function run(fn: (ctx: CommandContext) => Promise<void>): Promise<void> {
@@ -106,6 +122,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       entity,
       bundle,
       warn: (m) => stderr(`${m}\n`),
+      plugins: ctx.plugins,
     });
     const transformed = toOperationVariant(raw, op);
     const tagged = {
@@ -232,18 +249,6 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     });
 
   program
-    .command("login")
-    .description("Authenticate via OAuth 2.0 Authorization Code + PKCE")
-    .action(async () => {
-      try {
-        await runLogin({ stdout: (s) => process.stdout.write(`${s}\n`) });
-      } catch (err) {
-        output.fail(err);
-        setExitCode(exitCodeFor(err));
-      }
-    });
-
-  program
     .command("schema [target]")
     .description("Catalog (no target) or JSON Schema for <entity>/<bundle>")
     .option("--for <op>", "create|update", "create")
@@ -263,17 +268,36 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
           cwd: ctx.cwd,
           emit: output.emit,
           warn: (m) => stderr(`${m}\n`),
+          plugins: ctx.plugins,
         }),
       );
     });
+
+  if (opts.plugins) {
+    for (const plugin of opts.plugins) {
+      plugin.registerCommands?.(program);
+    }
+  }
 
   program.exitOverride();
 
   return program;
 }
 
+function earlyConfigArg(argv: string[]): string | undefined {
+  const { values } = parseArgs({
+    args: argv.slice(2),
+    options: { config: { type: "string" } },
+    strict: false,
+  });
+  return typeof values.config === "string" ? values.config : undefined;
+}
+
 export async function main(): Promise<void> {
-  const program = buildProgram();
+  const configPath = resolveConfigPath(earlyConfigArg(process.argv));
+  const cfg = await loadConfig(configPath).catch(() => null);
+  const plugins = cfg?.plugins ?? [];
+  const program = buildProgram({ plugins });
   try {
     await program.parseAsync(process.argv);
   } catch (err) {

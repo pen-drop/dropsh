@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { AuthAdapter } from "../core/auth/types.js";
 import { createFileStore } from "../core/cache/file-store.js";
 import type { HttpClient } from "../core/http.js";
+import type { DrupalCliPlugin } from "../core/plugin.js";
 import { fetchCatalog } from "../core/schema/catalog.js";
 import { fetchJsonSchema } from "../core/schema/jsonschema-source.js";
 import { type Operation, toOperationVariant } from "../core/schema/to-jsonschema.js";
@@ -21,6 +22,7 @@ export interface SchemaDeps {
   cwd: string;
   emit: (v: unknown) => void;
   warn: (m: string) => void;
+  plugins?: DrupalCliPlugin[];
 }
 
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+$/;
@@ -71,6 +73,7 @@ export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<voi
     entity,
     bundle,
     warn: deps.warn,
+    plugins: deps.plugins ?? [],
   });
   const transformed = toOperationVariant(raw, args.operation);
 

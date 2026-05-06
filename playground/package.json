@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "drupal-cli": "file:.."
+    "drupal-cli": "file:..",
+    "@drupal-cli/plugin-oauth2": "file:../plugins/oauth2",
+    "@drupal-cli/plugin-schemata": "file:../plugins/schemata"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
   }
 }
