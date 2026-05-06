@@ -43,7 +43,7 @@ export async function fetchJsonSchema(deps: JsonSchemaDeps): Promise<JsonSchemaR
   } catch (err) {
     if (err instanceof HttpError && err.status === 404) {
       throw new ValidationError(
-        `no such target '${entity}/${bundle}'. Run 'drupal-cli schema' to see available targets.`,
+        `no such target '${entity}/${bundle}'. Run 'dropsh schema' to see available targets.`,
         { entity, bundle },
       );
     }
