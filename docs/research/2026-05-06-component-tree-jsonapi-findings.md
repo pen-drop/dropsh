@@ -3,7 +3,8 @@
 **Date:** 2026-05-06  
 **Branch:** spike/jsonapi-research  
 **Drupal:** 11.3.8  
-**Packages:** canvas 1.3.3, display_builder 1.0.0-beta4, ui_patterns 2.0.15
+**Packages:** canvas 1.3.3, display_builder 1.0.0-beta4, ui_patterns 2.0.15  
+**Method:** Canvas and Display Builder tested in **separate, isolated DDEV instances** (`spike-up.sh canvas` / `spike-up.sh display-builder`) to avoid the known compatibility conflict.
 
 ---
 
@@ -224,7 +225,36 @@ pattern_preset--pattern_preset                       /jsonapi/pattern_preset/pat
 
 The profile config entity IS accessible and returns rich configuration data (islands/panels, component library settings, weights). However, this is site configuration, not content.
 
-### 2.4 Sub-modules (not enabled)
+### 2.4 SDC components available (isolated run, no Canvas conflict)
+
+In the isolated Display Builder environment, 30 SDC components are registered. The `display_builder:*` ones are **internal editor UI components**, not content components for site builders:
+
+```
+display_builder:toolbar       Toolbar
+display_builder:panel_tree    Island tree
+display_builder:layer         Layer
+display_builder:card          Card
+display_builder:section       Section
+display_builder:placeholder   Placeholder
+... (23 more Display Builder UI components)
+olivero:teaser                Teaser  ← theme component
+```
+
+These editor UI components are not used in content payloads. They power the Display Builder drag-and-drop editor UI itself.
+
+### 2.5 Architecture correction (isolated testing revealed)
+
+The original design assumption — *"Display Builder can have multiple fields on a single entity, each carrying its own component tree"* — is **incorrect**.
+
+Display Builder is a **view mode layout tool**, not a content storage system:
+- It does NOT add `component_tree` fields to content entities
+- It maps **existing entity field values** to SDC component props/slots
+- The "component tree" in Display Builder describes *how fields are rendered*, not *what content is stored*
+- It is architecturally closer to Layout Builder than to Canvas
+
+The `display_builder_instance` stores rendering configuration in Drupal State — not content. There are no "landing page component tree values" to write via JSON:API.
+
+### 2.6 Sub-modules (not enabled)
 
 | Sub-module | Purpose |
 |---|---|
@@ -233,17 +263,19 @@ The profile config entity IS accessible and returns rich configuration data (isl
 | `display_builder_views` | Views integration |
 | `display_builder_ui` | UI components |
 
-Enabling `display_builder_entity_view` configures which entity view modes use Display Builder, but does **not** change the JSON:API situation — instances still live in State.
+Enabling these sub-modules configures which entity view modes use Display Builder, but does **not** change the JSON:API situation — instances still live in State.
 
-### 2.5 `node--landing_page` fields
+### 2.7 `node--landing_page` fields
 
-The `node--landing_page` bundle (our test fixture) has no Display Builder-specific fields. Display Builder does not inject fields into content types.
+The `node--landing_page` bundle (our test fixture) has no Display Builder-specific fields, confirmed in isolated run (clean install without Canvas). Display Builder does not inject fields into content types.
 
-### 2.6 BLOCKER
+### 2.8 BLOCKER
 
-**Display Builder component trees cannot be created, read, or updated via JSON:API.** The component tree is stored in Drupal State as untyped PHP objects. There is no JSON:API-accessible representation of the component tree.
+**Display Builder is not a content creation tool.** It renders entity fields through SDC components. There is no "component tree of content" to write via JSON:API — the content is already on the entity's own fields.
 
-Per the design constraint (no custom Drupal module), the Display Builder implementation worktree is **blocked**. A custom Drupal module would be required to expose `display_builder_instance` component trees via JSON:API.
+The original goal of *"create/update a Display Builder page"* via dropsh does not apply: the content is already managed via standard node create/update on `node--landing_page`. Display Builder is a display/rendering concern, not a content concern.
+
+Per the design constraint (no custom Drupal module), and given the architectural reality, the Display Builder implementation worktree is **blocked as designed — but for a different reason than expected**.
 
 ---
 
@@ -263,7 +295,7 @@ No contrib module found that exposes Layout Builder sections via JSON:API. This 
 
 ---
 
-## 4. Compatibility Note: Canvas + Display Builder Cannot Coexist
+## 4. Compatibility Note: Canvas + Display Builder Must Not Be Installed Together
 
 Installing Canvas 1.3.3 alongside ui_patterns 2.0.15 (required by Display Builder) produces a PHP `TypeError`:
 
@@ -309,9 +341,11 @@ C. **Document as a known limitation** — the `discover` output lists components
 
 D. **Look at the JSON:API `component--component` response UUID** — the UUID IS the config entity UUID; but the machine name (`id`) is the one needed. Check if `drupal_internal__id` is suppressed or just missing. **(To investigate in Canvas implementation worktree.)**
 
-### Display Builder → BLOCKED
+### Display Builder → BLOCKED (reason revised)
 
-No JSON:API path exists without a custom Drupal module. Per design constraints, this worktree is blocked. Inform developer.
+Display Builder is a view mode rendering tool, not a content creation tool. Content for a `node--landing_page` is written via standard JSON:API node operations. Display Builder only controls *how* fields are displayed — it does not store a "component tree of content" that dropsh could write.
+
+The implementation worktree is blocked — not because JSON:API is missing, but because the original design premise was wrong. Inform developer.
 
 ### Layout Builder → BLOCKED
 
