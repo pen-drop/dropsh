@@ -13,7 +13,9 @@ mkdir -p .ddev
 printf 'name: %s\n' "$PROJECT_NAME" > .ddev/config.local.yaml
 
 ddev start
-ddev composer install --no-interaction
+# Use `update` so that packages added to composer.json but not yet in the lock
+# file are resolved. This is safe for a spike environment.
+ddev composer update --no-interaction
 
 ddev drush site:install standard -y \
   --account-name=admin --account-pass=admin \
