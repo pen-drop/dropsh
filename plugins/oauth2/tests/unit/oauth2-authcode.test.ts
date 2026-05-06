@@ -23,7 +23,7 @@ function httpMock(responses: Array<{ status: number; body: unknown }>): HttpClie
 }
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), "drupal-cli-test-"));
+  const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
   await fn(dir);
 }
 

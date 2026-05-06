@@ -8,7 +8,7 @@ describe("integration: schema --refresh", () => {
     // first call — populates cache
     const first = await runCli({ args: ["schema", "node/article_test"] });
     expect(first.code).toBe(0);
-    const cacheDir = ".drupal-cli/cache/schema";
+    const cacheDir = ".dropsh/cache/schema";
     expect(existsSync(`${cacheDir}/node--article_test.create.json`)).toBe(true);
     // second call — served from cache
     const second = await runCli({ args: ["schema", "node/article_test"] });
@@ -18,6 +18,6 @@ describe("integration: schema --refresh", () => {
     expect(third.code).toBe(0);
     expect(third.stderr).toBe("");
     // cleanup to avoid test bleed
-    rmSync(".drupal-cli", { recursive: true, force: true });
+    rmSync(".dropsh", { recursive: true, force: true });
   });
 });

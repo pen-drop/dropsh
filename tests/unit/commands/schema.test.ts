@@ -43,7 +43,7 @@ describe("runSchema", () => {
     ]);
   });
 
-  it("with target: emits a JSON Schema with x-drupal-cli metadata", async () => {
+  it("with target: emits a JSON Schema with x-dropsh metadata", async () => {
     const emitted: unknown[] = [];
     const warnings: string[] = [];
     const http = seqHttp([

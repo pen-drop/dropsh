@@ -6,7 +6,7 @@ import { parseError, runCli } from "../helpers/run.js";
 
 describe("integration: create validates payload client-side against schema", () => {
   it("rejects an invalid payload before hitting Drupal and reports E_VALIDATION (exit 4)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "drupal-cli-payload-"));
+    const dir = mkdtempSync(join(tmpdir(), "dropsh-payload-"));
     const badFile = join(dir, "bad.json");
     writeFileSync(
       badFile,
@@ -27,7 +27,7 @@ describe("integration: create validates payload client-side against schema", () 
   });
 
   it("--no-validate bypasses client-side check (server still rejects garbage)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "drupal-cli-payload-"));
+    const dir = mkdtempSync(join(tmpdir(), "dropsh-payload-"));
     const badFile = join(dir, "bad.json");
     writeFileSync(
       badFile,

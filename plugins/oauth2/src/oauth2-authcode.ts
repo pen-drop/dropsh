@@ -29,7 +29,7 @@ export function createOAuth2AuthCodeAuth(
     async apply(req: HttpRequest): Promise<HttpRequest> {
       const stored = await readToken(baseUrl, deps.tokenDir);
       if (!stored) {
-        throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.");
+        throw new AuthError("Session expired. Run 'dropsh login' to authenticate.");
       }
 
       if (stored.expires_at - 30_000 > now()) {
@@ -40,7 +40,7 @@ export function createOAuth2AuthCodeAuth(
       }
 
       if (!stored.refresh_token) {
-        throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.");
+        throw new AuthError("Session expired. Run 'dropsh login' to authenticate.");
       }
 
       try {
@@ -78,12 +78,12 @@ export function createOAuth2AuthCodeAuth(
       } catch (err) {
         if (err instanceof AuthError) throw err;
         if (err instanceof HttpError) {
-          throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.", {
+          throw new AuthError("Session expired. Run 'dropsh login' to authenticate.", {
             status: err.status,
             body: err.body,
           });
         }
-        throw new AuthError("Session expired. Run 'drupal-cli login' to authenticate.");
+        throw new AuthError("Session expired. Run 'dropsh login' to authenticate.");
       }
     },
   };
