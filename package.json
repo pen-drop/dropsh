@@ -28,6 +28,8 @@
     "lint:fix": "biome check --write src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
+    "spike:up": "bash tests/integrations/bin/spike-up.sh",
+    "spike:down": "bash tests/integrations/bin/spike-down.sh",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
   "keywords": [
