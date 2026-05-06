@@ -1,10 +1,10 @@
 {
-  "name": "drupal-cli",
+  "name": "dropsh",
   "version": "0.0.1-alpha.0",
-  "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the drupal-cli Claude skill for editorial publishing workflows.",
+  "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the dropsh Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
-    "drupal-cli": "./bin/drupal-cli"
+    "dropsh": "./bin/dropsh"
   },
   "exports": {
     ".": "./dist/src/index.js",
@@ -43,7 +43,7 @@
   "license": "(MIT OR GPL-2.0-or-later)",
   "repository": {
     "type": "git",
-    "url": "git+https://git.drupal.org/project/drupal_cli.git"
+    "url": "git+https://github.com/pen-drop/dropsh.git"
   },
   "dependencies": {
     "ajv": "^8.18.0",
