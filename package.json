@@ -31,6 +31,7 @@
     "spike:up": "bash tests/integrations/bin/spike-up.sh canvas",
     "spike:up:display-builder": "bash tests/integrations/bin/spike-up.sh display-builder",
     "spike:up:layout-builder": "bash tests/integrations/bin/spike-up.sh layout-builder",
+    "spike:up:paragraphs": "bash tests/integrations/bin/spike-up.sh paragraphs",
     "spike:down": "bash tests/integrations/bin/spike-down.sh",
     "prepublishOnly": "npm run typecheck && npm run build"
   },

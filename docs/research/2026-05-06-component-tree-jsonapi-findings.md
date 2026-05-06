@@ -3,8 +3,8 @@
 **Date:** 2026-05-06  
 **Branch:** spike/jsonapi-research  
 **Drupal:** 11.3.8  
-**Packages:** canvas 1.3.3, display_builder 1.0.0-beta4, ui_patterns 2.0.15  
-**Method:** Canvas and Display Builder tested in **separate, isolated DDEV instances** (`spike-up.sh canvas` / `spike-up.sh display-builder`) to avoid the known compatibility conflict.
+**Packages:** canvas 1.3.3, display_builder 1.0.0-beta4, ui_patterns 2.0.15, paragraphs 1.20.0, entity_reference_revisions 1.14.0  
+**Method:** Canvas and Display Builder tested in **separate, isolated DDEV instances** (`spike-up.sh canvas` / `spike-up.sh display-builder`) to avoid the known compatibility conflict. Layout Builder and Paragraphs each tested in their own isolated instances.
 
 ---
 
@@ -15,6 +15,7 @@
 | **Canvas** | ✅ Own entity type `canvas_page` | ✅ `components` attribute (array) | ✅ Confirmed working | **Proceed** |
 | **Display Builder** | ✅ `ui_patterns_source` field on content entity | ✅ Standard field attribute on `node--landing_page` | ✅ Confirmed working | **Proceed** |
 | **Layout Builder** | ⚠️ Field registered but access hardcoded forbidden in core | ❌ GET blocked; write blocked | ❌ (read-only via `jsonapi_frontend_layout`) | **BLOCKER** |
+| **Paragraphs** | ✅ `paragraph--{bundle}` entities in JSON:API | ✅ Standard attributes per bundle | ⚠️ UPDATE ✅ / CREATE ❌ (access handler blocks non-HTML) | **BLOCKER for new content** |
 
 ---
 
@@ -507,7 +508,195 @@ This module is useful for reading the current layout configuration (e.g. for a `
 
 ---
 
-## 4. Compatibility Note: Canvas + Display Builder Must Not Be Installed Together
+## 4. Paragraphs (`drupal/paragraphs 1.20.0` + `drupal/entity_reference_revisions 1.14.0`)
+
+### 4.1 Architecture
+
+Paragraphs provides the `paragraph` content entity type with user-defined bundles. Each bundle is a separate JSON:API resource type:
+
+```
+paragraph--hero        /jsonapi/paragraph/hero
+paragraph--text_block  /jsonapi/paragraph/text_block
+```
+
+Paragraphs are attached to content entities (e.g. nodes) via an `entity_reference_revisions` field. This field type stores both a target entity ID and a target revision ID — meaning each paragraph reference pins to a specific revision.
+
+**Test fixture** (`setup-paragraphs.php`):
+- Bundle `hero`: `field_title` (string), `field_subtitle` (string)
+- Bundle `text_block`: `field_body` (text_long)
+- Node type `landing_page` with `field_sections` (type: `entity_reference_revisions`, target: `paragraph`, bundles: hero + text_block, cardinality: unlimited)
+
+### 4.2 READ — fully functional
+
+GET requests to paragraph endpoints return all field values:
+
+**`paragraph--hero` read shape:**
+
+```json
+{
+  "type": "paragraph--hero",
+  "id": "302caf1d-dd4e-404d-896e-934a6487d6c7",
+  "attributes": {
+    "drupal_internal__id": 1,
+    "drupal_internal__revision_id": 1,
+    "field_title": "Test Hero Title",
+    "field_subtitle": "Test Subtitle",
+    "parent_id": null,
+    "parent_type": null,
+    "parent_field_name": null,
+    "behavior_settings": [],
+    "status": true
+  },
+  "relationships": {
+    "paragraph_type": {
+      "data": {
+        "type": "paragraphs_type--paragraphs_type",
+        "id": "<type-uuid>",
+        "meta": { "drupal_internal__target_id": "hero" }
+      }
+    }
+  }
+}
+```
+
+**`paragraph--text_block` read shape:**
+
+```json
+{
+  "type": "paragraph--text_block",
+  "id": "e81aa3fc-9828-44e8-91f1-3c5c2df86c17",
+  "attributes": {
+    "field_body": {
+      "value": "<p>Body content</p>",
+      "format": "basic_html",
+      "processed": "<p>Body content</p>"
+    }
+  }
+}
+```
+
+`parent_id` / `parent_type` / `parent_field_name` are populated once the paragraph is attached to a parent entity.
+
+### 4.3 CREATE — BLOCKED (access handler, non-HTML requests only)
+
+```
+POST /jsonapi/paragraph/hero  →  403 Forbidden
+```
+
+**Root cause — in `ParagraphAccessControlHandler::checkCreateAccess()`:**
+
+```php
+protected function checkCreateAccess(AccountInterface $account, array $context, $entity_bundle = NULL) {
+    if (\Drupal::requestStack()->getCurrentRequest()->getRequestFormat() === 'html') {
+        return AccessResult::allowed()->addCacheContexts(['request_format']);
+    }
+    return AccessResult::neutral()->addCacheContexts(['request_format']);
+}
+```
+
+The method returns `neutral()` for all non-HTML requests (including JSON:API). `neutral()` with no other `allowed()` result yields `forbidden()` in Drupal's access aggregation. This is a **deliberate design decision** — paragraphs are intentionally only creatable via Drupal entity forms to prevent orphaned paragraph entities.
+
+**No permission or configuration can override this** — the check is format-based, not permission-based. Even uid=1 receives `neutral()` via HTTP.
+
+### 4.4 UPDATE — fully functional
+
+PATCH requests on existing paragraphs succeed:
+
+```
+PATCH /jsonapi/paragraph/hero/{uuid}  →  200 OK
+```
+
+`checkAccess()` in `ParagraphAccessControlHandler` returns `allowed()` for non-view, non-delete operations.
+
+**PATCH payload:**
+
+```json
+PATCH /jsonapi/paragraph/hero/{uuid}
+Content-Type: application/vnd.api+json
+
+{
+  "data": {
+    "type": "paragraph--hero",
+    "id": "{uuid}",
+    "attributes": {
+      "field_title": "Updated Title",
+      "field_subtitle": "Updated Subtitle"
+    }
+  }
+}
+```
+
+### 4.5 Node attachment — fully functional
+
+Attaching an existing paragraph to a node via the node PATCH endpoint works. The `entity_reference_revisions` field requires `meta.target_revision_id`:
+
+```json
+PATCH /jsonapi/node/landing_page/{node-uuid}
+Content-Type: application/vnd.api+json
+
+{
+  "data": {
+    "type": "node--landing_page",
+    "id": "{node-uuid}",
+    "relationships": {
+      "field_sections": {
+        "data": [
+          {
+            "type": "paragraph--hero",
+            "id": "302caf1d-dd4e-404d-896e-934a6487d6c7",
+            "meta": {
+              "target_revision_id": 1
+            }
+          },
+          {
+            "type": "paragraph--text_block",
+            "id": "e81aa3fc-9828-44e8-91f1-3c5c2df86c17",
+            "meta": {
+              "target_revision_id": 3
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+The response includes the updated `field_sections` with the new `target_revision_id` values.
+
+### 4.6 BLOCKER for new content creation
+
+The missing link is paragraph CREATE. A full editorial workflow for new content requires:
+
+1. Create paragraph entity → ❌ blocked
+2. PATCH node to attach paragraph → ✅ works
+
+**Workaround options:**
+
+| Option | What it requires |
+|---|---|
+| Custom module with `hook_paragraph_create_access` | One-hook module returning `allowed()` for authenticated API callers — smallest possible module |
+| `drupal/subrequests` + JSON:API | Batch creation in a single HTTP call, but still depends on paragraph create access |
+| Pre-seed paragraphs via Drush | Only viable for seeding known content, not for editorial create-new-page workflows |
+| Different entity type design | Replace paragraph bundles with node bundles + entity references (no access restriction) |
+
+**Smallest possible custom module** (for documentation, not implemented in spike):
+
+```php
+// mymodule.module
+function mymodule_paragraph_create_access($account, $context, $entity_bundle = NULL) {
+    // Allow authenticated users to create paragraphs via non-HTML requests (e.g. JSON:API).
+    return $account->isAuthenticated()
+        ? \Drupal\Core\Access\AccessResult::allowed()->cachePerUser()
+        : \Drupal\Core\Access\AccessResult::neutral();
+}
+```
+
+This is a 4-line hook — effectively the smallest possible custom module — but it IS a custom module.
+
+---
+
+## 5. Compatibility Note: Canvas + Display Builder Must Not Be Installed Together
 
 Installing Canvas 1.3.3 alongside ui_patterns 2.0.15 (required by Display Builder) produces a PHP `TypeError`:
 
@@ -523,21 +712,21 @@ The error is **non-fatal** in this case (Drupal recovered and both modules are a
 
 ---
 
-## 5. Answers to Spike Questions
+## 6. Answers to Spike Questions
 
-| Question | Canvas | Display Builder | Layout Builder |
-|---|---|---|---|
-| JSON:API endpoint(s) for page entities? | `/jsonapi/canvas_page/canvas_page` | `/jsonapi/node/landing_page` (standard node endpoint) | Write: none. Read: `/jsonapi/layout/resolve?path=...` (`jsonapi_frontend_layout`) |
-| Exact field name(s) for the component tree? | `components` (attribute on `canvas_page`) | Any `ui_patterns_source` field added to the bundle (e.g. `field_display`) | `layout_builder__layout` — access hardcoded forbidden in core |
-| JSON shape of one component entry? | `{uuid, component_id, parent_uuid, slot, inputs}` (flat tree) | `{source_id, source: {component: {component_id, slots}}, node_id}` (one component per field) | Readable via `jsonapi_frontend_layout`: `{layout_id, components[{uuid, region, plugin_id, type, settings}]}` |
-| Source of available component types? | `/jsonapi/component/component` (label only, machine name not exposed) | Via `plugin.manager.sdc` (drush only); same gap as Canvas | Via `plugin.manager.layout` (drush only) |
-| Contrib module that extends JSON:API support? | None needed | `ui_patterns_field` sub-module (ships with `ui_patterns`) — adds `ui_patterns_source` field type | `drupal/jsonapi_frontend_layout` v1.0.1 (read-only); `drupal/jsonapi_layout_builder` (Drupal 8/9 only) |
-| Full example create payload? | See §1.7 | See §2.4 | Not possible |
-| Full example update payload? | See §1.8 | See §2.5 | Not possible |
+| Question | Canvas | Display Builder | Layout Builder | Paragraphs |
+|---|---|---|---|---|
+| JSON:API endpoint(s) for page entities? | `/jsonapi/canvas_page/canvas_page` | `/jsonapi/node/landing_page` (standard node endpoint) | Write: none. Read: `/jsonapi/layout/resolve?path=...` (`jsonapi_frontend_layout`) | `/jsonapi/paragraph/{bundle}` + `/jsonapi/node/landing_page` (for attachment) |
+| Exact field name(s) for the component tree? | `components` (attribute on `canvas_page`) | Any `ui_patterns_source` field added to the bundle (e.g. `field_display`) | `layout_builder__layout` — access hardcoded forbidden in core | `entity_reference_revisions` field (e.g. `field_sections`) on parent node; fields are per-bundle on paragraph entity |
+| JSON shape of one component entry? | `{uuid, component_id, parent_uuid, slot, inputs}` (flat tree) | `{source_id, source: {component: {component_id, slots}}, node_id}` (one component per field) | Readable via `jsonapi_frontend_layout`: `{layout_id, components[{uuid, region, plugin_id, type, settings}]}` | Paragraph entity attributes are bundle-specific; relationship reference needs `meta.target_revision_id` |
+| Source of available component types? | `/jsonapi/component/component` (label only, machine name not exposed) | Via `plugin.manager.sdc` (drush only); same gap as Canvas | Via `plugin.manager.layout` (drush only) | Bundle list at `/jsonapi/paragraphs_type/paragraphs_type`; field list via JSON:API field discovery |
+| Contrib module that extends JSON:API support? | None needed | `ui_patterns_field` sub-module (ships with `ui_patterns`) — adds `ui_patterns_source` field type | `drupal/jsonapi_frontend_layout` v1.0.1 (read-only); `drupal/jsonapi_layout_builder` (Drupal 8/9 only) | None; CREATE requires custom module with `hook_paragraph_create_access` |
+| Full example create payload? | See §1.7 | See §2.4 | Not possible | Not possible without custom module |
+| Full example update payload? | See §1.8 | See §2.5 | Not possible | PATCH paragraph §4.4; node attachment §4.5 |
 
 ---
 
-## 6. Recommendations for Next Steps
+## 7. Recommendations for Next Steps
 
 ### Canvas → Proceed
 
@@ -572,3 +761,13 @@ Display Builder content **is** writable via JSON:API once the `ui_patterns_field
 **Partial option for `discover`:** `jsonapi_frontend_layout` exposes the current layout sections at `/jsonapi/layout/resolve?path=/node/<nid>`. This could be used by the `discover` command to inspect which layouts/blocks are in use — but not to write.
 
 The Layout Builder implementation worktree remains **BLOCKED** per the design constraint (no custom module). Inform developer.
+
+### Paragraphs → BLOCKED for new content; UPDATE path functional
+
+**Paragraph entities are readable and updatable via JSON:API** — `PATCH /jsonapi/paragraph/{bundle}/{uuid}` works without restriction. The gap is creation: `ParagraphAccessControlHandler::checkCreateAccess()` unconditionally returns `neutral()` for non-HTML requests, which the access aggregator treats as denied.
+
+**UPDATE-only workflow is viable** for sites where paragraph entities pre-exist (created via Drupal UI). The node attachment PATCH (`field_sections` relationship with `meta.target_revision_id`) also works.
+
+**For a CREATE workflow**, a single-hook custom module is the smallest viable solution — the hook is 4 lines. Feasibility depends on whether the constraint "no custom module" applies to the Paragraphs implementation or only to the Layout Builder one. This is a **decision point for the next spec**.
+
+If the constraint allows a minimal module, the Paragraphs implementation worktree can proceed. If not, Paragraphs is in the same BLOCKER category as Layout Builder for new-page creation.

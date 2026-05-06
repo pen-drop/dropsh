@@ -44,6 +44,11 @@ case "$MODE" in
     ddev drush en -y ui_patterns display_builder ui_patterns_field display_builder_entity_view || echo "WARNING: display_builder module not found or failed"
     ddev drush php:script fixtures/setup-display-builder.php
     ;;
+  paragraphs)
+    echo "=== Paragraphs mode: enabling Paragraphs only ==="
+    ddev drush en -y paragraphs || echo "WARNING: paragraphs module not found or failed"
+    ddev drush php:script fixtures/setup-paragraphs.php
+    ;;
   layout-builder)
     echo "=== Layout Builder mode: Layout Builder core + jsonapi_frontend_layout for read access ==="
     ddev drush en -y jsonapi_frontend jsonapi_frontend_layout || echo "WARNING: jsonapi_frontend_layout not found or failed"
