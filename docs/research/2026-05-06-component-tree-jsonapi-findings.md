@@ -13,7 +13,7 @@
 | System | JSON:API support | Component tree accessible | Create/update via JSON:API | Status |
 |---|---|---|---|---|
 | **Canvas** | ✅ Own entity type `canvas_page` | ✅ `components` attribute (array) | ✅ Confirmed working | **Proceed** |
-| **Display Builder** | ⚠️ Endpoint exists, but tree not exposed | ❌ Component tree not a Drupal field | ❌ Not possible | **BLOCKER** |
+| **Display Builder** | ✅ `ui_patterns_source` field on content entity | ✅ Standard field attribute on `node--landing_page` | ✅ Confirmed working | **Proceed** |
 | **Layout Builder** | ❌ No JSON:API exposure in core | ❌ | ❌ | **BLOCKER** |
 
 ---
@@ -199,83 +199,166 @@ Content-Type: application/vnd.api+json
 
 ### 2.1 Architecture
 
-Display Builder is **not** a field-based system. It does not add `component_tree` fields to content entities. Instead:
+Display Builder **does** support component content stored as a standard Drupal field — but only when the `ui_patterns_field` sub-module is enabled and a `ui_patterns_source` field is explicitly added to the content type.
 
-- It works at the **view display** level (Manage Display configuration)
-- Each entity/field combination has a `display_builder_instance` entity
-- Instances are stored in Drupal's **State API** (`drupal_state`), not a database table
-- The component tree is stored in PHP objects (`HistoryStep`, `SourceTree`) inside the instance
+**Required setup:**
+1. Enable sub-modules: `ui_patterns_field`, `display_builder_entity_view`
+2. Add one or more fields of type `ui_patterns_source` to the content type (e.g. `field_display`)
+3. Configure the entity's view display to use Display Builder and select those fields (Drupal Admin UI — one-time site setup)
 
-### 2.2 JSON:API exposure
+**Architecture note:** `display_builder_instance` entities (stored in Drupal State) are NOT the content storage mechanism and are NOT accessible via JSON:API — they represent editor UI session state only. The actual component content lives in the `ui_patterns_source` fields on the content entity.
+
+### 2.2 `ui_patterns_source` field type
+
+Provided by `ui_patterns_field` sub-module. Field class: `Drupal\ui_patterns_field\Plugin\Field\FieldType\SourceValueItem`.
+
+The field stores the configuration for ONE source plugin (which component to render + slot values). Multiple `ui_patterns_source` fields can exist on a single entity — each carries its own independent component instance.
+
+**JSON:API read shape (on `node--landing_page`):**
+
+```json
+"field_display": {
+  "source_id": "component",
+  "source": {
+    "component": {
+      "component_id": "olivero:teaser",
+      "slots": {
+        "title": [
+          { "source_id": "textfield", "source": { "value": "My Title" } }
+        ],
+        "content": [
+          { "source_id": "wysiwyg", "source": { "value": "<p>Body text</p>" } }
+        ]
+      }
+    }
+  },
+  "third_party_settings": [],
+  "node_id": ""
+}
+```
+
+**Field value structure:**
+
+| Key | Type | Notes |
+|---|---|---|
+| `source_id` | string | Source plugin ID. Use `"component"` to render an SDC component. |
+| `source` | object | Plugin-specific settings. For `"component"`: `{ "component": { "component_id": "...", "slots": {...} } }` |
+| `source.component.component_id` | string | SDC machine name in `provider:name` format (e.g. `olivero:teaser`) |
+| `source.component.slots` | object | Map of slot name → array of slot source configs |
+| `node_id` | string | Internal — write as `""` |
+| `third_party_settings` | array | Ignore on write — always `[]` |
+
+**Slot source config (each slot entry):**
+
+| Key | Type | Notes |
+|---|---|---|
+| `source_id` | string | Source plugin for the slot value: `"textfield"`, `"wysiwyg"`, etc. |
+| `source` | object | Plugin-specific value. For `textfield`/`wysiwyg`: `{ "value": "..." }` |
+
+### 2.3 JSON:API exposure
 
 ```
-display_builder_instance--display_builder_instance   /jsonapi/display_builder_instance/display_builder_instance
+display_builder_instance--display_builder_instance   /jsonapi/display_builder_instance/display_builder_instance  (inaccessible)
 display_builder_profile--display_builder_profile     /jsonapi/display_builder_profile/display_builder_profile
 pattern--pattern                                     /jsonapi/pattern/pattern
 pattern_preset--pattern_preset                       /jsonapi/pattern_preset/pattern_preset
 ```
 
-**The `display_builder_instance` endpoint is inaccessible for content operations:**
+The `display_builder_instance` endpoint returns `[]` for GET and 403 for POST — it is not the content API.
 
-- `GET /jsonapi/display_builder_instance/display_builder_instance` → returns `[]` even when instances exist in State
-- `POST` → 403 Forbidden
-- The component tree (`present.data`) is stored as PHP object properties, not Drupal field types — JSON:API cannot serialize them
+The **actual content endpoint** is the standard node endpoint: `/jsonapi/node/landing_page` — the `ui_patterns_source` field appears as a regular attribute.
 
-### 2.3 `display_builder_profile` shape
+### 2.4 Create payload example
 
-The profile config entity IS accessible and returns rich configuration data (islands/panels, component library settings, weights). However, this is site configuration, not content.
+```json
+POST /jsonapi/node/landing_page
+Authorization: Basic YWRtaW46YWRtaW4=
+Content-Type: application/vnd.api+json
 
-### 2.4 SDC components available (isolated run, no Canvas conflict)
+{
+  "data": {
+    "type": "node--landing_page",
+    "attributes": {
+      "title": "My Landing Page",
+      "status": true,
+      "field_display": {
+        "source_id": "component",
+        "source": {
+          "component": {
+            "component_id": "olivero:teaser",
+            "slots": {
+              "title": [
+                { "source_id": "textfield", "source": { "value": "Hero Title" } }
+              ],
+              "content": [
+                { "source_id": "wysiwyg", "source": { "value": "<p>Lead text</p>" } }
+              ]
+            }
+          }
+        },
+        "node_id": ""
+      }
+    }
+  }
+}
+```
 
-In the isolated Display Builder environment, 30 SDC components are registered. The `display_builder:*` ones are **internal editor UI components**, not content components for site builders:
+### 2.5 Update payload example
+
+```json
+PATCH /jsonapi/node/landing_page/{uuid}
+Content-Type: application/vnd.api+json
+
+{
+  "data": {
+    "type": "node--landing_page",
+    "id": "{uuid}",
+    "attributes": {
+      "field_display": {
+        "source_id": "component",
+        "source": {
+          "component": {
+            "component_id": "olivero:teaser",
+            "slots": {
+              "title": [
+                { "source_id": "textfield", "source": { "value": "Updated Title" } }
+              ]
+            }
+          }
+        },
+        "node_id": ""
+      }
+    }
+  }
+}
+```
+
+### 2.6 SDC components available (isolated run, no Canvas conflict)
+
+In the isolated Display Builder environment, 30 SDC components are registered. The `display_builder:*` ones are **internal editor UI components** — they power the drag-and-drop editor UI and are not used in content payloads:
 
 ```
-display_builder:toolbar       Toolbar
-display_builder:panel_tree    Island tree
-display_builder:layer         Layer
-display_builder:card          Card
-display_builder:section       Section
-display_builder:placeholder   Placeholder
-... (23 more Display Builder UI components)
-olivero:teaser                Teaser  ← theme component
+display_builder:toolbar       Toolbar  ← editor UI
+display_builder:panel_tree    Island tree  ← editor UI
+... (28 more Display Builder UI components)
+olivero:teaser                Teaser  ← theme component, usable in content
 ```
 
-These editor UI components are not used in content payloads. They power the Display Builder drag-and-drop editor UI itself.
+For content payloads, use theme components (e.g. `olivero:teaser`), not `display_builder:*` components.
 
-### 2.5 Architecture correction (isolated testing revealed)
+### 2.7 Component discovery for Display Builder
 
-The original design assumption — *"Display Builder can have multiple fields on a single entity, each carrying its own component tree"* — is **incorrect**.
+Available SDC components come from `plugin.manager.sdc` — same plugin manager as Canvas, different ID format:
+- Display Builder uses `provider:name` format (e.g. `olivero:teaser`)
+- Canvas uses `sdc.{provider}.{name}` format (e.g. `sdc.olivero.teaser`)
 
-Display Builder is a **view mode layout tool**, not a content storage system:
-- It does NOT add `component_tree` fields to content entities
-- It maps **existing entity field values** to SDC component props/slots
-- The "component tree" in Display Builder describes *how fields are rendered*, not *what content is stored*
-- It is architecturally closer to Layout Builder than to Canvas
+No JSON:API endpoint exposes machine names — same gap as Canvas. Discovery requires drush or a custom endpoint.
 
-The `display_builder_instance` stores rendering configuration in Drupal State — not content. There are no "landing page component tree values" to write via JSON:API.
+### 2.8 Multi-field support
 
-### 2.6 Sub-modules (not enabled)
+Multiple `ui_patterns_source` fields can exist on a single content type. Each field carries one independent component instance. The mode markdown can map different content sections to different fields (e.g. `field_hero`, `field_cta`, `field_body`).
 
-| Sub-module | Purpose |
-|---|---|
-| `display_builder_entity_view` | Attaches Display Builder to entity view displays |
-| `display_builder_page_layout` | Page layout variant |
-| `display_builder_views` | Views integration |
-| `display_builder_ui` | UI components |
-
-Enabling these sub-modules configures which entity view modes use Display Builder, but does **not** change the JSON:API situation — instances still live in State.
-
-### 2.7 `node--landing_page` fields
-
-The `node--landing_page` bundle (our test fixture) has no Display Builder-specific fields, confirmed in isolated run (clean install without Canvas). Display Builder does not inject fields into content types.
-
-### 2.8 BLOCKER
-
-**Display Builder is not a content creation tool.** It renders entity fields through SDC components. There is no "component tree of content" to write via JSON:API — the content is already on the entity's own fields.
-
-The original goal of *"create/update a Display Builder page"* via dropsh does not apply: the content is already managed via standard node create/update on `node--landing_page`. Display Builder is a display/rendering concern, not a content concern.
-
-Per the design constraint (no custom Drupal module), and given the architectural reality, the Display Builder implementation worktree is **blocked as designed — but for a different reason than expected**.
+This is the original design intent from §5.2 of the integration design — confirmed working.
 
 ---
 
@@ -315,13 +398,13 @@ The error is **non-fatal** in this case (Drupal recovered and both modules are a
 
 | Question | Canvas | Display Builder | Layout Builder |
 |---|---|---|---|
-| JSON:API endpoint(s) for page entities? | `/jsonapi/canvas_page/canvas_page` | `/jsonapi/display_builder_instance/display_builder_instance` (inaccessible) | None |
-| Exact field name(s) for the component tree? | `components` (attribute on `canvas_page`) | Not a field — stored in Drupal State | N/A |
-| JSON shape of one component entry? | `{uuid, component_id, parent_uuid, slot, inputs}` | Not accessible | N/A |
-| Source of available component types? | `/jsonapi/component/component` (label only, machine name not exposed) | Via `plugin.manager.sdc` (drush only) | N/A |
-| Contrib module that extends JSON:API support? | None needed | None found | None found |
-| Full example create payload? | See §1.7 | Not possible | Not possible |
-| Full example update payload? | See §1.8 | Not possible | Not possible |
+| JSON:API endpoint(s) for page entities? | `/jsonapi/canvas_page/canvas_page` | `/jsonapi/node/landing_page` (standard node endpoint) | None |
+| Exact field name(s) for the component tree? | `components` (attribute on `canvas_page`) | Any `ui_patterns_source` field added to the bundle (e.g. `field_display`) | N/A |
+| JSON shape of one component entry? | `{uuid, component_id, parent_uuid, slot, inputs}` (flat tree) | `{source_id, source: {component: {component_id, slots}}, node_id}` (one component per field) | N/A |
+| Source of available component types? | `/jsonapi/component/component` (label only, machine name not exposed) | Via `plugin.manager.sdc` (drush only); same gap as Canvas | N/A |
+| Contrib module that extends JSON:API support? | None needed | `ui_patterns_field` sub-module (ships with `ui_patterns`) — adds `ui_patterns_source` field type | None found |
+| Full example create payload? | See §1.7 | See §2.4 | Not possible |
+| Full example update payload? | See §1.8 | See §2.5 | Not possible |
 
 ---
 
@@ -341,12 +424,18 @@ C. **Document as a known limitation** — the `discover` output lists components
 
 D. **Look at the JSON:API `component--component` response UUID** — the UUID IS the config entity UUID; but the machine name (`id`) is the one needed. Check if `drupal_internal__id` is suppressed or just missing. **(To investigate in Canvas implementation worktree.)**
 
-### Display Builder → BLOCKED (reason revised)
+### Display Builder → Proceed
 
-Display Builder is a view mode rendering tool, not a content creation tool. Content for a `node--landing_page` is written via standard JSON:API node operations. Display Builder only controls *how* fields are displayed — it does not store a "component tree of content" that dropsh could write.
+Display Builder content **is** writable via JSON:API once the `ui_patterns_field` sub-module is enabled and a `ui_patterns_source` field is added to the content type.
 
-The implementation worktree is blocked — not because JSON:API is missing, but because the original design premise was wrong. Inform developer.
+**Implementation worktree can proceed.** The spec must document:
+- Required sub-modules: `ui_patterns_field`, `display_builder_entity_view`
+- The field naming convention (site-specific — mode markdown must document which field names are in use)
+- Component ID format: `provider:name` (e.g. `olivero:teaser`) — differs from Canvas format
+- Component discovery: same gap as Canvas — machine names not in JSON:API
+
+**Key difference from Canvas:** Each `ui_patterns_source` field holds ONE component instance; multiple fields = multiple components. Canvas uses a single flat component array on the entity.
 
 ### Layout Builder → BLOCKED
 
-Same situation as Display Builder. No JSON:API support in core, no suitable contrib module found. Inform developer.
+No JSON:API support in core. No contrib module found that exposes Layout Builder sections via JSON:API. Blocked per the design constraint (no custom module).

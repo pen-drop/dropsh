@@ -41,7 +41,7 @@ case "$MODE" in
     ;;
   display-builder)
     echo "=== Display Builder mode: enabling Display Builder only (no Canvas) ==="
-    ddev drush en -y ui_patterns display_builder || echo "WARNING: display_builder module not found or failed"
+    ddev drush en -y ui_patterns display_builder ui_patterns_field display_builder_entity_view || echo "WARNING: display_builder module not found or failed"
     ddev drush php:script fixtures/setup-display-builder.php
     ;;
   layout-builder)
