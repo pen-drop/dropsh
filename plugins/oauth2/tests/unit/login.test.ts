@@ -3,8 +3,8 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { HttpClient } from "drupal-cli/plugin";
-import { AuthError } from "drupal-cli/plugin";
+import type { HttpClient } from "dropsh/plugin";
+import { AuthError } from "dropsh/plugin";
 import { describe, expect, it } from "vitest";
 import { generatePkce, generateState, runLogin } from "../../src/login.js";
 
@@ -23,7 +23,7 @@ function httpMock(body: unknown): HttpClient {
 }
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), "drupal-cli-test-"));
+  const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
   await fn(dir);
 }
 

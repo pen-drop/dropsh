@@ -1,5 +1,5 @@
-import type { DrupalCliPlugin } from "drupal-cli/plugin";
-import { ConfigError } from "drupal-cli/plugin";
+import type { DrupalCliPlugin } from "dropsh/plugin";
+import { ConfigError } from "dropsh/plugin";
 import { createOAuth2Auth } from "./oauth2.js";
 import { createOAuth2AuthCodeAuth } from "./oauth2-authcode.js";
 

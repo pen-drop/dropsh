@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import type { HttpClient } from "drupal-cli/plugin";
-import { AuthError, createHttpClient, loadConfig } from "drupal-cli/plugin";
+import type { HttpClient } from "dropsh/plugin";
+import { AuthError, createHttpClient, loadConfig } from "dropsh/plugin";
 import { writeToken } from "./token-store.js";
 
 const DEFAULT_PORT = 7432;

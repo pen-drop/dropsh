@@ -13,7 +13,7 @@ function hostnameFromUrl(baseUrl: string): string {
 }
 
 export function defaultTokenDir(): string {
-  return join(homedir(), ".config", "drupal-cli");
+  return join(homedir(), ".config", "dropsh");
 }
 
 export async function readToken(baseUrl: string, dir?: string): Promise<StoredToken | null> {

@@ -1,5 +1,5 @@
-import type { DrupalCliPlugin, PluginContext } from "drupal-cli/plugin";
-import { HttpError } from "drupal-cli/plugin";
+import type { DrupalCliPlugin, PluginContext } from "dropsh/plugin";
+import { HttpError } from "dropsh/plugin";
 import { fetchSchemata, SCHEMATA_MISS } from "./schemata.js";
 
 export function schemataPlugin(): DrupalCliPlugin {

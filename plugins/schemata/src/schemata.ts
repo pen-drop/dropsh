@@ -1,5 +1,5 @@
-import type { AuthAdapter, HttpClient } from "drupal-cli/plugin";
-import { HttpError } from "drupal-cli/plugin";
+import type { AuthAdapter, HttpClient } from "dropsh/plugin";
+import { HttpError } from "dropsh/plugin";
 
 export const SCHEMATA_MISS = Symbol("SCHEMATA_MISS");
 

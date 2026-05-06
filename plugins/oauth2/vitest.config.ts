@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 export default defineConfig({
   resolve: {
     alias: {
-      "drupal-cli/plugin": resolve(__dirname, "../../src/plugin-api.ts"),
+      "dropsh/plugin": resolve(__dirname, "../../src/plugin-api.ts"),
     },
   },
   test: {
