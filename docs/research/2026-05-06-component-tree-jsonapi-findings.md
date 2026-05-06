@@ -14,7 +14,7 @@
 |---|---|---|---|---|
 | **Canvas** | ✅ Own entity type `canvas_page` | ✅ `components` attribute (array) | ✅ Confirmed working | **Proceed** |
 | **Display Builder** | ✅ `ui_patterns_source` field on content entity | ✅ Standard field attribute on `node--landing_page` | ✅ Confirmed working | **Proceed** |
-| **Layout Builder** | ❌ No JSON:API exposure in core | ❌ | ❌ | **BLOCKER** |
+| **Layout Builder** | ⚠️ Field registered but access hardcoded forbidden in core | ❌ GET blocked; write blocked | ❌ (read-only via `jsonapi_frontend_layout`) | **BLOCKER** |
 
 ---
 
@@ -364,17 +364,97 @@ This is the original design intent from §5.2 of the integration design — conf
 
 ## 3. Layout Builder (Drupal core 11.3.8)
 
-### 3.1 JSON:API exposure
+### 3.1 Field type
 
-Layout Builder is confirmed as having **no JSON:API support in core**.
+When Layout Builder is enabled for a content type with "Allow each content item to have its layout customized" (overridable), Drupal adds a `layout_builder__layout` field (type `layout_section`) to the entity:
 
-- `/jsonapi/layout_section/layout_section` → 404
-- No layout-builder specific endpoints found in JSON:API index
-- Layout Builder section/block data is stored in entity display configuration overrides, not as content
+```
+Field name:  layout_builder__layout
+Field type:  layout_section  (no_ui: TRUE)
+Field class: Drupal\layout_builder\Field\LayoutSectionItemList
+Main property: section (serialized PHP blob, one Section object per delta)
+```
 
-### 3.2 BLOCKER
+### 3.2 JSON:API exposure — field registered but access denied
 
-No contrib module found that exposes Layout Builder sections via JSON:API. This worktree is blocked per the design constraint (no custom module).
+The `layout_builder__layout` field IS registered in the JSON:API resource type (`isFieldEnabled: true`, `publicName: layout_builder__layout`). However, it does **not** appear in GET responses and PATCH writes are rejected with 403.
+
+**Root cause — hardcoded in core (`LayoutSectionItemList.php`):**
+
+```php
+public function defaultAccess($operation = 'view', ?AccountInterface $account = NULL) {
+  // @todo Allow access in https://www.drupal.org/node/2942975.
+  return AccessResult::forbidden();
+}
+```
+
+This `forbidden()` is unconditional — even the admin user cannot read or write the field via the API. The TODO issue (d.o #2942975) is open; it has not been resolved in Drupal 11.3.8.
+
+**What JSON:API tells us about the write shape (from the 422 error):**
+
+The property to write is `section` — but the write is blocked before any serialization occurs:
+
+```
+"Writable properties are: 'section'."
+→ PATCH with { "layout_builder__layout": [{ "section": { ... } }] }
+→ 403 The current user is not allowed to PATCH the selected field (layout_builder__layout).
+```
+
+### 3.3 Contrib modules evaluated
+
+| Module | Drupal 11 | Purpose | Write support |
+|---|---|---|---|
+| `drupal/jsonapi_layout_builder` | ❌ `^8.8 || ^9` only | JSON:API customizations for Layout Builder | N/A — incompatible |
+| `drupal/jsonapi_frontend_layout` v1.0.1 | ✅ `^10.3 || ^11` | Read-only layout tree endpoint | ❌ GET only |
+
+### 3.4 Read-only option: `jsonapi_frontend_layout`
+
+`drupal/jsonapi_frontend_layout` v1.0.1 (stable) adds a single GET endpoint:
+
+```
+GET /jsonapi/layout/resolve?path=/node/1&_format=json
+```
+
+Response shape (no authentication required — public):
+
+```json
+{
+  "resolved": true,
+  "kind": "entity",
+  "entity": { "type": "node--landing_page", "id": "<uuid>", "langcode": "en" },
+  "jsonapi_url": "/jsonapi/node/landing_page/<uuid>",
+  "layout": {
+    "source": "overrides",
+    "view_mode": "default",
+    "sections": [
+      {
+        "layout_id": "layout_onecol",
+        "layout_settings": { "label": "" },
+        "components": [
+          {
+            "uuid": "<uuid>",
+            "region": "content",
+            "weight": 0,
+            "plugin_id": "page_title_block",
+            "type": "block",
+            "settings": { "label": "Title", "label_display": "1" }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`layout.source` is `"defaults"` when no per-node override exists, `"overrides"` when the node has its own layout customization.
+
+This module is useful for reading the current layout configuration (e.g. for a `discover` command), but provides **no write path**.
+
+### 3.5 BLOCKER (write use case)
+
+**Layout Builder sections cannot be written via JSON:API in Drupal 11.** The access block is in Drupal core and intentional. No Drupal 11–compatible contrib module provides a write path. The Layout Builder implementation worktree is blocked per the design constraint (no custom module).
+
+**Read-only partial option:** `drupal/jsonapi_frontend_layout` v1.0.1 can be used to inspect the current layout of a node (useful for `discover` command), but cannot be used to create or update layout sections.
 
 ---
 
@@ -398,11 +478,11 @@ The error is **non-fatal** in this case (Drupal recovered and both modules are a
 
 | Question | Canvas | Display Builder | Layout Builder |
 |---|---|---|---|
-| JSON:API endpoint(s) for page entities? | `/jsonapi/canvas_page/canvas_page` | `/jsonapi/node/landing_page` (standard node endpoint) | None |
-| Exact field name(s) for the component tree? | `components` (attribute on `canvas_page`) | Any `ui_patterns_source` field added to the bundle (e.g. `field_display`) | N/A |
-| JSON shape of one component entry? | `{uuid, component_id, parent_uuid, slot, inputs}` (flat tree) | `{source_id, source: {component: {component_id, slots}}, node_id}` (one component per field) | N/A |
-| Source of available component types? | `/jsonapi/component/component` (label only, machine name not exposed) | Via `plugin.manager.sdc` (drush only); same gap as Canvas | N/A |
-| Contrib module that extends JSON:API support? | None needed | `ui_patterns_field` sub-module (ships with `ui_patterns`) — adds `ui_patterns_source` field type | None found |
+| JSON:API endpoint(s) for page entities? | `/jsonapi/canvas_page/canvas_page` | `/jsonapi/node/landing_page` (standard node endpoint) | Write: none. Read: `/jsonapi/layout/resolve?path=...` (`jsonapi_frontend_layout`) |
+| Exact field name(s) for the component tree? | `components` (attribute on `canvas_page`) | Any `ui_patterns_source` field added to the bundle (e.g. `field_display`) | `layout_builder__layout` — access hardcoded forbidden in core |
+| JSON shape of one component entry? | `{uuid, component_id, parent_uuid, slot, inputs}` (flat tree) | `{source_id, source: {component: {component_id, slots}}, node_id}` (one component per field) | Readable via `jsonapi_frontend_layout`: `{layout_id, components[{uuid, region, plugin_id, type, settings}]}` |
+| Source of available component types? | `/jsonapi/component/component` (label only, machine name not exposed) | Via `plugin.manager.sdc` (drush only); same gap as Canvas | Via `plugin.manager.layout` (drush only) |
+| Contrib module that extends JSON:API support? | None needed | `ui_patterns_field` sub-module (ships with `ui_patterns`) — adds `ui_patterns_source` field type | `drupal/jsonapi_frontend_layout` v1.0.1 (read-only); `drupal/jsonapi_layout_builder` (Drupal 8/9 only) |
 | Full example create payload? | See §1.7 | See §2.4 | Not possible |
 | Full example update payload? | See §1.8 | See §2.5 | Not possible |
 
@@ -436,6 +516,10 @@ Display Builder content **is** writable via JSON:API once the `ui_patterns_field
 
 **Key difference from Canvas:** Each `ui_patterns_source` field holds ONE component instance; multiple fields = multiple components. Canvas uses a single flat component array on the entity.
 
-### Layout Builder → BLOCKED
+### Layout Builder → BLOCKED (write); partial read via contrib
 
-No JSON:API support in core. No contrib module found that exposes Layout Builder sections via JSON:API. Blocked per the design constraint (no custom module).
+**Write is blocked at the Drupal core level.** `LayoutSectionItemList::defaultAccess()` returns `forbidden()` unconditionally — even for admin. The open core issue (d.o #2942975) has not been resolved in 11.3.8. The only Drupal 11–compatible contrib module (`drupal/jsonapi_frontend_layout` v1.0.1) is read-only.
+
+**Partial option for `discover`:** `jsonapi_frontend_layout` exposes the current layout sections at `/jsonapi/layout/resolve?path=/node/<nid>`. This could be used by the `discover` command to inspect which layouts/blocks are in use — but not to write.
+
+The Layout Builder implementation worktree remains **BLOCKED** per the design constraint (no custom module). Inform developer.

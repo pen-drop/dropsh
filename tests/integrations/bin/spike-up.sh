@@ -45,8 +45,9 @@ case "$MODE" in
     ddev drush php:script fixtures/setup-display-builder.php
     ;;
   layout-builder)
-    echo "=== Layout Builder mode: core only, no extra modules ==="
-    # Layout Builder is already enabled above via layout_builder
+    echo "=== Layout Builder mode: Layout Builder core + jsonapi_frontend_layout for read access ==="
+    ddev drush en -y jsonapi_frontend jsonapi_frontend_layout || echo "WARNING: jsonapi_frontend_layout not found or failed"
+    ddev drush php:script fixtures/setup-layout-builder.php
     ;;
   all)
     echo "WARNING: Installing Canvas + Display Builder together is known to produce a PHP TypeError."
