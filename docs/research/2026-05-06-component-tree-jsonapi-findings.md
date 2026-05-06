@@ -400,14 +400,63 @@ The property to write is `section` — but the write is blocked before any seria
 → 403 The current user is not allowed to PATCH the selected field (layout_builder__layout).
 ```
 
-### 3.3 Contrib modules evaluated
+### 3.3 Core patch MR #14351 (January 2026)
+
+Drupal core MR #14351 (`2942975-layout_builder_rest_main → main`, Jan 2026) partially addresses the issue. Tested against Drupal 11.3.8 — patch applies cleanly.
+
+**What the patch changes:**
+
+```php
+// LayoutSectionItemList::defaultAccess() — before:
+return AccessResult::forbidden();
+
+// After:
+if ($operation === 'view') {
+  return parent::defaultAccess($operation, $account);
+}
+return AccessResult::forbidden();
+```
+
+It also adds `SectionDataNormalizer` (serializes `Section` objects to/from JSON arrays).
+
+**Effect confirmed by testing:**
+
+| Operation | Without patch | With MR #14351 patch |
+|---|---|---|
+| GET `layout_builder__layout` | ❌ Field absent from response | ✅ Full section tree returned |
+| PATCH `layout_builder__layout` | ❌ 403 Forbidden | ❌ 403 Forbidden (unchanged) |
+
+**Read shape (with patch):**
+
+```json
+"layout_builder__layout": [
+  {
+    "layout_id": "layout_onecol",
+    "layout_settings": { "label": "" },
+    "components": [
+      {
+        "uuid": "<uuid>",
+        "region": "content",
+        "configuration": { "id": "page_title_block", "label": "Title", "label_display": "1" },
+        "weight": 0,
+        "additional": []
+      }
+    ],
+    "third_party_settings": []
+  }
+]
+```
+
+**Conclusion:** The patch enables READ but deliberately keeps WRITE blocked. The `edit` operation remains `forbidden()` by design. This MR is not yet merged into Drupal core.
+
+### 3.4 Contrib modules evaluated
 
 | Module | Drupal 11 | Purpose | Write support |
 |---|---|---|---|
 | `drupal/jsonapi_layout_builder` | ❌ `^8.8 || ^9` only | JSON:API customizations for Layout Builder | N/A — incompatible |
 | `drupal/jsonapi_frontend_layout` v1.0.1 | ✅ `^10.3 || ^11` | Read-only layout tree endpoint | ❌ GET only |
 
-### 3.4 Read-only option: `jsonapi_frontend_layout`
+### 3.5 Read-only option: `jsonapi_frontend_layout`
 
 `drupal/jsonapi_frontend_layout` v1.0.1 (stable) adds a single GET endpoint:
 
@@ -450,7 +499,7 @@ Response shape (no authentication required — public):
 
 This module is useful for reading the current layout configuration (e.g. for a `discover` command), but provides **no write path**.
 
-### 3.5 BLOCKER (write use case)
+### 3.6 BLOCKER (write use case)
 
 **Layout Builder sections cannot be written via JSON:API in Drupal 11.** The access block is in Drupal core and intentional. No Drupal 11–compatible contrib module provides a write path. The Layout Builder implementation worktree is blocked per the design constraint (no custom module).
 
