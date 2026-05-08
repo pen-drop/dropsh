@@ -19,7 +19,7 @@ ddev drush site:install standard -y \
   --account-name=admin --account-pass=admin \
   --site-name="drupal-cli integration (schemata)"
 
-ddev drush en -y basic_auth jsonapi simple_oauth simple_oauth_password_grant consumers schemata schemata_json_schema drupal_cli_test_helper
+ddev drush en -y basic_auth jsonapi simple_oauth simple_oauth_password_grant consumers schemata schemata_json_schema canvas jsonapi_sdc jsonapi_resources
 ddev drush php:eval "\Drupal::configFactory()->getEditable('jsonapi.settings')->set('read_only', FALSE)->save();"
 
 KEYDIR="/var/www/html/keys"
@@ -28,6 +28,7 @@ ddev drush config:set -y simple_oauth.settings public_key "$KEYDIR/public.key"
 ddev drush config:set -y simple_oauth.settings private_key "$KEYDIR/private.key"
 
 ddev drush php:script fixtures/setup-content-type.php
+ddev drush php:script fixtures/setup-canvas.php
 ddev drush php:script fixtures/setup-users.php
 OAUTH_OUTPUT="$(ddev drush php:script fixtures/setup-oauth.php)"
 OAUTH_JSON="$(printf '%s\n' "$OAUTH_OUTPUT" | grep '^CONSUMER_JSON:' | head -1 | sed 's/^CONSUMER_JSON://')"
