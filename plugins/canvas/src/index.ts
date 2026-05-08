@@ -7,8 +7,5 @@ export function canvasPlugin(): DrupalCliPlugin {
     async extendSchema(_entityType, _bundle, schema) {
       return schema;
     },
-    async extendOperationSchema(_entityType, _bundle, _operation, schema) {
-      return schema;
-    },
   };
 }

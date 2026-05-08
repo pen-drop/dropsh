@@ -18,12 +18,9 @@ describe("canvasPlugin", () => {
     );
   });
 
-  it("passes operation schema through unchanged before enrichment", async () => {
+  it("does not register an operation schema hook before enrichment", () => {
     const plugin = canvasPlugin();
-    const schema = { type: "object", properties: { data: { type: "object" } } };
 
-    await expect(
-      plugin.extendOperationSchema!("canvas_page", "canvas_page", "create", schema, {} as any),
-    ).resolves.toBe(schema);
+    expect(plugin.extendOperationSchema).toBeUndefined();
   });
 });
