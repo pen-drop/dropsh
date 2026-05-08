@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpError } from "../../../../src/errors.js";
-import type { PluginContext } from "../../../../src/core/plugin.js";
+import { HttpError, type PluginContext } from "dropsh/plugin";
 import { fetchSdcComponents, toCanvasComponentId } from "../../src/sdc-client.js";
 
 function ctx(
@@ -136,6 +135,46 @@ describe("sdc-client", () => {
       status: 404,
       body: "not found",
       message: "Canvas plugin requires Drupal module jsonapi_sdc to build component schemas.",
+    });
+  });
+
+  it("preserves non-404 HTTP errors from jsonapi_sdc", async () => {
+    const forbidden = ctx([{ status: 403, body: "forbidden" }]);
+    const broken = ctx([{ status: 500, body: "server error" }]);
+
+    await expect(fetchSdcComponents(forbidden)).rejects.toMatchObject({
+      code: "E_HTTP",
+      status: 403,
+      body: "forbidden",
+      message: "HTTP 403",
+    });
+    await expect(fetchSdcComponents(broken)).rejects.toMatchObject({
+      code: "E_HTTP",
+      status: 500,
+      body: "server error",
+      message: "HTTP 500",
+    });
+  });
+
+  it("throws a clear error when jsonapi_sdc returns malformed JSON", async () => {
+    const context = ctx([{ status: 200, body: "not json" }]);
+
+    await expect(fetchSdcComponents(context)).rejects.toMatchObject({
+      code: "E_HTTP",
+      status: 502,
+      body: "not json",
+      message: "Canvas plugin requires jsonapi_sdc to return valid JSON:API.",
+    });
+  });
+
+  it("throws a clear error when jsonapi_sdc returns null JSON", async () => {
+    const context = ctx([{ status: 200, body: "null" }]);
+
+    await expect(fetchSdcComponents(context)).rejects.toMatchObject({
+      code: "E_HTTP",
+      status: 502,
+      body: null,
+      message: "Canvas plugin requires jsonapi_sdc to return valid JSON:API.",
     });
   });
 

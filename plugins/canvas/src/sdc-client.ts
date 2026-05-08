@@ -1,5 +1,4 @@
-import type { PluginContext } from "../../../src/core/plugin.js";
-import { HttpError } from "../../../src/errors.js";
+import { HttpError, type PluginContext } from "dropsh/plugin";
 
 export interface SdcComponent {
   id: string;
@@ -30,6 +29,8 @@ interface JsonApiSdcResource {
 interface JsonApiSdcResponse {
   data?: unknown;
 }
+
+const invalidJsonApiMessage = "Canvas plugin requires jsonapi_sdc to return valid JSON:API.";
 
 function asObject(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -82,7 +83,7 @@ export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcCompone
   try {
     response = await ctx.http.send(request);
   } catch (error) {
-    if (error instanceof HttpError) {
+    if (error instanceof HttpError && error.status === 404) {
       throw new HttpError(
         error.status,
         "Canvas plugin requires Drupal module jsonapi_sdc to build component schemas.",
@@ -92,8 +93,18 @@ export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcCompone
     throw error;
   }
 
-  const body = JSON.parse(response.body) as JsonApiSdcResponse;
-  const resources = Array.isArray(body.data) ? body.data : [];
+  let body: unknown;
+  try {
+    body = JSON.parse(response.body);
+  } catch {
+    throw new HttpError(502, invalidJsonApiMessage, response.body);
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new HttpError(502, invalidJsonApiMessage, body);
+  }
+
+  const jsonApiBody = body as JsonApiSdcResponse;
+  const resources = Array.isArray(jsonApiBody.data) ? jsonApiBody.data : [];
   const components = resources
     .map((resource) => normalizeResource(asObject(resource)))
     .filter((component): component is SdcComponent => component !== null);
@@ -102,7 +113,7 @@ export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcCompone
     throw new HttpError(
       422,
       "Canvas plugin requires Drupal module jsonapi_sdc to return at least one SDC component.",
-      body,
+      jsonApiBody,
     );
   }
 
