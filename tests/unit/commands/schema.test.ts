@@ -59,6 +59,67 @@ describe("runSchema", () => {
     expect(out["x-dropsh-operation"]).toBe("create");
   });
 
+  it("runs operation schema hooks after create/update conversion", async () => {
+    const emitted: unknown[] = [];
+    const warnings: string[] = [];
+    const http = seqHttp([
+      {
+        status: 200,
+        body: JSON.stringify({
+          data: [
+            {
+              type: "canvas_page--canvas_page",
+              id: "x",
+              attributes: { title: "A", components: [] },
+              relationships: {},
+            },
+          ],
+        }),
+      },
+    ]);
+    const plugin = {
+      id: "canvas",
+      requiredModules: ["canvas", "jsonapi_sdc"],
+      async extendSchema(_entity: string, _bundle: string, schema: unknown) {
+        return schema;
+      },
+      async extendOperationSchema(
+        _entity: string,
+        _bundle: string,
+        operation: "create" | "update",
+        schema: unknown,
+      ) {
+        const out = schema as Record<string, unknown>;
+        const data = (out.properties as any).data;
+        return {
+          ...out,
+          properties: out.properties,
+          "x-test-operation": operation,
+          "x-test-data-required": data.required,
+        };
+      },
+    };
+
+    await runSchema(
+      { target: "canvas_page/canvas_page", operation: "update", refresh: false },
+      {
+        http,
+        auth,
+        baseUrl: "https://ex",
+        jsonapiPrefix: "/jsonapi",
+        cwd: tempDir(),
+        emit: (v) => emitted.push(v),
+        warn: (m) => warnings.push(m),
+        plugins: [plugin],
+      },
+    );
+
+    const out = emitted[0] as any;
+    expect(out["x-test-operation"]).toBe("update");
+    expect(out["x-test-data-required"]).toEqual(["type", "id"]);
+    expect(out["x-dropsh-schema-extensions"]).toEqual(["canvas"]);
+  });
+
   it("rejects invalid target with ValidationError", async () => {
     const http = seqHttp([]);
     await expect(runSchema(

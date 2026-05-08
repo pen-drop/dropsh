@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
-import { runSchema } from "./commands/schema.js";
+import { applyOperationSchemaPlugins, runSchema } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
@@ -125,11 +125,22 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       plugins: ctx.plugins,
     });
     const transformed = toOperationVariant(raw, op);
+    const operationExtended = await applyOperationSchemaPlugins(
+      transformed,
+      { entity, bundle, operation: op },
+      {
+        http: ctx.http,
+        auth: ctx.auth,
+        baseUrl: ctx.baseUrl,
+        plugins: ctx.plugins,
+      },
+    );
     const tagged = {
-      ...(transformed as Record<string, unknown>),
+      ...(operationExtended.schema as Record<string, unknown>),
       "x-dropsh-source": source,
       "x-dropsh-target": { entity_type: entity, bundle },
       "x-dropsh-operation": op,
+      "x-dropsh-schema-extensions": operationExtended.extensions,
     };
     await store.write(key, tagged);
     return tagged;

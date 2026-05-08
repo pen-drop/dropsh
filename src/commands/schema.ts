@@ -25,6 +25,40 @@ export interface SchemaDeps {
   plugins?: DrupalCliPlugin[];
 }
 
+export async function applyOperationSchemaPlugins(
+  schema: unknown,
+  args: {
+    entity: string;
+    bundle: string;
+    operation: Operation;
+  },
+  deps: {
+    http: HttpClient;
+    auth: AuthAdapter;
+    baseUrl: string;
+    plugins: DrupalCliPlugin[];
+  },
+): Promise<{ schema: unknown; extensions: string[] }> {
+  let current = schema;
+  const extensions: string[] = [];
+  const ctx = { http: deps.http, auth: deps.auth, baseUrl: deps.baseUrl };
+  for (const plugin of deps.plugins) {
+    if (!plugin.extendOperationSchema) continue;
+    const extended = await plugin.extendOperationSchema(
+      args.entity,
+      args.bundle,
+      args.operation,
+      current,
+      ctx,
+    );
+    if (extended !== current) {
+      current = extended;
+      extensions.push(plugin.id);
+    }
+  }
+  return { schema: current, extensions };
+}
+
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+$/;
 
 export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<void> {
@@ -76,12 +110,23 @@ export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<voi
     plugins: deps.plugins ?? [],
   });
   const transformed = toOperationVariant(raw, args.operation);
+  const operationExtended = await applyOperationSchemaPlugins(
+    transformed,
+    { entity, bundle, operation: args.operation },
+    {
+      http: deps.http,
+      auth: deps.auth,
+      baseUrl: deps.baseUrl,
+      plugins: deps.plugins ?? [],
+    },
+  );
 
   const tagged = {
-    ...(transformed as Record<string, unknown>),
+    ...(operationExtended.schema as Record<string, unknown>),
     "x-dropsh-source": source,
     "x-dropsh-target": { entity_type: entity, bundle },
     "x-dropsh-operation": args.operation,
+    "x-dropsh-schema-extensions": operationExtended.extensions,
   };
 
   await store.write(cacheKey, tagged);
