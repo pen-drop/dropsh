@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runSchema } from "../../../src/commands/schema.js";
 import type { HttpClient } from "../../../src/core/http.js";
 import type { AuthAdapter } from "../../../src/core/auth/types.js";
@@ -25,6 +25,12 @@ function rootIndexBody(): string {
 function seqHttp(responses: Array<{ status: number; body: string }>): HttpClient {
   let i = 0;
   return { send: vi.fn(async () => ({ headers: {}, ...responses[i++]! })) };
+}
+
+function writeCachedSchema(dir: string, relPath: string, schema: unknown): void {
+  const abs = join(dir, ".dropsh/cache", relPath);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, JSON.stringify(schema, null, 2), "utf8");
 }
 
 describe("runSchema", () => {
@@ -118,6 +124,116 @@ describe("runSchema", () => {
     expect(out["x-test-operation"]).toBe("update");
     expect(out["x-test-data-required"]).toEqual(["type", "id"]);
     expect(out["x-dropsh-schema-extensions"]).toEqual(["canvas"]);
+  });
+
+  it("ignores stale cached schemas without operation hook metadata", async () => {
+    const emitted: unknown[] = [];
+    const warnings: string[] = [];
+    const dir = tempDir();
+    writeCachedSchema(dir, "schema/canvas_page--canvas_page.update.json", {
+      type: "object",
+      "x-stale-cache": true,
+    });
+    const http = seqHttp([
+      {
+        status: 200,
+        body: JSON.stringify({
+          data: [
+            {
+              type: "canvas_page--canvas_page",
+              id: "x",
+              attributes: { title: "A", components: [] },
+              relationships: {},
+            },
+          ],
+        }),
+      },
+    ]);
+    const plugin = {
+      id: "canvas",
+      requiredModules: ["canvas", "jsonapi_sdc"],
+      async extendSchema(_entity: string, _bundle: string, schema: unknown) {
+        return schema;
+      },
+      async extendOperationSchema(
+        _entity: string,
+        _bundle: string,
+        operation: "create" | "update",
+        schema: unknown,
+      ) {
+        return {
+          ...(schema as Record<string, unknown>),
+          "x-test-operation": operation,
+        };
+      },
+    };
+
+    await runSchema(
+      { target: "canvas_page/canvas_page", operation: "update", refresh: false },
+      {
+        http,
+        auth,
+        baseUrl: "https://ex",
+        jsonapiPrefix: "/jsonapi",
+        cwd: dir,
+        emit: (v) => emitted.push(v),
+        warn: (m) => warnings.push(m),
+        plugins: [plugin],
+      },
+    );
+
+    const out = emitted[0] as any;
+    expect((http.send as any).mock.calls.length).toBe(1);
+    expect(out["x-stale-cache"]).toBeUndefined();
+    expect(out["x-test-operation"]).toBe("update");
+    expect(out["x-dropsh-schema-pipeline-version"]).toBe(2);
+    expect(out["x-dropsh-operation-hook-plugins"]).toEqual(["canvas"]);
+  });
+
+  it("uses cached schemas when operation hook metadata matches", async () => {
+    const emitted: unknown[] = [];
+    const warnings: string[] = [];
+    const dir = tempDir();
+    writeCachedSchema(dir, "schema/canvas_page--canvas_page.update.json", {
+      type: "object",
+      "x-cached-schema": true,
+      "x-dropsh-schema-pipeline-version": 2,
+      "x-dropsh-operation-hook-plugins": ["canvas"],
+    });
+    const http = seqHttp([]);
+    const plugin = {
+      id: "canvas",
+      requiredModules: ["canvas", "jsonapi_sdc"],
+      async extendSchema(_entity: string, _bundle: string, schema: unknown) {
+        return schema;
+      },
+      async extendOperationSchema(
+        _entity: string,
+        _bundle: string,
+        _operation: "create" | "update",
+        schema: unknown,
+      ) {
+        return schema;
+      },
+    };
+
+    await runSchema(
+      { target: "canvas_page/canvas_page", operation: "update", refresh: false },
+      {
+        http,
+        auth,
+        baseUrl: "https://ex",
+        jsonapiPrefix: "/jsonapi",
+        cwd: dir,
+        emit: (v) => emitted.push(v),
+        warn: (m) => warnings.push(m),
+        plugins: [plugin],
+      },
+    );
+
+    const out = emitted[0] as any;
+    expect((http.send as any).mock.calls.length).toBe(0);
+    expect(out["x-cached-schema"]).toBe(true);
   });
 
   it("rejects invalid target with ValidationError", async () => {

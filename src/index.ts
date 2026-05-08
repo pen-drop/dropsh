@@ -4,7 +4,13 @@ import { Command } from "commander";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
-import { applyOperationSchemaPlugins, runSchema } from "./commands/schema.js";
+import {
+  SCHEMA_PIPELINE_VERSION,
+  applyOperationSchemaPlugins,
+  operationHookPluginIds,
+  runSchema,
+  schemaCacheMetadataMatches,
+} from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
@@ -112,8 +118,9 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     });
     const [entity, bundle] = target.split("/", 2) as [string, string];
     const key = `schema/${entity}--${bundle}.${op}.json`;
+    const hookPluginIds = operationHookPluginIds(ctx.plugins);
     const hit = await store.read<unknown>(key);
-    if (hit !== undefined) return hit;
+    if (hit !== undefined && schemaCacheMetadataMatches(hit, hookPluginIds)) return hit;
     const { schema: raw, source } = await fetchJsonSchema({
       http: ctx.http,
       auth: ctx.auth,
@@ -141,6 +148,8 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       "x-dropsh-target": { entity_type: entity, bundle },
       "x-dropsh-operation": op,
       "x-dropsh-schema-extensions": operationExtended.extensions,
+      "x-dropsh-schema-pipeline-version": SCHEMA_PIPELINE_VERSION,
+      "x-dropsh-operation-hook-plugins": hookPluginIds,
     };
     await store.write(key, tagged);
     return tagged;
