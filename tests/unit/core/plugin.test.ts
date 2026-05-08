@@ -41,4 +41,31 @@ describe("DrupalCliPlugin interface", () => {
     };
     expect(plugin.createAuthAdapter!()).toBe(adapter);
   });
+
+  it("accepts an optional operation-aware schema hook", async () => {
+    const plugin: DrupalCliPlugin = {
+      id: "builder",
+      requiredModules: ["jsonapi_sdc"],
+      async extendSchema(_e, _b, s) {
+        return s;
+      },
+      async extendOperationSchema(_entity, _bundle, operation, schema, _ctx) {
+        return {
+          ...(schema as Record<string, unknown>),
+          "x-test-operation": operation,
+        };
+      },
+    };
+
+    const schema = { type: "object" };
+    const extended = await plugin.extendOperationSchema!(
+      "canvas_page",
+      "canvas_page",
+      "create",
+      schema,
+      ctx,
+    );
+
+    expect(extended).toEqual({ type: "object", "x-test-operation": "create" });
+  });
 });

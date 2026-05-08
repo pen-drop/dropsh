@@ -5,5 +5,5 @@ export type { Config, SiteConfig } from "./core/config.js";
 export { loadConfig } from "./core/config.js";
 export type { HttpClient, HttpRequest } from "./core/http.js";
 export { createHttpClient } from "./core/http.js";
-export type { DrupalCliPlugin, PluginContext } from "./core/plugin.js";
+export type { DrupalCliPlugin, PluginContext, SchemaOperation } from "./core/plugin.js";
 export { AuthError, ConfigError, HttpError } from "./errors.js";
