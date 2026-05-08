@@ -53,6 +53,36 @@ If the site has `drupal/schemata` + `drupal/schemata_json_schema` installed, the
 
 Schemas are cached under `.dropsh/cache/`. Override the config path via `DROPSH_CONFIG` or `--config`.
 
+### Canvas schema plugin
+
+Canvas support lives in `@dropsh/plugin-canvas` and requires these Drupal modules:
+
+- `canvas`
+- `jsonapi_sdc`
+
+Register the plugin in `dropsh.config.js`:
+
+```js
+import { basicAuthPlugin } from "dropsh";
+import { canvasPlugin } from "@dropsh/plugin-canvas";
+
+export default {
+  site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
+  plugins: [
+    basicAuthPlugin({ username: process.env.DRUPAL_USER, password: process.env.DRUPAL_PASSWORD }),
+    canvasPlugin(),
+  ],
+};
+```
+
+Then ask for the Canvas schema:
+
+```bash
+dropsh schema canvas_page/canvas_page --for=create
+```
+
+The returned JSON Schema includes `x-dropsh-builder: "canvas"`, `x-dropsh-components`, and a typed `attributes.components` array. If `jsonapi_sdc` is missing or inaccessible, the Canvas schema fails instead of returning incomplete component information.
+
 ### Client-side validation in `create` / `update`
 
 `dropsh create` and `dropsh update` run the payload through the bundle's schema before sending it. A validation failure exits with code 4 (`E_VALIDATION`) and emits the Ajv errors on stderr without issuing an HTTP request. Pass `--no-validate` to skip the check.
