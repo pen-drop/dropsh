@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { testConfig } from "./helpers/config.js";
+import { oauth2Config } from "./helpers/config.js";
 import {
   type Auth,
   createTestNode,
@@ -24,12 +24,12 @@ describe("integration: auth oauth2 password grant", () => {
   });
 
   it("returns exit 3 with a wrong password", async () => {
-    const cfg = testConfig();
+    const oauth = oauth2Config();
     const badAuth: Auth = {
       type: "oauth2_password",
-      clientId: cfg.oauth2.password_client_id,
-      clientSecret: cfg.oauth2.password_client_secret,
-      user: cfg.oauth2.user,
+      clientId: oauth.password_client_id,
+      clientSecret: oauth.password_client_secret,
+      user: oauth.user,
       pass: "wrong-password",
     };
 

@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { type SiteName, testConfig } from "./config.js";
+import { oauth2Config, type SiteName, testConfig } from "./config.js";
 
 export type Auth =
   | { type: "basic"; user: string; pass: string }
@@ -41,71 +41,86 @@ export interface RunOptions {
   args: string[];
 }
 
-function renderConfig(url: string, auth: Auth): string {
-  const schemataUrl = pathToFileURL(resolve("plugins/schemata/src/index.js")).href;
-  const oauthUrl = pathToFileURL(resolve("plugins/oauth2/src/index.js")).href;
-  const basicUrl = pathToFileURL(resolve("src/core/auth/basic.js")).href;
+const PLUGIN_BY_SITE: Record<SiteName, string | null> = {
+  plain: null,
+  schemata: "schemata",
+  canvas: "canvas",
+  db: null,
+};
+
+function pluginImport(plugin: string): { importLine: string; instantiation: string } {
+  const sourcePath = pathToFileURL(resolve(`plugins/${plugin}/src/index.js`)).href;
+  if (plugin === "schemata") {
+    return {
+      importLine: `import { schemataPlugin } from ${JSON.stringify(sourcePath)};`,
+      instantiation: "schemataPlugin()",
+    };
+  }
+  if (plugin === "canvas") {
+    return {
+      importLine: `import { canvasPlugin } from ${JSON.stringify(sourcePath)};`,
+      instantiation: "canvasPlugin()",
+    };
+  }
+  throw new Error(`Unknown plugin '${plugin}'`);
+}
+
+function renderConfig(url: string, auth: Auth, site: SiteName): string {
+  const oauthSrc = pathToFileURL(resolve("plugins/oauth2/src/index.js")).href;
+  const basicSrc = pathToFileURL(resolve("src/core/auth/basic.js")).href;
   const tokenUrl = `${url.replace(/\/$/, "")}/oauth/token`;
 
+  const sitePlugin = PLUGIN_BY_SITE[site];
+  const pluginExtras = sitePlugin ? pluginImport(sitePlugin) : null;
+
+  const importLines: string[] = [];
+  const pluginLines: string[] = [];
+
   if (auth.type === "basic") {
-    return [
-      `import { basicAuthPlugin } from ${JSON.stringify(basicUrl)};`,
-      `import { schemataPlugin } from ${JSON.stringify(schemataUrl)};`,
-      "",
-      "export default {",
-      `  site: { base_url: ${JSON.stringify(url)}, jsonapi_prefix: '/jsonapi' },`,
-      "  defaults: { dry_run: false, timeout_ms: 30000 },",
-      "  plugins: [",
+    importLines.push(`import { basicAuthPlugin } from ${JSON.stringify(basicSrc)};`);
+    pluginLines.push(
       `    basicAuthPlugin({ username: ${JSON.stringify(auth.user)}, password: ${JSON.stringify(auth.pass)} }),`,
-      "    schemataPlugin(),",
-      "  ],",
-      "};",
-      "",
-    ].join("\n");
+    );
+  } else {
+    importLines.push(`import { oauth2Plugin } from ${JSON.stringify(oauthSrc)};`);
+    if (auth.type === "oauth2_password") {
+      pluginLines.push(
+        "    oauth2Plugin({",
+        "      type: 'oauth2_password',",
+        `      client_id: ${JSON.stringify(auth.clientId)},`,
+        `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
+        `      username: ${JSON.stringify(auth.user)},`,
+        `      password: ${JSON.stringify(auth.pass)},`,
+        `      token_url: ${JSON.stringify(tokenUrl)},`,
+        ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
+        "    }),",
+      );
+    } else {
+      pluginLines.push(
+        "    oauth2Plugin({",
+        "      type: 'oauth2_client_credentials',",
+        `      client_id: ${JSON.stringify(auth.clientId)},`,
+        `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
+        `      token_url: ${JSON.stringify(tokenUrl)},`,
+        ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
+        "    }),",
+      );
+    }
   }
 
-  if (auth.type === "oauth2_password") {
-    return [
-      `import { oauth2Plugin } from ${JSON.stringify(oauthUrl)};`,
-      `import { schemataPlugin } from ${JSON.stringify(schemataUrl)};`,
-      "",
-      "export default {",
-      `  site: { base_url: ${JSON.stringify(url)}, jsonapi_prefix: '/jsonapi' },`,
-      "  defaults: { dry_run: false, timeout_ms: 30000 },",
-      "  plugins: [",
-      "    oauth2Plugin({",
-      "      type: 'oauth2_password',",
-      `      client_id: ${JSON.stringify(auth.clientId)},`,
-      `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
-      `      username: ${JSON.stringify(auth.user)},`,
-      `      password: ${JSON.stringify(auth.pass)},`,
-      `      token_url: ${JSON.stringify(tokenUrl)},`,
-      ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
-      "    }),",
-      "    schemataPlugin(),",
-      "  ],",
-      "};",
-      "",
-    ].join("\n");
+  if (pluginExtras) {
+    importLines.push(pluginExtras.importLine);
+    pluginLines.push(`    ${pluginExtras.instantiation},`);
   }
 
-  // oauth2_client_credentials
   return [
-    `import { oauth2Plugin } from ${JSON.stringify(oauthUrl)};`,
-    `import { schemataPlugin } from ${JSON.stringify(schemataUrl)};`,
+    ...importLines,
     "",
     "export default {",
     `  site: { base_url: ${JSON.stringify(url)}, jsonapi_prefix: '/jsonapi' },`,
     "  defaults: { dry_run: false, timeout_ms: 30000 },",
     "  plugins: [",
-    "    oauth2Plugin({",
-    "      type: 'oauth2_client_credentials',",
-    `      client_id: ${JSON.stringify(auth.clientId)},`,
-    `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
-    `      token_url: ${JSON.stringify(tokenUrl)},`,
-    ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
-    "    }),",
-    "    schemataPlugin(),",
+    ...pluginLines,
     "  ],",
     "};",
     "",
@@ -113,13 +128,14 @@ function renderConfig(url: string, auth: Auth): string {
 }
 
 export async function runCli(opts: RunOptions): Promise<RunResult> {
-  const cfg = testConfig(opts.site ?? "plain");
+  const site = opts.site ?? "plain";
+  const cfg = testConfig(site);
   const url = opts.url ?? cfg.url;
-  const auth = opts.auth ?? basicAuth(opts.site ?? "plain");
+  const auth = opts.auth ?? basicAuth(site);
 
   const dir = mkdtempSync(join(tmpdir(), "dropsh-it-"));
   const cfgPath = join(dir, "dropsh.config.mjs");
-  writeFileSync(cfgPath, renderConfig(url, auth), "utf8");
+  writeFileSync(cfgPath, renderConfig(url, auth, site), "utf8");
 
   return await new Promise<RunResult>((resolve) => {
     const child = spawn("node", ["--import", "tsx/esm", "bin/dropsh-src", ...opts.args], {
@@ -158,24 +174,24 @@ export function basicAuth(site: SiteName = "plain"): Auth {
 }
 
 export function oauth2Password(site: SiteName = "plain"): Auth {
-  const cfg = testConfig(site);
+  const oauth = oauth2Config(site);
   return {
     type: "oauth2_password",
-    clientId: cfg.oauth2.password_client_id,
-    clientSecret: cfg.oauth2.password_client_secret,
-    user: cfg.oauth2.user,
-    pass: cfg.oauth2.pass,
-    scope: cfg.oauth2.scope,
+    clientId: oauth.password_client_id,
+    clientSecret: oauth.password_client_secret,
+    user: oauth.user,
+    pass: oauth.pass,
+    scope: oauth.scope,
   };
 }
 
 export function oauth2ClientCred(site: SiteName = "plain"): Auth {
-  const cfg = testConfig(site);
+  const oauth = oauth2Config(site);
   return {
     type: "oauth2_client_credentials",
-    clientId: cfg.oauth2.cc_client_id,
-    clientSecret: cfg.oauth2.cc_client_secret,
-    scope: cfg.oauth2.scope,
+    clientId: oauth.cc_client_id,
+    clientSecret: oauth.cc_client_secret,
+    scope: oauth.scope,
   };
 }
 

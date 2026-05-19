@@ -1,9 +1,9 @@
 // Multisite integration fixture coordinates.
 //
-// All values are static (no .test-config.json handover): URLs are determined
-// by the DDEV project name (dropsh-test), credentials are hardcoded in the
-// Drupal fixture scripts (fixtures/setup-*.php). This file is the canonical
-// source for tests.
+// Static URLs + hardcoded credentials. Tests run against the DDEV project
+// dropsh-test; each subsite is exposed at <name>.dropsh-test.ddev.site with
+// its own database. OAuth credentials live only on the "plain" site because
+// only that site enables simple_oauth.
 
 export type SiteName = "plain" | "schemata" | "canvas" | "db";
 
@@ -20,57 +20,49 @@ export interface OAuth2Config {
 export interface TestConfig {
   url: string;
   basic: { user: string; pass: string };
-  oauth2: OAuth2Config;
+  oauth2?: OAuth2Config;
 }
 
 const TESTER = { user: "tester", pass: "tester-pw" };
-
-const OAUTH2: OAuth2Config = {
-  scope: "integration:content",
-  password_client_id: "tests-password",
-  password_client_secret: "tests-password-secret",
-  cc_client_id: "tests-cc",
-  cc_client_secret: "tests-cc-secret",
-  user: TESTER.user,
-  pass: TESTER.pass,
-};
-
-const EMPTY_OAUTH: OAuth2Config = {
-  scope: "",
-  password_client_id: "",
-  password_client_secret: "",
-  cc_client_id: "",
-  cc_client_secret: "",
-  user: TESTER.user,
-  pass: TESTER.pass,
-};
 
 const SITES: Record<SiteName, TestConfig> = {
   plain: {
     url: "http://dropsh-test.ddev.site",
     basic: TESTER,
-    oauth2: OAUTH2,
+    oauth2: {
+      scope: "integration:content",
+      password_client_id: "tests-password",
+      password_client_secret: "tests-password-secret",
+      cc_client_id: "tests-cc",
+      cc_client_secret: "tests-cc-secret",
+      user: TESTER.user,
+      pass: TESTER.pass,
+    },
   },
   schemata: {
     url: "http://schemata.dropsh-test.ddev.site",
     basic: TESTER,
-    oauth2: EMPTY_OAUTH,
   },
   canvas: {
     url: "http://canvas.dropsh-test.ddev.site",
     basic: TESTER,
-    oauth2: EMPTY_OAUTH,
   },
   db: {
     url: "http://db.dropsh-test.ddev.site",
     basic: TESTER,
-    oauth2: EMPTY_OAUTH,
   },
 };
 
-/**
- * Returns the config for an integration site. Defaults to "plain".
- */
+/** Coordinates for an integration subsite. Defaults to "plain". */
 export function testConfig(site: SiteName = "plain"): TestConfig {
   return SITES[site];
+}
+
+/** OAuth credentials for sites that enable simple_oauth. Throws otherwise. */
+export function oauth2Config(site: SiteName = "plain"): OAuth2Config {
+  const cfg = SITES[site];
+  if (!cfg.oauth2) {
+    throw new Error(`Site '${site}' has no simple_oauth — use site: "plain" for OAuth tests.`);
+  }
+  return cfg.oauth2;
 }
