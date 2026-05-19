@@ -6,21 +6,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DRUPAL_DIR="$ROOT/tests/integrations/drupal"
 
-# Wait for Drupal to be reachable on a given URI.
-wait_for_url() {
-  local url="$1"
-  local tries=30
-  while (( tries > 0 )); do
-    if curl -s -k -o /dev/null -w "%{http_code}" "$url" | grep -qE "^(200|301|302|403)$"; then
-      return 0
-    fi
-    sleep 1
-    tries=$((tries - 1))
-  done
-  echo "URL never came up: $url" >&2
-  return 1
-}
-
 # Create a database in the DDEV mariadb container (idempotent).
 create_db() {
   local db_name="$1"
@@ -50,7 +35,7 @@ install_site() {
     if [ -d /var/www/html/web/sites/${site_dir} ]; then
       chmod -R u+w /var/www/html/web/sites/${site_dir} 2>/dev/null || true
     fi
-    rm -rf /var/www/html/web/sites/${site_dir}/settings.php /var/www/html/web/sites/${site_dir}/files /var/www/html/web/sites/${site_dir}/services.yml
+    rm -rf /var/www/html/web/sites/${site_dir}/settings.php /var/www/html/web/sites/${site_dir}/files
     mkdir -p /var/www/html/web/sites/${site_dir}
     cp /var/www/html/web/sites/default/default.settings.php /var/www/html/web/sites/${site_dir}/settings.php
     chmod -R u+w /var/www/html/web/sites/${site_dir}
@@ -61,23 +46,6 @@ install_site() {
     --account-name=admin --account-pass=admin \
     "--site-name=${site_name}" \
     "--db-url=mysql://db:db@db:3306/${db_name}"
-}
-
-# Override the basic_auth provider so it applies to every route (not just the
-# ones with _auth: [basic_auth]). Needed for routes like /schemata/* whose
-# modules don't opt into basic_auth explicitly. No custom Drupal module
-# required — just per-site container yaml.
-enable_global_basic_auth() {
-  local site_dir="$1"
-  local uri="$2"
-  local target="/var/www/html/web/sites/${site_dir}"
-
-  ddev exec bash -lc "set -e; chmod -R u+w ${target}"
-  ddev exec cp /var/www/html/sites-templates/services.yml "${target}/services.yml"
-  # Idempotent append: only add the include line if it's not already there.
-  ddev exec bash -lc "grep -q 'container_yamls.*services.yml' ${target}/settings.php || cat /var/www/html/sites-templates/settings-append.php >> ${target}/settings.php"
-
-  ddev drush -l "https://${uri}" cr >/dev/null
 }
 
 # Enable modules on a specific multisite.
@@ -93,21 +61,19 @@ make_jsonapi_writable() {
   ddev drush -l "https://${uri}" php:eval "\\Drupal::configFactory()->getEditable('jsonapi.settings')->set('read_only', FALSE)->save();"
 }
 
+# Generate (once) shared RSA keys and point the site's simple_oauth settings
+# at them. Keys live outside the docroot at /var/www/html/keys.
+setup_oauth_keys() {
+  local uri="$1"
+  local keydir="/var/www/html/keys"
+  ddev exec bash -lc "mkdir -p '$keydir' && [ -f '$keydir/private.key' ] || (openssl genrsa -out '$keydir/private.key' 2048 && openssl rsa -in '$keydir/private.key' -pubout -out '$keydir/public.key' && chmod 600 '$keydir/private.key' '$keydir/public.key')"
+  ddev drush -l "https://${uri}" config:set -y simple_oauth.settings public_key "$keydir/public.key"
+  ddev drush -l "https://${uri}" config:set -y simple_oauth.settings private_key "$keydir/private.key"
+}
+
 # Run a PHP fixture script against a site.
 run_fixture() {
   local uri="$1"
   local script="$2"
   ddev drush -l "https://${uri}" php:script "$script"
-}
-
-# Capture stdout of a PHP fixture script.
-capture_fixture() {
-  local uri="$1"
-  local script="$2"
-  ddev drush -l "https://${uri}" php:script "$script"
-}
-
-# Print the canonical web URL DDEV announces for the project (http).
-ddev_http_url() {
-  ddev describe -j | python3 -c 'import json, sys; print(json.load(sys.stdin)["raw"]["services"]["web"]["http_url"])'
 }

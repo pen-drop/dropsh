@@ -21,7 +21,6 @@ enable_modules "$URI" \
   ui_patterns ui_patterns_library \
   display_builder jsonapi_sdc
 
-enable_global_basic_auth "$SITE_DIR" "$URI"
 make_jsonapi_writable "$URI"
 
 run_fixture "$URI" fixtures/setup-content-type.php

@@ -31,9 +31,12 @@ function ensure_scope(): Oauth2Scope {
       ],
     ],
     'umbrella' => FALSE,
-    'granularity_id' => Oauth2ScopeInterface::GRANULARITY_PERMISSION,
+    // ROLE granularity grants OAuth tokens every permission of the
+    // integration_editor role (CRUD + access schemata data models),
+    // so OAuth works on routes like /schemata/* that have no _auth set.
+    'granularity_id' => Oauth2ScopeInterface::GRANULARITY_ROLE,
     'granularity_configuration' => [
-      'permission' => 'access content',
+      'role' => 'integration_editor',
     ],
   ];
 

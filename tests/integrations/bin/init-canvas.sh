@@ -19,7 +19,6 @@ enable_modules "$URI" \
   basic_auth jsonapi jsonapi_resources \
   canvas jsonapi_sdc
 
-enable_global_basic_auth "$SITE_DIR" "$URI"
 make_jsonapi_writable "$URI"
 
 run_fixture "$URI" fixtures/setup-content-type.php

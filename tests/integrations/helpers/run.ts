@@ -131,7 +131,8 @@ export async function runCli(opts: RunOptions): Promise<RunResult> {
   const site = opts.site ?? "plain";
   const cfg = testConfig(site);
   const url = opts.url ?? cfg.url;
-  const auth = opts.auth ?? basicAuth(site);
+  const auth =
+    opts.auth ?? (cfg.defaultAuth === "oauth2_password" ? oauth2Password(site) : basicAuth(site));
 
   const dir = mkdtempSync(join(tmpdir(), "dropsh-it-"));
   const cfgPath = join(dir, "dropsh.config.mjs");

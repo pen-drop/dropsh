@@ -20,13 +20,8 @@ enable_modules "$URI" \
   basic_auth jsonapi jsonapi_resources \
   simple_oauth simple_oauth_password_grant consumers
 
-enable_global_basic_auth "$SITE_DIR" "$URI"
 make_jsonapi_writable "$URI"
-
-KEYDIR="/var/www/html/keys"
-ddev exec bash -lc "mkdir -p '$KEYDIR' && [ -f '$KEYDIR/private.key' ] || (openssl genrsa -out '$KEYDIR/private.key' 2048 && openssl rsa -in '$KEYDIR/private.key' -pubout -out '$KEYDIR/public.key' && chmod 600 '$KEYDIR/private.key' '$KEYDIR/public.key')"
-ddev drush -l "https://${URI}" config:set -y simple_oauth.settings public_key "$KEYDIR/public.key"
-ddev drush -l "https://${URI}" config:set -y simple_oauth.settings private_key "$KEYDIR/private.key"
+setup_oauth_keys "$URI"
 
 run_fixture "$URI" fixtures/setup-content-type.php
 run_fixture "$URI" fixtures/setup-users.php
