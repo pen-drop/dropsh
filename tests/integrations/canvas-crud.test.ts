@@ -24,15 +24,21 @@ function updatePayload(uuid: string, title: string): string {
   });
 }
 
+// Shared lifecycle state — populated by "create" and consumed by the other
+// `it` blocks. Tests in a describe run sequentially by default in vitest, so
+// the ordering is reliable; if "create" fails, the downstream tests fail
+// loudly (uuid is undefined) which is the desired signal.
 describe("integration: canvas CRUD (canvas_page entity)", () => {
-  it("creates, reads, updates, and deletes a canvas_page", async () => {
-    const title = `it-canvas-${crypto.randomUUID()}`;
+  let title: string;
+  let uuid: string;
 
-    // CREATE — POST to /jsonapi/canvas_page/canvas_page. --no-validate skips
-    // client-side schema compilation because some SDC components ship props
-    // with Drupal PHP types (e.g. Drupal\Core\Template\Attribute) that Ajv
-    // cannot interpret. Drupal still validates server-side.
-    const created = await runCli({
+  it("create — POST canvas_page returns a UUID", async () => {
+    title = `it-canvas-${crypto.randomUUID()}`;
+
+    // --no-validate skips client-side schema compilation: some SDC components
+    // ship props with Drupal PHP types (e.g. Drupal\Core\Template\Attribute)
+    // that Ajv cannot interpret. Drupal still validates server-side.
+    const result = await runCli({
       site: "canvas",
       args: [
         "create",
@@ -42,25 +48,33 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
         "--no-validate",
       ],
     });
-    expect(created.code).toBe(0);
-    const createdBody = parseJson<CanvasPage>(created.stdout);
-    const uuid = createdBody.data.id;
-    expect(uuid).toMatch(/^[0-9a-f-]{36}$/);
-    expect(createdBody.data.attributes.title).toBe(title);
+    expect(result.code).toBe(0);
 
-    // READ
-    const read = await runCli({
+    const body = parseJson<CanvasPage>(result.stdout);
+    uuid = body.data.id;
+    expect(uuid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.data.attributes.title).toBe(title);
+  });
+
+  it("read — GET canvas_page returns the created entity", async () => {
+    expect(uuid).toBeDefined();
+
+    const result = await runCli({
       site: "canvas",
       args: ["read", `canvas_page/canvas_page/${uuid}`],
     });
-    expect(read.code).toBe(0);
-    const readBody = parseJson<CanvasPage>(read.stdout);
-    expect(readBody.data.id).toBe(uuid);
-    expect(readBody.data.attributes.title).toBe(title);
+    expect(result.code).toBe(0);
 
-    // UPDATE — change the title only.
+    const body = parseJson<CanvasPage>(result.stdout);
+    expect(body.data.id).toBe(uuid);
+    expect(body.data.attributes.title).toBe(title);
+  });
+
+  it("update — PATCH canvas_page changes the title", async () => {
+    expect(uuid).toBeDefined();
     const newTitle = `${title}-updated`;
-    const updated = await runCli({
+
+    const result = await runCli({
       site: "canvas",
       args: [
         "update",
@@ -69,11 +83,16 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
         "--no-validate",
       ],
     });
-    expect(updated.code).toBe(0);
-    const updatedBody = parseJson<CanvasPage>(updated.stdout);
-    expect(updatedBody.data.attributes.title).toBe(newTitle);
+    expect(result.code).toBe(0);
 
-    // DELETE
+    const body = parseJson<CanvasPage>(result.stdout);
+    expect(body.data.attributes.title).toBe(newTitle);
+    title = newTitle;
+  });
+
+  it("delete — DELETE canvas_page returns ok and a follow-up read 404s", async () => {
+    expect(uuid).toBeDefined();
+
     const deleted = await runCli({
       site: "canvas",
       args: ["delete", `canvas_page/canvas_page/${uuid}`],
@@ -81,7 +100,6 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
     expect(deleted.code).toBe(0);
     expect(parseJson<{ ok: boolean }>(deleted.stdout).ok).toBe(true);
 
-    // Verify it's gone — read should 404 → exit 5.
     const afterDelete = await runCli({
       site: "canvas",
       args: ["read", `canvas_page/canvas_page/${uuid}`],
