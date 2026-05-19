@@ -30,7 +30,7 @@ interface JsonApiSdcResponse {
   data?: unknown;
 }
 
-const invalidJsonApiMessage = "Canvas plugin requires jsonapi_sdc to return valid JSON:API.";
+const invalidJsonApiMessage = "jsonapi_sdc did not return a valid JSON:API document.";
 
 function asObject(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -43,7 +43,11 @@ function asString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-export function toCanvasComponentId(sdcId: string): string {
+/**
+ * Normalises a Drupal SDC id (e.g. "olivero:teaser") into the dotted form
+ * used by dropsh schemas: "sdc.<provider>.<name>".
+ */
+export function toSdcComponentId(sdcId: string): string {
   const [provider, name] = sdcId.split(":", 2);
   if (!provider || !name) {
     return `sdc.${sdcId.replace(/:/g, ".")}`;
@@ -72,6 +76,12 @@ function normalizeResource(resource: JsonApiSdcResource): SdcComponent | null {
   };
 }
 
+/**
+ * Fetches all SDC components from the Drupal jsonapi_sdc endpoint and
+ * returns them as a normalised list. Throws a `404 HttpError` with a clear
+ * message if jsonapi_sdc is not installed, and `502`/`422` HttpErrors for
+ * malformed or empty responses.
+ */
 export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcComponent[]> {
   const request = await ctx.auth.apply({
     method: "GET",
@@ -86,7 +96,7 @@ export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcCompone
     if (error instanceof HttpError && error.status === 404) {
       throw new HttpError(
         error.status,
-        "Canvas plugin requires Drupal module jsonapi_sdc to build component schemas.",
+        "Drupal module jsonapi_sdc is required to fetch SDC components.",
         error.body,
       );
     }
@@ -112,7 +122,7 @@ export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcCompone
   if (components.length === 0) {
     throw new HttpError(
       422,
-      "Canvas plugin requires Drupal module jsonapi_sdc to return at least one SDC component.",
+      "jsonapi_sdc returned no SDC components.",
       jsonApiBody,
     );
   }

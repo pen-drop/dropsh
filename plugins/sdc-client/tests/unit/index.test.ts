@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpError, type PluginContext } from "dropsh/plugin";
-import { fetchSdcComponents, toCanvasComponentId } from "../../src/sdc-client.js";
+import { fetchSdcComponents, toSdcComponentId } from "../../src/index.js";
 
 function ctx(
   responses: Array<{ status: number; body: string }>,
@@ -23,9 +23,9 @@ function ctx(
 }
 
 describe("sdc-client", () => {
-  it("maps Drupal SDC IDs to Canvas component IDs", () => {
-    expect(toCanvasComponentId("olivero:teaser")).toBe("sdc.olivero.teaser");
-    expect(toCanvasComponentId("my_theme:hero_card")).toBe("sdc.my_theme.hero_card");
+  it("maps Drupal SDC ids to dotted dropsh ids", () => {
+    expect(toSdcComponentId("olivero:teaser")).toBe("sdc.olivero.teaser");
+    expect(toSdcComponentId("my_theme:hero_card")).toBe("sdc.my_theme.hero_card");
   });
 
   it("fetches and normalizes jsonapi_sdc components", async () => {
@@ -134,7 +134,7 @@ describe("sdc-client", () => {
       code: "E_HTTP",
       status: 404,
       body: "not found",
-      message: "Canvas plugin requires Drupal module jsonapi_sdc to build component schemas.",
+      message: "Drupal module jsonapi_sdc is required to fetch SDC components.",
     });
   });
 
@@ -163,7 +163,7 @@ describe("sdc-client", () => {
       code: "E_HTTP",
       status: 502,
       body: "not json",
-      message: "Canvas plugin requires jsonapi_sdc to return valid JSON:API.",
+      message: "jsonapi_sdc did not return a valid JSON:API document.",
     });
   });
 
@@ -174,7 +174,7 @@ describe("sdc-client", () => {
       code: "E_HTTP",
       status: 502,
       body: null,
-      message: "Canvas plugin requires jsonapi_sdc to return valid JSON:API.",
+      message: "jsonapi_sdc did not return a valid JSON:API document.",
     });
   });
 
@@ -204,8 +204,7 @@ describe("sdc-client", () => {
           },
         ],
       },
-      message:
-        "Canvas plugin requires Drupal module jsonapi_sdc to return at least one SDC component.",
+      message: "jsonapi_sdc returned no SDC components.",
     });
   });
 });

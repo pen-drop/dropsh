@@ -1,6 +1,6 @@
 import type { DrupalCliPlugin } from "dropsh/plugin";
+import { fetchSdcComponents } from "@dropsh/sdc-client";
 import { extendCanvasSchema } from "./canvas-schema.js";
-import { fetchSdcComponents } from "./sdc-client.js";
 
 export function canvasPlugin(): DrupalCliPlugin {
   return {

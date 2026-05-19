@@ -1,6 +1,5 @@
 import type { SchemaOperation } from "dropsh/plugin";
-import type { SdcComponent } from "./sdc-client.js";
-import { toCanvasComponentId } from "./sdc-client.js";
+import { type SdcComponent, toSdcComponentId } from "@dropsh/sdc-client";
 
 type JsonSchemaObject = Record<string, any>;
 
@@ -35,7 +34,7 @@ function inputSchema(component: SdcComponent): JsonSchemaObject {
   return {
     ...props,
     type: "object",
-    description: `Inputs for ${toCanvasComponentId(component.id)} (${component.name})`,
+    description: `Inputs for ${toSdcComponentId(component.id)} (${component.name})`,
   };
 }
 
@@ -56,7 +55,7 @@ function componentItemVariant(component: SdcComponent, knownSlots: string[]): Js
     additionalProperties: false,
     properties: {
       uuid: { type: "string", format: "uuid" },
-      component_id: { type: "string", const: toCanvasComponentId(component.id) },
+      component_id: { type: "string", const: toSdcComponentId(component.id) },
       parent_uuid: { type: ["string", "null"], format: "uuid" },
       slot: slotSchema(knownSlots),
       inputs: inputSchema(component),
@@ -68,7 +67,7 @@ function componentItemVariant(component: SdcComponent, knownSlots: string[]): Js
 
 function componentMetadata(component: SdcComponent): JsonSchemaObject {
   return {
-    id: toCanvasComponentId(component.id),
+    id: toSdcComponentId(component.id),
     source_id: component.id,
     name: component.name,
     description: component.description,
@@ -94,7 +93,7 @@ export function extendCanvasSchema(
   const attributes = ensureObjectProperty(data, "attributes");
   const knownSlots = slotNames(components);
   const componentItemVariants = [...components]
-    .sort((a, b) => toCanvasComponentId(a.id).localeCompare(toCanvasComponentId(b.id)))
+    .sort((a, b) => toSdcComponentId(a.id).localeCompare(toSdcComponentId(b.id)))
     .map((component) => componentItemVariant(component, knownSlots));
 
   attributes.properties.components = {

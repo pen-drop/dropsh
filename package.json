@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build && npm --prefix plugins/canvas run build",
+    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build && npm --prefix plugins/sdc-client run build && npm --prefix plugins/canvas run build",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",

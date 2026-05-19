@@ -1,7 +1,7 @@
 import Ajv from "ajv";
 import { describe, expect, it } from "vitest";
 import { extendCanvasSchema } from "../../src/canvas-schema.js";
-import type { SdcComponent } from "../../src/sdc-client.js";
+import type { SdcComponent } from "@dropsh/sdc-client";
 
 const baseSchema = {
   $schema: "https://json-schema.org/draft-07/schema",
