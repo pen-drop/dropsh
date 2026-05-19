@@ -80,8 +80,9 @@ function ensure_consumer(string $client_id, string $label, array $grants, string
   return $consumer->get('client_id')->value;
 }
 
-$password_secret = bin2hex(random_bytes(16));
-$cc_secret = bin2hex(random_bytes(16));
+// Deterministic secrets so test code can hardcode credentials.
+$password_secret = 'tests-password-secret';
+$cc_secret = 'tests-cc-secret';
 $scope = ensure_scope();
 $tester = user_load_by_name('tester');
 

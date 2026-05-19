@@ -35,7 +35,10 @@ export function operationHookPluginIds(plugins: DrupalCliPlugin[]): string[] {
   return plugins.filter((plugin) => plugin.extendOperationSchema).map((plugin) => plugin.id);
 }
 
-export function schemaCacheMetadataMatches(schema: unknown, operationHookPlugins: string[]): boolean {
+export function schemaCacheMetadataMatches(
+  schema: unknown,
+  operationHookPlugins: string[],
+): boolean {
   if (!isRecord(schema)) return false;
   if (schema["x-dropsh-schema-pipeline-version"] !== SCHEMA_PIPELINE_VERSION) return false;
   const cachedPlugins = schema["x-dropsh-operation-hook-plugins"];

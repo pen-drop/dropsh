@@ -5,7 +5,10 @@ import { parseJson, runCli } from "../helpers/run.js";
 
 describe("integration: schema (schemata path, --for=create)", () => {
   it("returns a schemata-sourced schema that Ajv can compile", async () => {
-    const result = await runCli({ args: ["schema", "node/article_test", "--refresh"] });
+    const result = await runCli({
+      site: "schemata",
+      args: ["schema", "node/article_test", "--refresh"],
+    });
     expect(result.code).toBe(0);
     expect(result.stderr).toBe(""); // no "no 'schemata' module" warning
     // biome-ignore lint/suspicious/noExplicitAny: runtime schema shape from schemata

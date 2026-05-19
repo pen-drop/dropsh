@@ -1,0 +1,19 @@
+# Per-site service overrides applied to every dropsh integration subsite.
+#
+# Drupal's basic_auth module ships its authentication provider with
+# global=false, which means the provider only applies to routes that
+# explicitly list 'basic_auth' in their _auth option. The schemata module
+# (and many others) don't set _auth at all, so basic-auth credentials are
+# rejected with "The used authentication method is not allowed on this route."
+#
+# Re-declaring the service here with global=true makes basic_auth apply to
+# every route, mirroring how cookie/session auth is treated. This avoids
+# the need for a custom Drupal module or a patched contrib module.
+services:
+  _defaults:
+    autoconfigure: true
+  basic_auth.authentication.basic_auth:
+    class: Drupal\basic_auth\Authentication\Provider\BasicAuth
+    arguments: ['@config.factory', '@user.auth', '@flood', '@entity_type.manager']
+    tags:
+      - { name: authentication_provider, provider_id: 'basic_auth', priority: 100, global: true }

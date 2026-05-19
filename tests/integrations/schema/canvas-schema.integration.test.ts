@@ -13,7 +13,7 @@ interface RunResult {
 }
 
 async function runCliWithCanvasPlugin(args: string[]): Promise<RunResult> {
-  const cfg = testConfig();
+  const cfg = testConfig("canvas");
   const dir = mkdtempSync(join(tmpdir(), "dropsh-canvas-it-"));
   const cfgPath = join(dir, "dropsh.config.mjs");
   const basicUrl = pathToFileURL(resolve("src/core/auth/basic.js")).href;

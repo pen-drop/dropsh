@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { testConfig } from "./config.js";
+import { type SiteName, testConfig } from "./config.js";
 
 export type Auth =
   | { type: "basic"; user: string; pass: string }
@@ -33,6 +33,9 @@ export interface ErrorPayload {
 }
 
 export interface RunOptions {
+  /** Target subsite; defaults to "plain". */
+  site?: SiteName;
+  /** Override URL explicitly (rare; site is preferred). */
   url?: string;
   auth?: Auth;
   args: string[];
@@ -110,9 +113,9 @@ function renderConfig(url: string, auth: Auth): string {
 }
 
 export async function runCli(opts: RunOptions): Promise<RunResult> {
-  const cfg = testConfig();
+  const cfg = testConfig(opts.site ?? "plain");
   const url = opts.url ?? cfg.url;
-  const auth = opts.auth ?? basicAuth();
+  const auth = opts.auth ?? basicAuth(opts.site ?? "plain");
 
   const dir = mkdtempSync(join(tmpdir(), "dropsh-it-"));
   const cfgPath = join(dir, "dropsh.config.mjs");
@@ -149,13 +152,13 @@ export function parseError(stderr: string): ErrorPayload {
   return JSON.parse(stderr) as ErrorPayload;
 }
 
-export function basicAuth(): Auth {
-  const cfg = testConfig();
+export function basicAuth(site: SiteName = "plain"): Auth {
+  const cfg = testConfig(site);
   return { type: "basic", user: cfg.basic.user, pass: cfg.basic.pass };
 }
 
-export function oauth2Password(): Auth {
-  const cfg = testConfig();
+export function oauth2Password(site: SiteName = "plain"): Auth {
+  const cfg = testConfig(site);
   return {
     type: "oauth2_password",
     clientId: cfg.oauth2.password_client_id,
@@ -166,8 +169,8 @@ export function oauth2Password(): Auth {
   };
 }
 
-export function oauth2ClientCred(): Auth {
-  const cfg = testConfig();
+export function oauth2ClientCred(site: SiteName = "plain"): Auth {
+  const cfg = testConfig(site);
   return {
     type: "oauth2_client_credentials",
     clientId: cfg.oauth2.cc_client_id,
@@ -176,9 +179,10 @@ export function oauth2ClientCred(): Auth {
   };
 }
 
-export async function createTestNode(title: string): Promise<string> {
+export async function createTestNode(title: string, site: SiteName = "plain"): Promise<string> {
   const payload = { data: { type: "node--article_test", attributes: { title } } };
   const result = await runCli({
+    site,
     args: ["create", "node", "--bundle=article_test", `--data=${JSON.stringify(payload)}`],
   });
   if (result.code !== 0) {

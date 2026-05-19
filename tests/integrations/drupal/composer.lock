@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ee926398175fbd3bdad8c6ef8a7b9b08",
+    "content-hash": "3f7ad962201ce1da0cd1926647bae76b",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -1584,6 +1584,101 @@
             "time": "2026-04-20T07:33:20+00:00"
         },
         {
+            "name": "drupal/display_builder",
+            "version": "dev-1.0.x",
+            "source": {
+                "type": "git",
+                "url": "https://git.drupalcode.org/project/display_builder.git",
+                "reference": "85907187ecafec9d8f77f17b8394e031bb2fb39c"
+            },
+            "require": {
+                "drupal/core": "^11.3",
+                "drupal/ui_patterns": "^2.0.15",
+                "drupal/ui_patterns_library": "*",
+                "php": ">=8.3"
+            },
+            "require-dev": {
+                "drupal/display_builder_dev_tools": "1.0.x-dev",
+                "drupal/sdc_devel": "^1.0.2",
+                "drupal/ui_icons": "^1.1",
+                "drupal/ui_patterns-ui_patterns_field_formatters": "*",
+                "drupal/ui_patterns_field": "*",
+                "drupal/ui_patterns_views": "*",
+                "drupal/ui_skins": "^1.1",
+                "drupal/ui_styles": "^1.19"
+            },
+            "suggest": {
+                "drupal/ui_icons": "Provide Icons feature in Display builder",
+                "drupal/ui_skins": "Provide CSS tokens features in Display builder",
+                "drupal/ui_styles": "Provide Styles features in Display builder"
+            },
+            "type": "drupal-module",
+            "extra": {
+                "branch-alias": {
+                    "dev-1.0.x": "1.0.x-dev"
+                },
+                "drupal": {
+                    "version": "1.0.0-beta4+22-dev",
+                    "datestamp": "1779177375",
+                    "security-coverage": {
+                        "status": "not-covered",
+                        "message": "Dev releases are not covered by Drupal security advisories."
+                    }
+                },
+                "patches": {
+                    "drupal/ui_patterns": {
+                        "https://www.drupal.org/i/3570294 throw error on missing component instead of fatal": "https://git.drupalcode.org/project/ui_patterns/-/merge_requests/478.patch"
+                    }
+                }
+            },
+            "notification-url": "https://packages.drupal.org/8/downloads",
+            "scripts": {
+                "composer-root": [
+                    "d=.; i=0; while [ $i -lt 10 ]; do if [ -f \"$d/composer.json\" ] && cat \"$d/composer.json\" | grep -q '\"type\"' && cat \"$d/composer.json\" | grep -q '\"project\"'; then readlink -f \"$d\"; break; fi; d=\"../$d\"; i=$((i+1)); done"
+                ],
+                "phpcs": [
+                    "mkdir -p test-results && composer --working-dir=$(composer run composer-root) exec phpcs -- --standard=$(pwd)/.phpcs.xml --report-width=auto --colors -s --report-junit=$(pwd)/test-results/phpcs.xml --report-full --report-summary $(pwd)"
+                ],
+                "phpcbf": [
+                    "composer --working-dir=$(composer run composer-root) exec phpcbf -- --standard=$(pwd)/.phpcs.xml --colors $(pwd)"
+                ],
+                "php-cs-fixer": [
+                    "composer --working-dir=$(composer run composer-root) exec php-cs-fixer -- fix -vv --config=$(pwd)/.php-cs-fixer.php --allow-risky=yes $(pwd)"
+                ],
+                "phpstan": [
+                    "mkdir -p test-results && COMPOSER_MEMORY_LIMIT=-1 composer --working-dir=$(composer run composer-root) exec phpstan -- --memory-limit=1G --configuration=$(pwd)/phpstan.neon --error-format=junit analyze $(pwd) > test-results/phpstan.xml || true && COMPOSER_MEMORY_LIMIT=-1 composer --working-dir=$(composer run composer-root) exec phpstan -- --memory-limit=1G --configuration=$(pwd)/phpstan.neon analyze $(pwd)"
+                ],
+                "phpmd": [
+                    "mkdir -p test-results && COMPOSER_MEMORY_LIMIT=-1 composer --working-dir=$(composer run composer-root) exec phpmd $(pwd) -- --exclude 'tests/*,**/tests/*,**/Hook/*,*/IslandWithFormTrait.php,*/IslandConfigurationFormTrait.php' text $(pwd)/.phpmd.xml"
+                ]
+            },
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Jean Valverde (mogtofu33)",
+                    "homepage": "https://www.drupal.org/u/mogtofu33",
+                    "role": "Maintainer"
+                },
+                {
+                    "name": "Pierre Dureau (pdureau)",
+                    "homepage": "https://www.drupal.org/u/pdureau",
+                    "role": "Maintainer"
+                },
+                {
+                    "name": "Mikael Meulle (just_like_good_vibes)",
+                    "homepage": "https://www.drupal.org/u/just_like_good_vibes",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Display Builder",
+            "homepage": "https://www.drupal.org/project/display_builder",
+            "support": {
+                "source": "https://git.drupalcode.org/project/display_builder"
+            }
+        },
+        {
             "name": "drupal/jsonapi_resources",
             "version": "1.4.0",
             "source": {
@@ -1912,6 +2007,152 @@
             "homepage": "https://www.drupal.org/project/simple_oauth_password_grant",
             "support": {
                 "source": "https://git.drupalcode.org/project/simple_oauth_password_grant"
+            }
+        },
+        {
+            "name": "drupal/ui_patterns",
+            "version": "2.0.15",
+            "source": {
+                "type": "git",
+                "url": "https://git.drupalcode.org/project/ui_patterns.git",
+                "reference": "2.0.15"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://ftp.drupal.org/files/projects/ui_patterns-2.0.15.zip",
+                "reference": "2.0.15",
+                "shasum": "762d89f38553534bedf69a3b24bc494128d69c0b"
+            },
+            "require": {
+                "drupal/core": "^10.3.4 || ^11",
+                "justinrainbow/json-schema": "^5.2 || ^6.3"
+            },
+            "require-dev": {
+                "drupal/ui_patterns_library": "*"
+            },
+            "type": "drupal-module",
+            "extra": {
+                "drupal": {
+                    "version": "2.0.15",
+                    "datestamp": "1772717211",
+                    "security-coverage": {
+                        "status": "covered",
+                        "message": "Covered by Drupal's security advisory policy"
+                    }
+                }
+            },
+            "notification-url": "https://packages.drupal.org/8/downloads",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "ademarco",
+                    "homepage": "https://www.drupal.org/user/186696"
+                },
+                {
+                    "name": "bircher",
+                    "homepage": "https://www.drupal.org/user/1344166"
+                },
+                {
+                    "name": "christian.wiedemann",
+                    "homepage": "https://www.drupal.org/user/861002"
+                },
+                {
+                    "name": "duaelfr",
+                    "homepage": "https://www.drupal.org/user/931394"
+                },
+                {
+                    "name": "g4mbini",
+                    "homepage": "https://www.drupal.org/user/2533498"
+                },
+                {
+                    "name": "grimreaper",
+                    "homepage": "https://www.drupal.org/user/2388214"
+                },
+                {
+                    "name": "just_like_good_vibes",
+                    "homepage": "https://www.drupal.org/user/792018"
+                },
+                {
+                    "name": "pdureau",
+                    "homepage": "https://www.drupal.org/user/1903334"
+                },
+                {
+                    "name": "pescetti",
+                    "homepage": "https://www.drupal.org/user/436244"
+                }
+            ],
+            "description": "Define and expose self-contained UI components and use them seamlessly in development and site-building.",
+            "homepage": "https://www.drupal.org/project/ui_patterns",
+            "support": {
+                "source": "https://git.drupalcode.org/project/ui_patterns"
+            }
+        },
+        {
+            "name": "drupal/ui_patterns_library",
+            "version": "2.0.15",
+            "require": {
+                "drupal/core": "^10.3 || ^11",
+                "drupal/ui_patterns": "*"
+            },
+            "type": "metapackage",
+            "extra": {
+                "drupal": {
+                    "version": "2.0.15",
+                    "datestamp": "1772717211",
+                    "security-coverage": {
+                        "status": "covered",
+                        "message": "Covered by Drupal's security advisory policy"
+                    }
+                }
+            },
+            "notification-url": "https://packages.drupal.org/8/downloads",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "ademarco",
+                    "homepage": "https://www.drupal.org/user/186696"
+                },
+                {
+                    "name": "bircher",
+                    "homepage": "https://www.drupal.org/user/1344166"
+                },
+                {
+                    "name": "christian.wiedemann",
+                    "homepage": "https://www.drupal.org/user/861002"
+                },
+                {
+                    "name": "duaelfr",
+                    "homepage": "https://www.drupal.org/user/931394"
+                },
+                {
+                    "name": "g4mbini",
+                    "homepage": "https://www.drupal.org/user/2533498"
+                },
+                {
+                    "name": "grimreaper",
+                    "homepage": "https://www.drupal.org/user/2388214"
+                },
+                {
+                    "name": "just_like_good_vibes",
+                    "homepage": "https://www.drupal.org/user/792018"
+                },
+                {
+                    "name": "pdureau",
+                    "homepage": "https://www.drupal.org/user/1903334"
+                },
+                {
+                    "name": "pescetti",
+                    "homepage": "https://www.drupal.org/user/436244"
+                }
+            ],
+            "description": "Browse UI components in library pages.",
+            "homepage": "https://www.drupal.org/project/ui_patterns",
+            "support": {
+                "source": "https://git.drupalcode.org/project/ui_patterns"
             }
         },
         {
@@ -7654,6 +7895,7 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
+        "drupal/display_builder": 20,
         "drupal/jsonapi_sdc": 20,
         "drupal/schemata": 20
     },

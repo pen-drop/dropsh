@@ -1,10 +1,13 @@
+import { fileURLToPath } from "node:url";
+import { resolve, dirname } from "node:path";
 import { defineConfig } from "vitest/config";
-import { resolve } from "node:path";
+
+const dropshRoot = dirname(fileURLToPath(import.meta.resolve("dropsh/package.json")));
 
 export default defineConfig({
   resolve: {
     alias: {
-      "dropsh/plugin": resolve(__dirname, "../../src/plugin-api.ts"),
+      "dropsh/plugin": resolve(dropshRoot, "src/plugin-api.ts"),
     },
   },
   test: {

@@ -7,7 +7,7 @@ build/
 *.tsbuildinfo
 
 # Runtime caches and local CLI state
-.drupal-cli/
+.dropsh/
 
 # Secrets and environment
 .env

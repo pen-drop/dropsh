@@ -5,10 +5,10 @@ import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
 import {
-  SCHEMA_PIPELINE_VERSION,
   applyOperationSchemaPlugins,
   operationHookPluginIds,
   runSchema,
+  SCHEMA_PIPELINE_VERSION,
   schemaCacheMetadataMatches,
 } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";

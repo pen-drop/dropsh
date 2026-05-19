@@ -13,6 +13,7 @@ describe("integration: create validates payload client-side against schema", () 
       JSON.stringify({ data: { type: "node--article_test", attributes: {} } }),
     );
     const result = await runCli({
+      site: "schemata",
       args: ["create", "node", "--bundle=article_test", `--data=@${badFile}`],
     });
     expect(result.code).toBe(4);
@@ -34,6 +35,7 @@ describe("integration: create validates payload client-side against schema", () 
       JSON.stringify({ data: { type: "node--article_test", attributes: {} } }),
     );
     const result = await runCli({
+      site: "schemata",
       args: ["create", "node", "--bundle=article_test", `--data=@${badFile}`, "--no-validate"],
     });
     // expect it to go to Drupal and come back with an HTTP error (exit 5)

@@ -20,8 +20,9 @@ $permissions = [
   'access schemata data models',
 ];
 
+$available = array_keys(\Drupal::service('user.permissions')->getPermissions());
 foreach ($permissions as $permission) {
-  if (!$role->hasPermission($permission)) {
+  if (in_array($permission, $available, TRUE) && !$role->hasPermission($permission)) {
     $role->grantPermission($permission);
   }
 }

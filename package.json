@@ -8,7 +8,8 @@
   },
   "exports": {
     ".": "./dist/src/index.js",
-    "./plugin": "./dist/src/plugin-api.js"
+    "./plugin": "./dist/src/plugin-api.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",

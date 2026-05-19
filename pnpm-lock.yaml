@@ -37,6 +37,42 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.39)
 
+  plugins/canvas:
+    devDependencies:
+      dropsh:
+        specifier: workspace:*
+        version: link:../..
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.39)
+
+  plugins/oauth2:
+    devDependencies:
+      dropsh:
+        specifier: workspace:*
+        version: link:../..
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.39)
+
+  plugins/schemata:
+    devDependencies:
+      dropsh:
+        specifier: workspace:*
+        version: link:../..
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.39)
+
 packages:
 
   '@biomejs/biome@2.4.14':

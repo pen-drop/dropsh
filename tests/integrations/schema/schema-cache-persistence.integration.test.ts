@@ -4,8 +4,8 @@ import { createTestNode, runCli } from "../helpers/run.js";
 
 describe("integration: schema cache", () => {
   it("writes a cache file that is parseable JSON", async () => {
-    await createTestNode(`cache-${crypto.randomUUID()}`);
-    await runCli({ args: ["schema", "node/article_test", "--refresh"] });
+    await createTestNode(`cache-${crypto.randomUUID()}`, "schemata");
+    await runCli({ site: "schemata", args: ["schema", "node/article_test", "--refresh"] });
     const path = ".dropsh/cache/schema/node--article_test.create.json";
     expect(existsSync(path)).toBe(true);
     const content = JSON.parse(readFileSync(path, "utf8"));
