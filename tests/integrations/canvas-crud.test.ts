@@ -35,9 +35,10 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
   it("create — POST canvas_page returns a UUID", async () => {
     title = `it-canvas-${crypto.randomUUID()}`;
 
-    // --no-validate skips client-side schema compilation: some SDC components
-    // ship props with Drupal PHP types (e.g. Drupal\Core\Template\Attribute)
-    // that Ajv cannot interpret. Drupal still validates server-side.
+    // Client-side schema validation is on. The upstream jsonapi_sdc patch
+    // at tests/integrations/drupal/patches/jsonapi_sdc-sanitize-props.patch
+    // rewrites Drupal PHP type hints (e.g. Drupal\Core\Template\Attribute)
+    // to "object" so Ajv can compile the canvas plugin's schema.
     const result = await runCli({
       site: "canvas",
       args: [
@@ -45,7 +46,6 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
         "canvas_page",
         "--bundle=canvas_page",
         `--data=${createPayload(title)}`,
-        "--no-validate",
       ],
     });
     expect(result.code).toBe(0);
@@ -80,7 +80,6 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
         "update",
         `canvas_page/canvas_page/${uuid}`,
         `--data=${updatePayload(uuid, newTitle)}`,
-        "--no-validate",
       ],
     });
     expect(result.code).toBe(0);
