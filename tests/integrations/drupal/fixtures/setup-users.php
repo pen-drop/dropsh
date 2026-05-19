@@ -18,6 +18,9 @@ $permissions = [
   'delete any article_test content',
   'grant simple_oauth codes',
   'access schemata data models',
+  'create canvas_page',
+  'edit canvas_page',
+  'delete canvas_page',
 ];
 
 $available = array_keys(\Drupal::service('user.permissions')->getPermissions());
