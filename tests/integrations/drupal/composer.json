@@ -7,13 +7,8 @@
   "prefer-stable": true,
   "repositories": [
     {
-      "type": "vcs",
-      "url": "https://git.drupalcode.org/project/jsonapi_sdc.git"
-    },
-    {
       "type": "composer",
-      "url": "https://packages.drupal.org/8",
-      "exclude": ["drupal/jsonapi_sdc"]
+      "url": "https://packages.drupal.org/8"
     }
   ],
   "require": {
@@ -23,7 +18,7 @@
     "drupal/core-recommended": "^11",
     "drupal/display_builder": "1.0.x-dev",
     "drupal/jsonapi_resources": "^1.2",
-    "drupal/jsonapi_sdc": "dev-feature/sanitize-non-jsonschema-types as 1.0.x-dev",
+    "drupal/jsonapi_sdc": "1.0.x-dev",
     "drupal/schemata": "1.x-dev",
     "drupal/simple_oauth": "^6",
     "drupal/simple_oauth_password_grant": "^2.1",

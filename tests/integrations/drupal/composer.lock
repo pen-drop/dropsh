@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "373377600b89d3f52ebd4c22c5cc1d86",
+    "content-hash": "3f7ad962201ce1da0cd1926647bae76b",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -1028,17 +1028,17 @@
         },
         {
             "name": "drupal/canvas",
-            "version": "1.4.0",
+            "version": "1.4.1",
             "source": {
                 "type": "git",
                 "url": "https://git.drupalcode.org/project/canvas.git",
-                "reference": "1.4.0"
+                "reference": "1.4.1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://ftp.drupal.org/files/projects/canvas-1.4.0.zip",
-                "reference": "1.4.0",
-                "shasum": "de174317de0fb97ba128deb4ef337dd76069bbec"
+                "url": "https://ftp.drupal.org/files/projects/canvas-1.4.1.zip",
+                "reference": "1.4.1",
+                "shasum": "df4a8ca1b562284b541237e08d5e39b2e9ff60c2"
             },
             "require": {
                 "drupal/core": "^11.2",
@@ -1060,13 +1060,14 @@
                 "mglaman/phpstan-drupal": "2.0.15",
                 "phpat/phpat": "0.12.4",
                 "phpstan/phpstan": "2.1.53",
-                "phpstan/phpstan-strict-rules": "2.0.10"
+                "phpstan/phpstan-strict-rules": "2.0.10",
+                "shipmonk/dead-code-detector": "1.1.1"
             },
             "type": "drupal-module",
             "extra": {
                 "drupal": {
-                    "version": "1.4.0",
-                    "datestamp": "1778091962",
+                    "version": "1.4.1",
+                    "datestamp": "1779217558",
                     "security-coverage": {
                         "status": "covered",
                         "message": "Covered by Drupal's security advisory policy"
@@ -1278,16 +1279,16 @@
         },
         {
             "name": "drupal/core",
-            "version": "11.3.8",
+            "version": "11.3.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core.git",
-                "reference": "d40f45fa436fb089cd54029d2dab387c3040fc2c"
+                "reference": "16e55d807cc9f839d281988fa16ee15096ed3a19"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/drupal/core/zipball/d40f45fa436fb089cd54029d2dab387c3040fc2c",
-                "reference": "d40f45fa436fb089cd54029d2dab387c3040fc2c",
+                "url": "https://api.github.com/repos/drupal/core/zipball/16e55d807cc9f839d281988fa16ee15096ed3a19",
+                "reference": "16e55d807cc9f839d281988fa16ee15096ed3a19",
                 "shasum": ""
             },
             "require": {
@@ -1445,13 +1446,13 @@
             ],
             "description": "Drupal is an open source content management platform powering millions of websites and applications.",
             "support": {
-                "source": "https://github.com/drupal/core/tree/11.3.8"
+                "source": "https://github.com/drupal/core/tree/11.3.9"
             },
-            "time": "2026-04-20T07:33:20+00:00"
+            "time": "2026-05-06T14:19:19+00:00"
         },
         {
             "name": "drupal/core-composer-scaffold",
-            "version": "11.3.8",
+            "version": "11.3.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core-composer-scaffold.git",
@@ -1495,29 +1496,29 @@
                 "drupal"
             ],
             "support": {
-                "source": "https://github.com/drupal/core-composer-scaffold/tree/11.3.8"
+                "source": "https://github.com/drupal/core-composer-scaffold/tree/11.3.9"
             },
             "time": "2026-02-10T11:39:53+00:00"
         },
         {
             "name": "drupal/core-recommended",
-            "version": "11.3.8",
+            "version": "11.3.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core-recommended.git",
-                "reference": "9c1fa4615a7542504be882eed0c6763b445fb852"
+                "reference": "b44d2fb1ccebe941157d9d27ad7e35aa2ab8ca84"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/drupal/core-recommended/zipball/9c1fa4615a7542504be882eed0c6763b445fb852",
-                "reference": "9c1fa4615a7542504be882eed0c6763b445fb852",
+                "url": "https://api.github.com/repos/drupal/core-recommended/zipball/b44d2fb1ccebe941157d9d27ad7e35aa2ab8ca84",
+                "reference": "b44d2fb1ccebe941157d9d27ad7e35aa2ab8ca84",
                 "shasum": ""
             },
             "require": {
                 "asm89/stack-cors": "~v2.3.0",
                 "composer/semver": "~3.4.4",
                 "doctrine/lexer": "~3.0.1",
-                "drupal/core": "11.3.8",
+                "drupal/core": "11.3.9",
                 "egulias/email-validator": "~4.0.4",
                 "guzzlehttp/guzzle": "~7.10.0",
                 "guzzlehttp/promises": "~2.3.0",
@@ -1579,9 +1580,9 @@
             ],
             "description": "Core and its dependencies with known-compatible minor versions. Require this project INSTEAD OF drupal/core.",
             "support": {
-                "source": "https://github.com/drupal/core-recommended/tree/11.3.8"
+                "source": "https://github.com/drupal/core-recommended/tree/11.3.9"
             },
-            "time": "2026-04-20T07:33:20+00:00"
+            "time": "2026-05-06T14:19:19+00:00"
         },
         {
             "name": "drupal/display_builder",
@@ -1740,22 +1741,45 @@
         },
         {
             "name": "drupal/jsonapi_sdc",
-            "version": "dev-feature/sanitize-non-jsonschema-types",
+            "version": "dev-1.0.x",
             "source": {
                 "type": "git",
                 "url": "https://git.drupalcode.org/project/jsonapi_sdc.git",
-                "reference": "76e011a6ab2694d96b417bf01fdfe47616fb9bef"
+                "reference": "465514cc7538ad083c4add8da4bc430655dc4858"
             },
             "require": {
                 "drupal/core": "^11",
                 "drupal/jsonapi_resources": "^1.2"
             },
             "type": "drupal-module",
+            "extra": {
+                "branch-alias": {
+                    "dev-1.0.x": "1.0.x-dev"
+                },
+                "drupal": {
+                    "version": "1.0.x-dev",
+                    "datestamp": "1779238455",
+                    "security-coverage": {
+                        "status": "not-covered",
+                        "message": "Project has not opted into security advisory coverage!"
+                    }
+                }
+            },
+            "notification-url": "https://packages.drupal.org/8/downloads",
             "license": [
                 "GPL-2.0-or-later"
             ],
+            "authors": [
+                {
+                    "name": "christian.wiedemann",
+                    "homepage": "https://www.drupal.org/user/861002"
+                }
+            ],
             "description": "Exposes Single Directory Components (SDC) as JSON:API read-only resources.",
-            "time": "2026-05-20T00:12:15+00:00"
+            "homepage": "https://www.drupal.org/project/jsonapi_sdc",
+            "support": {
+                "source": "https://git.drupalcode.org/project/jsonapi_sdc"
+            }
         },
         {
             "name": "drupal/schemata",
@@ -2134,16 +2158,16 @@
         },
         {
             "name": "drush/drush",
-            "version": "13.7.2",
+            "version": "13.7.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drush-ops/drush.git",
-                "reference": "670c5f81b3f525b3f08263f038c7f07558f2580d"
+                "reference": "a4974fabbd14337fbfdc2918184e6ef773cfeb78"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/drush-ops/drush/zipball/670c5f81b3f525b3f08263f038c7f07558f2580d",
-                "reference": "670c5f81b3f525b3f08263f038c7f07558f2580d",
+                "url": "https://api.github.com/repos/drush-ops/drush/zipball/a4974fabbd14337fbfdc2918184e6ef773cfeb78",
+                "reference": "a4974fabbd14337fbfdc2918184e6ef773cfeb78",
                 "shasum": ""
             },
             "require": {
@@ -2172,7 +2196,7 @@
                 "symfony/yaml": "^6.0 || ^7"
             },
             "conflict": {
-                "drupal/core": "< 10.4",
+                "drupal/core": "<10.4 <12.0",
                 "drupal/migrate_run": "*",
                 "drupal/migrate_tools": "<= 5"
             },
@@ -2271,7 +2295,7 @@
                 "issues": "https://github.com/drush-ops/drush/issues",
                 "security": "https://github.com/drush-ops/drush/security/advisories",
                 "slack": "https://drupal.slack.com/messages/C62H9CWQM",
-                "source": "https://github.com/drush-ops/drush/tree/13.7.2"
+                "source": "https://github.com/drush-ops/drush/tree/13.7.3"
             },
             "funding": [
                 {
@@ -2279,7 +2303,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-03-20T19:18:11+00:00"
+            "time": "2026-05-11T10:48:11+00:00"
         },
         {
             "name": "egulias/email-validator",
@@ -2859,16 +2883,16 @@
         },
         {
             "name": "laravel/prompts",
-            "version": "v0.3.17",
+            "version": "v0.3.18",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/prompts.git",
-                "reference": "6a82ac19a28b916ae0885828795dbd4c59d9a818"
+                "reference": "a19af51bb144bf87f08397921fa619f85c7d4e72"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/prompts/zipball/6a82ac19a28b916ae0885828795dbd4c59d9a818",
-                "reference": "6a82ac19a28b916ae0885828795dbd4c59d9a818",
+                "url": "https://api.github.com/repos/laravel/prompts/zipball/a19af51bb144bf87f08397921fa619f85c7d4e72",
+                "reference": "a19af51bb144bf87f08397921fa619f85c7d4e72",
                 "shasum": ""
             },
             "require": {
@@ -2912,9 +2936,9 @@
             "description": "Add beautiful and user-friendly forms to your command-line applications.",
             "support": {
                 "issues": "https://github.com/laravel/prompts/issues",
-                "source": "https://github.com/laravel/prompts/tree/v0.3.17"
+                "source": "https://github.com/laravel/prompts/tree/v0.3.18"
             },
-            "time": "2026-04-20T16:07:33+00:00"
+            "time": "2026-05-19T00:47:18+00:00"
         },
         {
             "name": "lcobucci/clock",
@@ -7870,14 +7894,7 @@
         }
     ],
     "packages-dev": [],
-    "aliases": [
-        {
-            "package": "drupal/jsonapi_sdc",
-            "version": "dev-feature/sanitize-non-jsonschema-types",
-            "alias": "1.0.x-dev",
-            "alias_normalized": "1.0.9999999.9999999-dev"
-        }
-    ],
+    "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
         "drupal/display_builder": 20,
