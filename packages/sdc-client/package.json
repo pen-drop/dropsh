@@ -8,7 +8,8 @@
     ".": {
       "types": "./dist/plugins/sdc-client/src/index.d.ts",
       "default": "./dist/plugins/sdc-client/src/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsc",

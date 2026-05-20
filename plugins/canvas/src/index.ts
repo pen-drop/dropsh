@@ -1,8 +1,9 @@
-import type { DrupalCliPlugin } from "dropsh/plugin";
+import type { DropSHPlugin } from "dropsh/plugin";
+import { HttpError } from "dropsh/plugin";
 import { fetchSdcComponents } from "@dropsh/sdc-client";
 import { extendCanvasSchema } from "./canvas-schema.js";
 
-export function canvasPlugin(): DrupalCliPlugin {
+export function canvasPlugin(): DropSHPlugin {
   return {
     id: "canvas",
     requiredModules: ["canvas", "jsonapi_sdc"],
@@ -14,7 +15,19 @@ export function canvasPlugin(): DrupalCliPlugin {
         return schema;
       }
 
-      const components = await fetchSdcComponents(ctx);
+      let components;
+      try {
+        components = await fetchSdcComponents(ctx);
+      } catch (err) {
+        if (err instanceof HttpError && err.status === 404) {
+          throw new HttpError(
+            404,
+            "Canvas plugin requires Drupal module jsonapi_sdc to build component schemas.",
+            err.body,
+          );
+        }
+        throw err;
+      }
       return extendCanvasSchema(schema, operation, components);
     },
   };
