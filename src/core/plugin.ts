@@ -11,7 +11,7 @@ export interface PluginContext {
 
 export type SchemaOperation = Operation;
 
-export interface DrupalCliPlugin {
+export interface DropSHPlugin {
   readonly id: string;
   readonly requiredModules: string[];
   createAuthAdapter?(): AuthAdapter;

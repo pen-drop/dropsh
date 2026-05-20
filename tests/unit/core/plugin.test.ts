@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DrupalCliPlugin, PluginContext } from "../../../src/core/plugin.js";
+import type { DropSHPlugin, PluginContext } from "../../../src/core/plugin.js";
 
 const ctx: PluginContext = {
   http: { send: async () => ({ status: 200, headers: {}, body: "{}" }) },
@@ -7,9 +7,9 @@ const ctx: PluginContext = {
   baseUrl: "https://example.com",
 };
 
-describe("DrupalCliPlugin interface", () => {
+describe("DropSHPlugin interface", () => {
   it("accepts a plugin with only extendSchema", async () => {
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "test",
       requiredModules: ["some_module"],
       async extendSchema(_entity, _bundle, schema, _ctx) { return schema; },
@@ -22,7 +22,7 @@ describe("DrupalCliPlugin interface", () => {
   });
 
   it("optional methods are absent on a minimal plugin", () => {
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "minimal",
       requiredModules: [],
       async extendSchema(_e, _b, s) { return s; },
@@ -33,7 +33,7 @@ describe("DrupalCliPlugin interface", () => {
 
   it("createAuthAdapter is optional and callable when present", () => {
     const adapter = { apply: async (req: any) => req };
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "auth-plugin",
       requiredModules: [],
       createAuthAdapter: () => adapter,
@@ -43,7 +43,7 @@ describe("DrupalCliPlugin interface", () => {
   });
 
   it("accepts an optional operation-aware schema hook", async () => {
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "builder",
       requiredModules: ["jsonapi_sdc"],
       async extendSchema(_e, _b, s) {

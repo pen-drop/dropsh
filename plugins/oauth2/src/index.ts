@@ -1,4 +1,4 @@
-import type { DrupalCliPlugin } from "dropsh/plugin";
+import type { DropSHPlugin } from "dropsh/plugin";
 import { ConfigError } from "dropsh/plugin";
 import { createOAuth2Auth } from "./oauth2.js";
 import { createOAuth2AuthCodeAuth } from "./oauth2-authcode.js";
@@ -44,7 +44,7 @@ function validate(config: OAuth2Config): OAuth2Config {
   return config;
 }
 
-export function oauth2Plugin(config: OAuth2Config): DrupalCliPlugin {
+export function oauth2Plugin(config: OAuth2Config): DropSHPlugin {
   const cfg = validate(config);
 
   const createAdapter =

@@ -41,12 +41,7 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
     // to "object" so Ajv can compile the canvas plugin's schema.
     const result = await runCli({
       site: "canvas",
-      args: [
-        "create",
-        "canvas_page",
-        "--bundle=canvas_page",
-        `--data=${createPayload(title)}`,
-      ],
+      args: ["create", "canvas_page", "--bundle=canvas_page", `--data=${createPayload(title)}`],
     });
     expect(result.code).toBe(0);
 

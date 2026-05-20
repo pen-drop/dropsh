@@ -1,8 +1,8 @@
-import type { DrupalCliPlugin, PluginContext } from "dropsh/plugin";
+import type { DropSHPlugin, PluginContext } from "dropsh/plugin";
 import { HttpError } from "dropsh/plugin";
 import { fetchSchemata, SCHEMATA_MISS } from "./schemata.js";
 
-export function schemataPlugin(): DrupalCliPlugin {
+export function schemataPlugin(): DropSHPlugin {
   return {
     id: "schemata",
     requiredModules: ["schemata", "jsonapi_schema"],

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type { AuthAdapter } from "../core/auth/types.js";
 import { createFileStore } from "../core/cache/file-store.js";
 import type { HttpClient } from "../core/http.js";
-import type { DrupalCliPlugin } from "../core/plugin.js";
+import type { DropSHPlugin } from "../core/plugin.js";
 import { fetchCatalog } from "../core/schema/catalog.js";
 import { fetchJsonSchema } from "../core/schema/jsonschema-source.js";
 import { type Operation, toOperationVariant } from "../core/schema/to-jsonschema.js";
@@ -22,7 +22,7 @@ export interface SchemaDeps {
   cwd: string;
   emit: (v: unknown) => void;
   warn: (m: string) => void;
-  plugins?: DrupalCliPlugin[];
+  plugins?: DropSHPlugin[];
 }
 
 export const SCHEMA_PIPELINE_VERSION = 2;
@@ -31,7 +31,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function operationHookPluginIds(plugins: DrupalCliPlugin[]): string[] {
+export function operationHookPluginIds(plugins: DropSHPlugin[]): string[] {
   return plugins.filter((plugin) => plugin.extendOperationSchema).map((plugin) => plugin.id);
 }
 
@@ -58,7 +58,7 @@ export async function applyOperationSchemaPlugins(
     http: HttpClient;
     auth: AuthAdapter;
     baseUrl: string;
-    plugins: DrupalCliPlugin[];
+    plugins: DropSHPlugin[];
   },
 ): Promise<{ schema: unknown; extensions: string[] }> {
   let current = schema;

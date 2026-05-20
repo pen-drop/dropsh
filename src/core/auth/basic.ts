@@ -1,6 +1,6 @@
 import { ConfigError } from "../../errors.js";
 import type { HttpRequest } from "../http.js";
-import type { DrupalCliPlugin } from "../plugin.js";
+import type { DropSHPlugin } from "../plugin.js";
 import type { AuthAdapter } from "./types.js";
 
 export interface BasicAuthConfig {
@@ -21,7 +21,7 @@ export function createBasicAuth(cfg: BasicAuthConfig): AuthAdapter {
   };
 }
 
-export function basicAuthPlugin(config: BasicAuthConfig): DrupalCliPlugin {
+export function basicAuthPlugin(config: BasicAuthConfig): DropSHPlugin {
   const adapter = createBasicAuth(config);
   return {
     id: "basic",

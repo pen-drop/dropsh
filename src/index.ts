@@ -21,7 +21,7 @@ import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
-import type { DrupalCliPlugin } from "./core/plugin.js";
+import type { DropSHPlugin } from "./core/plugin.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
@@ -35,7 +35,7 @@ export interface CommandContext {
   baseUrl: string;
   jsonapiPrefix: string;
   cwd: string;
-  plugins: DrupalCliPlugin[];
+  plugins: DropSHPlugin[];
 }
 
 export interface ProgramOptions {
@@ -43,7 +43,7 @@ export interface ProgramOptions {
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
   setExitCode?: (code: number) => void;
-  plugins?: DrupalCliPlugin[];
+  plugins?: DropSHPlugin[];
 }
 
 function resolveConfigPath(override?: string): string {

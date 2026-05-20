@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildProgram, type CommandContext } from "../../src/index.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
-import type { DrupalCliPlugin } from "../../src/core/plugin.js";
+import type { DropSHPlugin } from "../../src/core/plugin.js";
 
 function fakeClient(): JsonApiClient {
   return {
@@ -36,7 +36,7 @@ describe("buildProgram", () => {
 
   it("uses createAuthAdapter from plugin when present", async () => {
     const mockAdapter = { apply: async (req: any) => req };
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "test-auth",
       requiredModules: [],
       createAuthAdapter: () => mockAdapter,
@@ -75,7 +75,7 @@ describe("buildProgram", () => {
 
   it("calls registerCommands on plugins passed to buildProgram", () => {
     const registeredCommands: string[] = [];
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "test-cmd",
       requiredModules: [],
       registerCommands(program) {
