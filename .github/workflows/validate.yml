@@ -10,11 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-      - run: npm ci
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - run: npm run lint
 
   typecheck:
@@ -24,11 +27,14 @@ jobs:
         node-version: ["20", "22"]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - run: npm ci
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - run: npm run typecheck
 
   test:
@@ -38,11 +44,14 @@ jobs:
         node-version: ["20", "22"]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - run: npm ci
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - run: npm test
 
   test-plugins:
@@ -53,13 +62,14 @@ jobs:
         plugin: ["schemata", "oauth2", "canvas"]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - run: npm ci
-      - run: npm ci
-        working-directory: plugins/${{ matrix.plugin }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - run: npm test
         working-directory: plugins/${{ matrix.plugin }}
 
@@ -71,12 +81,13 @@ jobs:
         package: ["sdc-client"]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - run: npm ci
-      - run: npm ci
-        working-directory: packages/${{ matrix.package }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - run: npm test
         working-directory: packages/${{ matrix.package }}
