@@ -21,6 +21,7 @@ enable_modules "$URI" \
   ui_patterns ui_patterns_library \
   display_builder jsonapi_sdc
 
+restore_services_yml "$URI" "$SITE_DIR"
 make_jsonapi_writable "$URI"
 
 run_fixture "$URI" fixtures/setup-content-type.php

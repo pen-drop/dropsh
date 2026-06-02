@@ -20,6 +20,7 @@ enable_modules "$URI" \
   basic_auth jsonapi jsonapi_resources \
   simple_oauth simple_oauth_password_grant consumers
 
+restore_services_yml "$URI" "$SITE_DIR"
 make_jsonapi_writable "$URI"
 setup_oauth_keys "$URI"
 

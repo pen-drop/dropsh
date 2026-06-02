@@ -30,10 +30,19 @@ install_site() {
   # Drupal's findSitePath() needs sites/<dir>/settings.php to exist before it
   # will route requests to that subsite. Seed an empty settings.php so drush
   # install can resolve the URI; drush then overwrites it with real config.
+  #
+  # A site-local services.yml may re-declare services owned by modules that
+  # are not enabled until after site:install (e.g. basic_auth). The installer
+  # compiles the container before those modules exist, so such overrides abort
+  # the install with "does not implement ...Interface". Stash services.yml out
+  # of the way during install; restore_services_yml puts it back afterwards.
   ddev exec bash -c "
     set -e
     if [ -d /var/www/html/web/sites/${site_dir} ]; then
       chmod -R u+w /var/www/html/web/sites/${site_dir} 2>/dev/null || true
+    fi
+    if [ -f /var/www/html/web/sites/${site_dir}/services.yml ]; then
+      mv /var/www/html/web/sites/${site_dir}/services.yml /var/www/html/web/sites/${site_dir}/services.yml.preinstall
     fi
     rm -rf /var/www/html/web/sites/${site_dir}/settings.php /var/www/html/web/sites/${site_dir}/files
     mkdir -p /var/www/html/web/sites/${site_dir}
@@ -46,6 +55,22 @@ install_site() {
     --account-name=admin --account-pass=admin \
     "--site-name=${site_name}" \
     "--db-url=mysql://db:db@db:3306/${db_name}"
+}
+
+# Restore a services.yml that install_site stashed away, then rebuild the
+# container so the overrides take effect. Call after enable_modules so the
+# modules referenced by the override exist.
+restore_services_yml() {
+  local uri="$1"
+  local site_dir="$2"
+  ddev exec bash -c "
+    set -e
+    if [ -f /var/www/html/web/sites/${site_dir}/services.yml.preinstall ]; then
+      chmod -R u+w /var/www/html/web/sites/${site_dir} 2>/dev/null || true
+      mv /var/www/html/web/sites/${site_dir}/services.yml.preinstall /var/www/html/web/sites/${site_dir}/services.yml
+    fi
+  "
+  ddev drush -l "https://${uri}" cr
 }
 
 # Enable modules on a specific multisite.
