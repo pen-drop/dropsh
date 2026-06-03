@@ -27,19 +27,8 @@ describe("DropSHPlugin interface", () => {
       requiredModules: [],
       async extendSchema(_e, _b, s) { return s; },
     };
-    expect(plugin.createAuthAdapter).toBeUndefined();
+    expect(plugin.authProvider).toBeUndefined();
     expect(plugin.registerCommands).toBeUndefined();
-  });
-
-  it("createAuthAdapter is optional and callable when present", () => {
-    const adapter = { apply: async (req: any) => req };
-    const plugin: DropSHPlugin = {
-      id: "auth-plugin",
-      requiredModules: [],
-      createAuthAdapter: () => adapter,
-      async extendSchema(_e, _b, s) { return s; },
-    };
-    expect(plugin.createAuthAdapter!()).toBe(adapter);
   });
 
   it("accepts an optional operation-aware schema hook", async () => {

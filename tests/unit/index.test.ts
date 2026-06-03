@@ -39,30 +39,6 @@ describe("buildProgram", () => {
     expect(JSON.parse(out.join(""))).toEqual({ data: { id: "u1" } });
   });
 
-  it("uses createAuthAdapter from plugin when present", async () => {
-    const mockAdapter = { apply: async (req: any) => req };
-    const plugin: DropSHPlugin = {
-      id: "test-auth",
-      requiredModules: [],
-      createAuthAdapter: () => mockAdapter,
-      async extendSchema(_e, _b, s) { return s; },
-    };
-    let capturedAuth: any;
-    const p = buildProgram({
-      contextFactory: async () => {
-        const { ConfigError } = await import("../../src/errors.js");
-        const authPlugin = [plugin].find(p => p.createAuthAdapter);
-        if (!authPlugin) throw new ConfigError("No auth plugin configured.");
-        capturedAuth = authPlugin.createAuthAdapter!();
-        return { client: fakeClient(), http: {} as any, auth: capturedAuth, baseUrl: "https://x", jsonapiPrefix: "/jsonapi", cwd: ".", plugins: [plugin] };
-      },
-      stdout: () => {},
-      stderr: () => {},
-    });
-    await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
-    expect(capturedAuth).toBe(mockAdapter);
-  });
-
   it("propagates ValidationError to stderr with exit-code signal", async () => {
     const err: string[] = [];
     const exitCodes: number[] = [];

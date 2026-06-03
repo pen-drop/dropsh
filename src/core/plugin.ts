@@ -14,8 +14,7 @@ export type SchemaOperation = Operation;
 export interface DropSHPlugin {
   readonly id: string;
   readonly requiredModules: string[];
-  createAuthAdapter?(): AuthAdapter;
-  /** New provider-based auth. Preferred over createAuthAdapter (legacy). */
+  /** Provider-based auth (login/logout/status/createAdapter). */
   authProvider?: AuthProvider;
   extendSchema(
     entityType: string,
