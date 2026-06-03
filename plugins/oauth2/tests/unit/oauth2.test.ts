@@ -1,5 +1,5 @@
-import type { HttpClient } from "drupal-cli/plugin";
-import { AuthError } from "drupal-cli/plugin";
+import type { HttpClient } from "dropsh/plugin";
+import { AuthError } from "dropsh/plugin";
 import { describe, expect, it, vi } from "vitest";
 import { createOAuth2Auth } from "../../src/oauth2.js";
 

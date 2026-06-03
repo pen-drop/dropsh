@@ -1,5 +1,5 @@
-import type { DrupalCliPlugin } from "drupal-cli/plugin";
-import { ConfigError } from "drupal-cli/plugin";
+import type { DrupalCliPlugin } from "dropsh/plugin";
+import { ConfigError } from "dropsh/plugin";
 import { createOAuth2Auth } from "./oauth2.js";
 import { createOAuth2AuthCodeAuth } from "./oauth2-authcode.js";
 
@@ -69,8 +69,8 @@ export function oauth2Plugin(config: OAuth2Config): DrupalCliPlugin {
           const { runLogin } = await import("./login.js");
           const configPath =
             (program.opts().config as string | undefined) ??
-            process.env.DRUPAL_CLI_CONFIG ??
-            "drupal-cli.config.js";
+            process.env.DROPSH_CONFIG ??
+            "dropsh.config.js";
           try {
             await runLogin({
               stdout: (s) => process.stdout.write(`${s}\n`),

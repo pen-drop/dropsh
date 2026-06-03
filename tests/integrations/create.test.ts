@@ -47,7 +47,7 @@ describe("integration: create", () => {
 
   it("--data=@file works the same as inline", async () => {
     const title = `it-create-file-${crypto.randomUUID()}`;
-    const dir = mkdtempSync(join(tmpdir(), "drupal-cli-data-"));
+    const dir = mkdtempSync(join(tmpdir(), "dropsh-data-"));
     const path = join(dir, "data.json");
     writeFileSync(path, payload(title), "utf8");
 

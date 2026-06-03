@@ -10,7 +10,7 @@ import { ValidationError } from "../../../src/errors.js";
 const auth: AuthAdapter = { apply: async (req) => req };
 
 function tempDir(): string {
-  return mkdtempSync(join(tmpdir(), "drupal-cli-cmd-schema-"));
+  return mkdtempSync(join(tmpdir(), "dropsh-cmd-schema-"));
 }
 
 function rootIndexBody(): string {
@@ -43,7 +43,7 @@ describe("runSchema", () => {
     ]);
   });
 
-  it("with target: emits a JSON Schema with x-drupal-cli metadata", async () => {
+  it("with target: emits a JSON Schema with x-dropsh metadata", async () => {
     const emitted: unknown[] = [];
     const warnings: string[] = [];
     const http = seqHttp([
@@ -54,9 +54,9 @@ describe("runSchema", () => {
       { http, auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", cwd: tempDir(), emit: (v) => emitted.push(v), warn: (m) => warnings.push(m) },
     );
     const out = emitted[0] as any;
-    expect(out["x-drupal-cli-source"]).toBe("heuristic");
-    expect(out["x-drupal-cli-target"]).toEqual({ entity_type: "node", bundle: "article" });
-    expect(out["x-drupal-cli-operation"]).toBe("create");
+    expect(out["x-dropsh-source"]).toBe("heuristic");
+    expect(out["x-dropsh-target"]).toEqual({ entity_type: "node", bundle: "article" });
+    expect(out["x-dropsh-operation"]).toBe("create");
   });
 
   it("rejects invalid target with ValidationError", async () => {

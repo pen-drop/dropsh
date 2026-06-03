@@ -1,4 +1,4 @@
-import { ConfigError } from "drupal-cli/plugin";
+import { ConfigError } from "dropsh/plugin";
 import { describe, expect, it } from "vitest";
 import { oauth2Plugin } from "../../src/index.js";
 

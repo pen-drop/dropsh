@@ -20,7 +20,7 @@ npm run drupal:down
 
 `drupal:up` provisions a fresh Drupal 11 site inside DDEV with `basic_auth`, `jsonapi`, `simple_oauth`, `schemata`, and `schemata_json_schema` enabled. It creates an `article_test` content type, two OAuth2 consumers, and writes the live DDEV URL + credentials to `tests/integrations/drupal/.test-config.json`.
 
-Each test spawns `node bin/drupal-cli` as a subprocess with a temporary `.drupal-cli.yml` pointing at that DDEV URL, then asserts on exit code, stdout JSON, and stderr. The subprocess runs with `NODE_TLS_REJECT_UNAUTHORIZED=0` so DDEV's self-signed HTTPS certificates are accepted without touching the host CA trust store.
+Each test spawns `node bin/dropsh` as a subprocess with a temporary `.dropsh.yml` pointing at that DDEV URL, then asserts on exit code, stdout JSON, and stderr. The subprocess runs with `NODE_TLS_REJECT_UNAUTHORIZED=0` so DDEV's self-signed HTTPS certificates are accepted without touching the host CA trust store.
 
 ## Troubleshooting
 

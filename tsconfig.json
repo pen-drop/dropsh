@@ -14,10 +14,11 @@
     "declaration": false,
     "baseUrl": ".",
     "paths": {
-      "drupal-cli/plugin": ["./src/plugin-api.ts"]
+      "dropsh/plugin": ["./src/plugin-api.ts"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", "tests/integrations/drupal"]
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PluginContext } from "drupal-cli/plugin";
-import { HttpError } from "drupal-cli/plugin";
+import type { PluginContext } from "dropsh/plugin";
+import { HttpError } from "dropsh/plugin";
 import { schemataPlugin } from "../../src/index.js";
 
 function makeCtx(responses: Array<{ status: number; body: string }>): PluginContext {

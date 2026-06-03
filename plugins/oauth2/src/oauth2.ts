@@ -1,5 +1,5 @@
-import type { AuthAdapter, HttpClient, HttpRequest } from "drupal-cli/plugin";
-import { AuthError, createHttpClient, HttpError } from "drupal-cli/plugin";
+import type { AuthAdapter, HttpClient, HttpRequest } from "dropsh/plugin";
+import { AuthError, createHttpClient, HttpError } from "dropsh/plugin";
 
 export type OAuth2GrantConfig =
   | {

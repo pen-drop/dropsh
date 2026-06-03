@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { readToken, type StoredToken, writeToken } from "../../src/token-store.js";
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), "drupal-cli-test-"));
+  const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
   await fn(dir);
 }
 
@@ -37,7 +37,7 @@ describe("token-store", () => {
 
   it("creates the token directory if it does not exist", async () => {
     await withTmpDir(async (dir) => {
-      const nested = join(dir, "sub", "drupal-cli");
+      const nested = join(dir, "sub", "dropsh");
       const token: StoredToken = { access_token: "tok", expires_at: 1234 };
       await writeToken("https://example.com", token, nested);
       const result = await readToken("https://example.com", nested);

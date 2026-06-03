@@ -1,8 +1,8 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HttpClient } from "drupal-cli/plugin";
-import { AuthError } from "drupal-cli/plugin";
+import type { HttpClient } from "dropsh/plugin";
+import { AuthError } from "dropsh/plugin";
 import { describe, expect, it } from "vitest";
 import { createOAuth2AuthCodeAuth } from "../../src/oauth2-authcode.js";
 import { readToken, writeToken } from "../../src/token-store.js";
@@ -23,7 +23,7 @@ function httpMock(responses: Array<{ status: number; body: unknown }>): HttpClie
 }
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), "drupal-cli-test-"));
+  const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
   await fn(dir);
 }
 

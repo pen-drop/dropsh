@@ -11,7 +11,7 @@ describe("integration: schema (schemata path, --for=update)", () => {
     expect(result.code).toBe(0);
     // biome-ignore lint/suspicious/noExplicitAny: runtime schema shape from schemata
     const schema = parseJson<any>(result.stdout);
-    expect(schema["x-drupal-cli-operation"]).toBe("update");
+    expect(schema["x-dropsh-operation"]).toBe("update");
     const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false, logger: false });
     ajv.removeKeyword("id");
     if (!ajv.getSchema("http://json-schema.org/draft-06/schema#")) ajv.addMetaSchema(draft6);

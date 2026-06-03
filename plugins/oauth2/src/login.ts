@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import type { HttpClient } from "drupal-cli/plugin";
-import { AuthError, createHttpClient, loadConfig } from "drupal-cli/plugin";
+import type { HttpClient } from "dropsh/plugin";
+import { AuthError, createHttpClient, loadConfig } from "dropsh/plugin";
 import { writeToken } from "./token-store.js";
 
 const DEFAULT_PORT = 7432;
@@ -35,7 +35,7 @@ export interface LoginDeps {
 
 export async function runLogin(deps: LoginDeps): Promise<void> {
   const stdout = deps.stdout ?? ((s) => process.stdout.write(`${s}\n`));
-  const configPath = deps.configPath ?? process.env.DRUPAL_CLI_CONFIG ?? "drupal-cli.config.js";
+  const configPath = deps.configPath ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const now = deps.now ?? Date.now;
   const http = deps.http ?? createHttpClient();
@@ -104,7 +104,7 @@ export async function runLogin(deps: LoginDeps): Promise<void> {
     });
 
     const timer = setTimeout(() => {
-      finish(() => reject(new AuthError("Login timed out. Run 'drupal-cli login' to try again.")));
+      finish(() => reject(new AuthError("Login timed out. Run 'dropsh login' to try again.")));
     }, timeoutMs);
 
     server.listen(port, () => {

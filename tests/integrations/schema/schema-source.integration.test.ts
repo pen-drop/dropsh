@@ -7,8 +7,8 @@ describe("integration: schema source", () => {
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
     const schema = parseJson<{ [k: string]: unknown }>(result.stdout);
-    expect(schema["x-drupal-cli-source"]).toBe("schemata");
-    expect(schema["x-drupal-cli-target"]).toEqual({ entity_type: "node", bundle: "article_test" });
-    expect(schema["x-drupal-cli-operation"]).toBe("create");
+    expect(schema["x-dropsh-source"]).toBe("schemata");
+    expect(schema["x-dropsh-target"]).toEqual({ entity_type: "node", bundle: "article_test" });
+    expect(schema["x-dropsh-operation"]).toBe("create");
   });
 });

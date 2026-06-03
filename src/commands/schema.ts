@@ -28,7 +28,7 @@ export interface SchemaDeps {
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+$/;
 
 export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<void> {
-  const store = createFileStore({ rootDir: join(deps.cwd, ".drupal-cli/cache"), warn: deps.warn });
+  const store = createFileStore({ rootDir: join(deps.cwd, ".dropsh/cache"), warn: deps.warn });
 
   if (args.target === undefined) {
     if (!args.refresh) {
@@ -79,9 +79,9 @@ export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<voi
 
   const tagged = {
     ...(transformed as Record<string, unknown>),
-    "x-drupal-cli-source": source,
-    "x-drupal-cli-target": { entity_type: entity, bundle },
-    "x-drupal-cli-operation": args.operation,
+    "x-dropsh-source": source,
+    "x-dropsh-target": { entity_type: entity, bundle },
+    "x-dropsh-operation": args.operation,
   };
 
   await store.write(cacheKey, tagged);

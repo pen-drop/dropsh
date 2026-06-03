@@ -7,7 +7,13 @@ build/
 *.tsbuildinfo
 
 # Runtime caches and local CLI state
+.dropsh/
 .drupal-cli/
+
+# Local agent/tool working dirs and worktrees
+.claude/
+.codex
+playground/canvas/
 
 # Secrets and environment
 .env

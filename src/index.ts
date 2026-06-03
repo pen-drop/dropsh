@@ -41,7 +41,7 @@ export interface ProgramOptions {
 }
 
 function resolveConfigPath(override?: string): string {
-  return override ?? process.env.DRUPAL_CLI_CONFIG ?? "drupal-cli.config.js";
+  return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
 }
 
 async function defaultContext(configPath: string): Promise<CommandContext> {
@@ -74,10 +74,10 @@ async function defaultContext(configPath: string): Promise<CommandContext> {
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
   program
-    .name("drupal-cli")
+    .name("dropsh")
     .description("Entity-agnostic CLI for Drupal 11 JSON:API")
     .version("0.0.0")
-    .option("--config <path>", "path to config file (overrides DRUPAL_CLI_CONFIG)");
+    .option("--config <path>", "path to config file (overrides DROPSH_CONFIG)");
 
   const stdout = opts.stdout ?? ((s) => process.stdout.write(s));
   const stderr = opts.stderr ?? ((s) => process.stderr.write(s));
@@ -107,7 +107,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     op: "create" | "update",
   ): Promise<unknown> {
     const store = createFileStore({
-      rootDir: `${ctx.cwd}/.drupal-cli/cache`,
+      rootDir: `${ctx.cwd}/.dropsh/cache`,
       warn: (m) => stderr(`${m}\n`),
     });
     const [entity, bundle] = target.split("/", 2) as [string, string];
@@ -127,9 +127,9 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     const transformed = toOperationVariant(raw, op);
     const tagged = {
       ...(transformed as Record<string, unknown>),
-      "x-drupal-cli-source": source,
-      "x-drupal-cli-target": { entity_type: entity, bundle },
-      "x-drupal-cli-operation": op,
+      "x-dropsh-source": source,
+      "x-dropsh-target": { entity_type: entity, bundle },
+      "x-dropsh-operation": op,
     };
     await store.write(key, tagged);
     return tagged;
