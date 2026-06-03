@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { AuthAdapter } from "./auth/types.js";
+import type { AuthAdapter, AuthProvider } from "./auth/types.js";
 import type { HttpClient } from "./http.js";
 import type { Operation } from "./schema/to-jsonschema.js";
 
@@ -14,7 +14,8 @@ export type SchemaOperation = Operation;
 export interface DropSHPlugin {
   readonly id: string;
   readonly requiredModules: string[];
-  createAuthAdapter?(): AuthAdapter;
+  /** Provider-based auth (login/logout/status/createAdapter). */
+  authProvider?: AuthProvider;
   extendSchema(
     entityType: string,
     bundle: string,

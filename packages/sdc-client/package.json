@@ -12,7 +12,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist/packages/sdc-client/src"
+    "dist/packages/sdc-client/src",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"

@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { buildProgram } from "../../src/index.js";
 import { createHttpClient } from "../../src/core/http.js";
-import { createBasicAuth } from "../../src/core/auth/basic.js";
+import { basicAuthProvider } from "../../src/core/auth/basic.js";
 import { createJsonApiClient } from "../../src/core/jsonapi/client.js";
 
 describe("smoke: read command against fake Drupal", () => {
@@ -32,7 +32,10 @@ describe("smoke: read command against fake Drupal", () => {
     const out: string[] = [];
     const http = createHttpClient({});
     const baseUrl = `http://127.0.0.1:${port}`;
-    const auth = createBasicAuth({ username: "a", password: "b" });
+    const auth = basicAuthProvider().createAdapter(
+      { basic_b64: Buffer.from("a:b").toString("base64") },
+      { http, now: () => 0, async save() {} },
+    );
     const client = createJsonApiClient({ baseUrl, prefix: "/jsonapi", http, auth });
     const p = buildProgram({
       contextFactory: async () => ({ client, http, auth, baseUrl, jsonapiPrefix: "/jsonapi", cwd: process.cwd(), plugins: [] }),

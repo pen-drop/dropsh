@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { Command } from "commander";
+import { runAuthLogin, runAuthLogout, runAuthStatus } from "./commands/auth.js";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
@@ -14,9 +15,12 @@ import {
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
+import { collectProviders, providerById } from "./core/auth/registry.js";
+import { readSession, writeSession } from "./core/auth/session-store.js";
 import type { AuthAdapter } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
+import { createPrompt } from "./core/cli/prompt.js";
 import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
@@ -26,7 +30,7 @@ import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
-import { ConfigError, exitCodeFor } from "./errors.js";
+import { AuthError, ConfigError, exitCodeFor } from "./errors.js";
 
 export interface CommandContext {
   client: JsonApiClient;
@@ -50,16 +54,35 @@ function resolveConfigPath(override?: string): string {
   return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
 }
 
+export interface ResolveAuthDeps {
+  baseUrl: string;
+  plugins: DropSHPlugin[];
+  http: HttpClient;
+  now: () => number;
+  stateDir?: string;
+}
+
+export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
+  const rec = await readSession(deps.baseUrl, deps.stateDir);
+  if (!rec) throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
+  const provider = providerById(collectProviders(deps.plugins), rec.activeProvider);
+  if (!provider) throw new ConfigError(`active provider '${rec.activeProvider}' is not configured`);
+  return provider.createAdapter(rec.session, {
+    http: deps.http,
+    now: deps.now,
+    save: (session) => writeSession(deps.baseUrl, provider.id, session, deps.stateDir),
+  });
+}
+
 async function defaultContext(configPath: string): Promise<CommandContext> {
   const cfg = await loadConfig(configPath);
   const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
-  const authPlugin = cfg.plugins.find((p) => p.createAuthAdapter);
-  if (!authPlugin?.createAuthAdapter) {
-    throw new ConfigError(
-      "No auth plugin configured. Add basicAuthPlugin() or oauth2Plugin() to config.plugins.",
-    );
-  }
-  const auth = authPlugin.createAuthAdapter();
+  const auth = await resolveAuth({
+    baseUrl: cfg.site.base_url,
+    plugins: cfg.plugins,
+    http,
+    now: Date.now,
+  });
   const client = createJsonApiClient({
     baseUrl: cfg.site.base_url,
     prefix: cfg.site.jsonapi_prefix,
@@ -105,6 +128,33 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       output.fail(err);
       setExitCode(exitCodeFor(err));
     }
+  }
+
+  async function run2(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      output.fail(err);
+      setExitCode(exitCodeFor(err));
+    }
+  }
+
+  async function authDeps(): Promise<import("./commands/auth.js").AuthDeps> {
+    const cfg = await loadConfig(resolveConfigPath(program.opts().config as string | undefined));
+    return {
+      baseUrl: cfg.site.base_url,
+      providers: collectProviders(cfg.plugins),
+      stdout,
+      stderr,
+      prompt: createPrompt(),
+      openBrowser: async (url: string) => {
+        const { default: open } = await import("open");
+        await open(url);
+      },
+      http: createHttpClient({ timeoutMs: cfg.defaults.timeout_ms }),
+      now: Date.now,
+      isTTY: Boolean(process.stdin.isTTY),
+    };
   }
 
   async function loadOrFetchSchema(
@@ -292,6 +342,24 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         }),
       );
     });
+
+  const auth = program.command("auth").description("Manage authentication");
+  auth
+    .command("login")
+    .description("Log in via an auth provider")
+    .option("--provider <id>", "skip the picker and use this provider id")
+    .action((o: { provider?: string }) =>
+      run2(async () => runAuthLogin(o.provider ? { provider: o.provider } : {}, await authDeps())),
+    );
+  auth
+    .command("logout")
+    .description("Clear the active session")
+    .action(() => run2(async () => runAuthLogout({}, await authDeps())));
+  auth
+    .command("status")
+    .description("Show the active session")
+    .option("--json", "machine-readable output")
+    .action((o: { json?: boolean }) => run2(async () => runAuthStatus(o, await authDeps())));
 
   if (opts.plugins) {
     for (const plugin of opts.plugins) {

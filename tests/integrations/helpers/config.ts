@@ -4,6 +4,11 @@
 // dropsh-test; each subsite is exposed at <name>.dropsh-test.ddev.site with
 // its own database. The "plain" and "schemata" sites enable simple_oauth;
 // "canvas" and "db" rely on basic auth against /jsonapi/* only.
+//
+// These credentials are NOT embedded in the dropsh config rendered by the test
+// helper. They are fed to the provider's interactive login (via a stub prompt in
+// `seedSession`), which then persists the resulting session to the state dir —
+// matching the real `dropsh auth login` flow.
 
 export type SiteName = "plain" | "schemata" | "canvas" | "db";
 
