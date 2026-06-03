@@ -18,7 +18,7 @@ jobs:
           node-version: "20"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npm run lint
+      - run: pnpm run lint
 
   typecheck:
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npm run typecheck
+      - run: pnpm run typecheck
 
   test:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npm test
+      - run: pnpm test
 
   test-plugins:
     runs-on: ubuntu-latest
@@ -70,7 +70,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npm test
+      - run: pnpm test
         working-directory: plugins/${{ matrix.plugin }}
 
   test-packages:
@@ -89,5 +89,5 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npm test
+      - run: pnpm test
         working-directory: packages/${{ matrix.package }}

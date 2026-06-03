@@ -6,41 +6,42 @@ workflow:
 stages:
   - validate
 
-.node_cache:
+.pnpm:
+  image: node:${NODE_VERSION}-alpine
   cache:
     key:
       files:
-        - package-lock.json
-      prefix: "node${NODE_VERSION}"
+        - pnpm-lock.yaml
+      prefix: "pnpm-node${NODE_VERSION}"
     paths:
-      - .npm/
+      - .pnpm-store/
+  before_script:
+    - corepack enable
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
 
 lint:
-  extends: .node_cache
+  extends: .pnpm
   stage: validate
-  image: node:20-alpine
+  variables:
+    NODE_VERSION: "20"
   script:
-    - npm ci --cache .npm
-    - npm run lint
+    - pnpm run lint
 
 typecheck:
-  extends: .node_cache
+  extends: .pnpm
   stage: validate
   parallel:
     matrix:
       - NODE_VERSION: ["20", "22"]
-  image: node:${NODE_VERSION}-alpine
   script:
-    - npm ci --cache .npm
-    - npm run typecheck
+    - pnpm run typecheck
 
 test:
-  extends: .node_cache
+  extends: .pnpm
   stage: validate
   parallel:
     matrix:
       - NODE_VERSION: ["20", "22"]
-  image: node:${NODE_VERSION}-alpine
   script:
-    - npm ci --cache .npm
-    - npm test
+    - pnpm test

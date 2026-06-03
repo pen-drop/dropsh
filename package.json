@@ -1,6 +1,6 @@
 {
   "name": "dropsh",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1",
   "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the dropsh Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
@@ -19,18 +19,19 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:packages": "npm --prefix packages/sdc-client run build",
-    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build && npm --prefix plugins/canvas run build",
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
+    "build:plugins": "pnpm --filter \"./plugins/*\" run build",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:integration": "npm run build && vitest run -c vitest.config.integration.ts",
+    "test:integration": "pnpm run build && vitest run -c vitest.config.integration.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "lint:fix": "biome check --write src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
-    "prepublishOnly": "npm run typecheck && npm run build"
+    "prepublishOnly": "pnpm run typecheck && pnpm run build",
+    "release": "pnpm publish --no-git-checks && pnpm -r publish --no-git-checks"
   },
   "keywords": [
     "drupal",
@@ -62,6 +63,7 @@
     "vitest": "^4.1.8"
   },
   "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"],
     "overrides": {
       "fast-uri": "^3.1.2",
       "qs": "^6.15.2",
