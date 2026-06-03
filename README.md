@@ -102,6 +102,26 @@ If the site has `drupal/schemata` + `drupal/schemata_json_schema` installed, the
 
 Schemas are cached under `.dropsh/cache/`. Override the config path via `DROPSH_CONFIG` or `--config`.
 
+### Authoritative schemas — `@dropsh/plugin-schemata`
+
+Without a schema plugin, the schema is derived from sample records (field names
+only). [`@dropsh/plugin-schemata`](plugins/schemata/README.md) returns the
+authoritative schema (required fields + constraints) from Drupal's `schemata`
+module, which makes client-side validation in `create` / `update` meaningful.
+Requires the Drupal modules `schemata` + `jsonapi_schema`.
+
+```js
+import { schemataPlugin } from "@dropsh/plugin-schemata";
+
+export default {
+  site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
+  plugins: [basicAuthPlugin(), schemataPlugin()],
+};
+```
+
+The output's `x-dropsh-source` is `"schemata"` when authoritative, or
+`"heuristic"` / `"heuristic-empty"` for the sample-derived fallback.
+
 ### Canvas schema plugin
 
 Canvas support lives in `@dropsh/plugin-canvas` and requires these Drupal modules:

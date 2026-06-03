@@ -7,7 +7,8 @@
     ".": "./dist/plugins/oauth2/src/index.js"
   },
   "files": [
-    "dist/plugins/oauth2/src"
+    "dist/plugins/oauth2/src",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
