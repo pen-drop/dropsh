@@ -1,6 +1,6 @@
 // Canvas integration: subsite with simple_oauth (authcode + PKCE) + canvas + jsonapi_sdc.
 // URL: http://canvas.dropsh-test.ddev.site
-// Run `npx dropsh login` once to authenticate via browser.
+// Run `npx dropsh auth login` once to authenticate via browser.
 import { oauth2Plugin } from "@dropsh/plugin-oauth2";
 import { canvasPlugin } from "@dropsh/plugin-canvas";
 
