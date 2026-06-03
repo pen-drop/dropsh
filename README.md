@@ -17,17 +17,62 @@ pnpm run build
 
 ## Configure
 
-Copy `dropsh.config.example.js` to `dropsh.config.js` in your project and set the auth fields.
+Copy `dropsh.config.example.js` to `dropsh.config.js` in your project. The config
+carries only **non-secret connection parameters** — secrets (passwords, client
+secrets, tokens) are never stored in the config. They are prompted at login and
+persisted separately (see [Authentication](#authentication)).
 
 ```js
 import { basicAuthPlugin } from "dropsh";
+import { oauth2Plugin } from "@dropsh/plugin-oauth2";
 
 export default {
   site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
   defaults: { dry_run: false, timeout_ms: 30000 },
-  plugins: [basicAuthPlugin({ username: "admin", password: "secret" })],
+  plugins: [
+    basicAuthPlugin(),
+    oauth2Plugin({ type: "oauth2_authcode", client_id: "my-client", token_url: "https://my-drupal.example.com/oauth/token" }),
+  ],
 };
 ```
+
+## Authentication
+
+Authentication is provider-based. Each entry in `plugins` that contributes an auth
+provider (`basicAuthPlugin()`, `oauth2Plugin(...)`) becomes a login option. You log
+in once per host; dropsh stores a single active session and uses it for every
+subsequent command.
+
+```bash
+dropsh auth login                  # interactive picker over the configured providers
+dropsh auth login --provider basic # skip the picker and use a provider by id
+dropsh auth logout                 # clear the active session for the host
+dropsh auth status                 # show the active session
+dropsh auth status --json          # machine-readable status
+```
+
+`dropsh auth login` prompts for any secrets the chosen provider needs (basic auth
+prompts username + password; OAuth2 password / client-credentials prompt the client
+secret and, for the password grant, the user password; `oauth2_authcode` opens the
+browser for a PKCE flow). On a non-interactive (non-TTY) shell you must pass
+`--provider <id>`.
+
+### Where secrets live
+
+Secrets and tokens are **never** written to `dropsh.config.js`. The active session
+is stored per host at `~/.config/dropsh/<host>.json` with file mode `0600`:
+
+```json
+{ "activeProvider": "oauth2_authcode", "session": { "access_token": "…", "expires_at": 1717459200000 } }
+```
+
+Only non-secret connection parameters stay in the config:
+
+- **basic** — `basicAuthPlugin()` (no fields; an optional `username` may be
+  pre-seeded, but the password is always prompted)
+- **oauth2** — `client_id`, `token_url`, optional `scope`; `redirect_port` for
+  `oauth2_authcode`; `username` for `oauth2_password`. The `client_secret` and the
+  user `password` are prompted at login, never stored in config.
 
 ## Commands
 
@@ -73,7 +118,7 @@ import { canvasPlugin } from "@dropsh/plugin-canvas";
 export default {
   site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
   plugins: [
-    basicAuthPlugin({ username: process.env.DRUPAL_USER, password: process.env.DRUPAL_PASSWORD }),
+    basicAuthPlugin(),
     canvasPlugin(),
   ],
 };

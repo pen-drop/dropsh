@@ -4,13 +4,14 @@ import {
   type Auth,
   createTestNode,
   oauth2Password,
-  parseError,
   parseJson,
   runCli,
+  seedSession,
+  testConfig,
 } from "./helpers/run.js";
 
 describe("integration: auth oauth2 password grant", () => {
-  it("reads a node using a password-grant token", async () => {
+  it("reads a node using a password-grant session", async () => {
     const uuid = await createTestNode(`it-auth-oauth2pw-${crypto.randomUUID()}`);
 
     const result = await runCli({
@@ -23,7 +24,9 @@ describe("integration: auth oauth2 password grant", () => {
     expect(body.data.id).toBe(uuid);
   });
 
-  it("returns exit 3 with a wrong password", async () => {
+  it("login fails with a wrong password", async () => {
+    // The token exchange happens during login (seedSession), so a bad password
+    // is rejected by the token endpoint there with an AuthError.
     const oauth = oauth2Config();
     const badAuth: Auth = {
       type: "oauth2_password",
@@ -31,13 +34,9 @@ describe("integration: auth oauth2 password grant", () => {
       clientSecret: oauth.password_client_secret,
       user: oauth.user,
       pass: "wrong-password",
+      scope: oauth.scope,
     };
 
-    const result = await runCli({
-      auth: badAuth,
-      args: ["search", "node", "--bundle=article_test", "--limit=1"],
-    });
-    expect(result.code).toBe(3);
-    expect(parseError(result.stderr).error.code).toBe("E_AUTH");
+    await expect(seedSession(testConfig().url, badAuth)).rejects.toThrow();
   });
 });
