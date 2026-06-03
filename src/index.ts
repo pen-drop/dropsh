@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { Command } from "commander";
+import { runAuthLogin, runAuthLogout, runAuthStatus } from "./commands/auth.js";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
@@ -14,9 +15,11 @@ import {
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
+import { collectProviders } from "./core/auth/registry.js";
 import type { AuthAdapter } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
+import { createPrompt } from "./core/cli/prompt.js";
 import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
@@ -105,6 +108,33 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       output.fail(err);
       setExitCode(exitCodeFor(err));
     }
+  }
+
+  async function run2(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      output.fail(err);
+      setExitCode(exitCodeFor(err));
+    }
+  }
+
+  async function authDeps(): Promise<import("./commands/auth.js").AuthDeps> {
+    const cfg = await loadConfig(resolveConfigPath(program.opts().config as string | undefined));
+    return {
+      baseUrl: cfg.site.base_url,
+      providers: collectProviders(cfg.plugins),
+      stdout,
+      stderr,
+      prompt: createPrompt(),
+      openBrowser: async (url: string) => {
+        const { default: open } = await import("open");
+        await open(url);
+      },
+      http: createHttpClient({ timeoutMs: cfg.defaults.timeout_ms }),
+      now: Date.now,
+      isTTY: Boolean(process.stdin.isTTY),
+    };
   }
 
   async function loadOrFetchSchema(
@@ -292,6 +322,24 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         }),
       );
     });
+
+  const auth = program.command("auth").description("Manage authentication");
+  auth
+    .command("login")
+    .description("Log in via an auth provider")
+    .option("--provider <id>", "skip the picker and use this provider id")
+    .action((o: { provider?: string }) =>
+      run2(async () => runAuthLogin(o.provider ? { provider: o.provider } : {}, await authDeps())),
+    );
+  auth
+    .command("logout")
+    .description("Clear the active session")
+    .action(() => run2(async () => runAuthLogout({}, await authDeps())));
+  auth
+    .command("status")
+    .description("Show the active session")
+    .option("--json", "machine-readable output")
+    .action((o: { json?: boolean }) => run2(async () => runAuthStatus(o, await authDeps())));
 
   if (opts.plugins) {
     for (const plugin of opts.plugins) {
