@@ -1,5 +1,5 @@
 export type { BasicAuthConfig } from "./core/auth/basic.js";
-export { basicAuthPlugin } from "./core/auth/basic.js";
+export { basicAuthPlugin, basicAuthProvider } from "./core/auth/basic.js";
 export type {
   AdapterRuntime,
   AuthAdapter,

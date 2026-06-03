@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AuthSession } from "./types.js";
@@ -39,10 +39,14 @@ export async function writeSession(
   const stateDir = dir ?? defaultStateDir();
   await mkdir(stateDir, { recursive: true });
   const record: SessionRecord = { activeProvider, session };
-  await writeFile(sessionPath(baseUrl, stateDir), JSON.stringify(record, null, 2), {
+  const path = sessionPath(baseUrl, stateDir);
+  await writeFile(path, JSON.stringify(record, null, 2), {
     encoding: "utf8",
     mode: 0o600,
   });
+  // writeFile's `mode` only applies when creating a new file; overwriting an
+  // existing file keeps its old (possibly looser) permissions, so tighten explicitly.
+  await chmod(path, 0o600);
 }
 
 export async function clearSession(baseUrl: string, dir?: string): Promise<void> {

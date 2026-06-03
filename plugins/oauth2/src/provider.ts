@@ -136,6 +136,13 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
           const expiresAt = typeof current.expires_at === "number" ? current.expires_at : 0;
           if (typeof token === "string" && expiresAt - 30_000 > rt.now())
             return { ...req, headers: bearer(req, token) };
+          // Only the authcode grant uses a public client (PKCE) and can refresh
+          // with client_id alone. For oauth2_password / oauth2_client_credentials
+          // the client is confidential and a refresh without client_secret would
+          // 401; we do not persist the long-lived client_secret at rest, so a
+          // re-login is required instead.
+          if (cfg.type !== "oauth2_authcode")
+            throw new AuthError("Session expired. Run 'dropsh auth login'.");
           const refresh = current.refresh_token;
           if (typeof refresh !== "string")
             throw new AuthError("Session expired. Run 'dropsh auth login'.");

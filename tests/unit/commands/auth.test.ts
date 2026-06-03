@@ -58,6 +58,13 @@ describe("auth login", () => {
     await expect(runAuthLogin({}, { ...deps({ stateDir, isTTY: false }) })).rejects.toThrow(/non-interactive/);
   });
 
+  it("non-TTY with a single provider and no --provider errors", async () => {
+    const stateDir = await tmp();
+    await expect(
+      runAuthLogin({}, { ...deps({ stateDir, isTTY: false, providers: [provider("only")] }) }),
+    ).rejects.toThrow(/non-interactive/);
+  });
+
   it("interactive picker selects by number", async () => {
     const stateDir = await tmp();
     await runAuthLogin({}, { ...deps({ stateDir, prompt: vi.fn(async () => "2") }) });

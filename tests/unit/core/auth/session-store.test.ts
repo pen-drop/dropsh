@@ -1,4 +1,4 @@
-import { mkdtemp, stat } from "node:fs/promises";
+import { chmod, mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,6 +28,17 @@ describe("session-store", () => {
     await withTmpDir(async (dir) => {
       await writeSession("https://example.com", "basic", { basic_b64: "x" }, dir);
       const info = await stat(join(dir, "example.com.json"));
+      expect(info.mode & 0o777).toBe(0o600);
+    });
+  });
+
+  it("re-tightens permissions to 0600 when overwriting a loosened file", async () => {
+    await withTmpDir(async (dir) => {
+      await writeSession("https://example.com", "basic", { basic_b64: "x" }, dir);
+      const path = join(dir, "example.com.json");
+      await chmod(path, 0o644);
+      await writeSession("https://example.com", "basic", { basic_b64: "y" }, dir);
+      const info = await stat(path);
       expect(info.mode & 0o777).toBe(0o600);
     });
   });
