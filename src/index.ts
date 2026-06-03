@@ -15,7 +15,8 @@ import {
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
-import { collectProviders } from "./core/auth/registry.js";
+import { collectProviders, providerById } from "./core/auth/registry.js";
+import { readSession, writeSession } from "./core/auth/session-store.js";
 import type { AuthAdapter } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
@@ -29,7 +30,7 @@ import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
-import { ConfigError, exitCodeFor } from "./errors.js";
+import { AuthError, ConfigError, exitCodeFor } from "./errors.js";
 
 export interface CommandContext {
   client: JsonApiClient;
@@ -53,16 +54,35 @@ function resolveConfigPath(override?: string): string {
   return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
 }
 
+export interface ResolveAuthDeps {
+  baseUrl: string;
+  plugins: DropSHPlugin[];
+  http: HttpClient;
+  now: () => number;
+  stateDir?: string;
+}
+
+export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
+  const rec = await readSession(deps.baseUrl, deps.stateDir);
+  if (!rec) throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
+  const provider = providerById(collectProviders(deps.plugins), rec.activeProvider);
+  if (!provider) throw new ConfigError(`active provider '${rec.activeProvider}' is not configured`);
+  return provider.createAdapter(rec.session, {
+    http: deps.http,
+    now: deps.now,
+    save: (session) => writeSession(deps.baseUrl, provider.id, session, deps.stateDir),
+  });
+}
+
 async function defaultContext(configPath: string): Promise<CommandContext> {
   const cfg = await loadConfig(configPath);
   const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
-  const authPlugin = cfg.plugins.find((p) => p.createAuthAdapter);
-  if (!authPlugin?.createAuthAdapter) {
-    throw new ConfigError(
-      "No auth plugin configured. Add basicAuthPlugin() or oauth2Plugin() to config.plugins.",
-    );
-  }
-  const auth = authPlugin.createAuthAdapter();
+  const auth = await resolveAuth({
+    baseUrl: cfg.site.base_url,
+    plugins: cfg.plugins,
+    http,
+    now: Date.now,
+  });
   const client = createJsonApiClient({
     baseUrl: cfg.site.base_url,
     prefix: cfg.site.jsonapi_prefix,

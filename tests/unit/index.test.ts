@@ -1,5 +1,10 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildProgram, type CommandContext } from "../../src/index.js";
+import { buildProgram, type CommandContext, resolveAuth } from "../../src/index.js";
+import { basicAuthPlugin } from "../../src/core/auth/basic.js";
+import { writeSession } from "../../src/core/auth/session-store.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 import type { DropSHPlugin } from "../../src/core/plugin.js";
 
@@ -88,5 +93,33 @@ describe("buildProgram", () => {
     const names = p.commands.map((c) => c.name());
     expect(names).toContain("test-plugin-cmd");
     expect(registeredCommands).toEqual(["test-plugin-cmd"]);
+  });
+
+  it("resolveAuth builds an adapter from the stored session", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    const b64 = Buffer.from("u:p").toString("base64");
+    await writeSession("https://example.com", "basic", { basic_b64: b64 }, dir);
+    const adapter = await resolveAuth({
+      baseUrl: "https://example.com",
+      plugins: [basicAuthPlugin()],
+      http: { async send() { throw new Error("unused"); } },
+      now: () => 0,
+      stateDir: dir,
+    });
+    const req = await adapter.apply({ method: "GET", url: "https://x" });
+    expect(req.headers?.Authorization).toBe(`Basic ${b64}`);
+  });
+
+  it("resolveAuth throws AuthError when there is no session", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    await expect(
+      resolveAuth({
+        baseUrl: "https://example.com",
+        plugins: [basicAuthPlugin()],
+        http: { async send() { throw new Error("unused"); } },
+        now: () => 0,
+        stateDir: dir,
+      }),
+    ).rejects.toThrow(/auth login/);
   });
 });
