@@ -25,9 +25,9 @@ pnpm test            # unit tests (vitest, Node 20+)
 
 To auto-fix lint and formatting issues: `pnpm run lint:fix`
 
-The CI pipeline (`validate` stage) runs all three checks: `lint` (Node 20 only), `typecheck` and `test` (Node 20 + 22). A commit that breaks any of them will fail the pipeline.
+CI runs on GitHub Actions. The `validate` workflow (`.github/workflows/validate.yml`) runs all three checks: `lint` (Node 20 only), `typecheck` and `test` (Node 20 + 22), plus the plugin and package test matrices. A commit that breaks any of them will fail the workflow.
 
-Integration tests (`pnpm run test:integration`) require a live DDEV instance and are **not** run in CI. Run them locally when touching schema, auth, or HTTP logic:
+Integration tests (`pnpm run test:integration`) require a live DDEV instance. The `integration` workflow (`.github/workflows/integration.yml`) provisions DDEV on the runner and executes them on pull requests and pushes to the release branches. Run them locally when touching schema, auth, or HTTP logic:
 
 ```bash
 pnpm run drupal:up          # provision DDEV + Drupal (once)
