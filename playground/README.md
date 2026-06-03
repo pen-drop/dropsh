@@ -13,11 +13,11 @@ eigene `dropsh.config.js` für ein konkretes Integrations-Szenario.
 ## Setup
 
 ```bash
-npm run drupal:up         # provisioniert alle 4 Sites
-npm run build             # Haupt-Package
-npm run build:plugins     # Plugins
+pnpm run drupal:up         # provisioniert alle 4 Sites
+pnpm run build             # Haupt-Package
+pnpm run build:plugins     # Plugins
 cd playground
-npm install
+pnpm install
 ```
 
 Zugangsdaten (alle vier Sites teilen dieselben Werte aus der Fixture):

@@ -41,5 +41,5 @@ Multisite fixture ready:
   canvas   https://canvas.dropsh-test.ddev.site
   db       https://db.dropsh-test.ddev.site
 
-Run: npm run test:integration
+Run: pnpm run test:integration
 EOF

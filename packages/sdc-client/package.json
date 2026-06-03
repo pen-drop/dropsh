@@ -1,20 +1,27 @@
 {
   "name": "@dropsh/sdc-client",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1",
   "type": "module",
-  "main": "./dist/plugins/sdc-client/src/index.js",
-  "types": "./dist/plugins/sdc-client/src/index.d.ts",
+  "main": "./dist/packages/sdc-client/src/index.js",
+  "types": "./dist/packages/sdc-client/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/plugins/sdc-client/src/index.d.ts",
-      "default": "./dist/plugins/sdc-client/src/index.js"
+      "types": "./dist/packages/sdc-client/src/index.d.ts",
+      "default": "./dist/packages/sdc-client/src/index.js"
     },
     "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/packages/sdc-client/src"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "dropsh": "*"

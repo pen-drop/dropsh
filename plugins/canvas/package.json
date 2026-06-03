@@ -1,15 +1,22 @@
 {
   "name": "@dropsh/plugin-canvas",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1",
   "type": "module",
   "main": "./dist/plugins/canvas/src/index.js",
   "exports": {
     ".": "./dist/plugins/canvas/src/index.js"
   },
+  "files": [
+    "dist/plugins/canvas/src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "dropsh": "*"
