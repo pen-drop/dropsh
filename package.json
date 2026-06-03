@@ -1,6 +1,6 @@
 {
   "name": "drupal-cli",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1",
   "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the drupal-cli Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
