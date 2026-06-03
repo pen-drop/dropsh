@@ -6,6 +6,7 @@ import { parseJson, runCli } from "../helpers/run.js";
 describe("integration: schema (schemata path, --for=update)", () => {
   it("allows a partial payload when update variant is requested", async () => {
     const result = await runCli({
+      site: "schemata",
       args: ["schema", "node/article_test", "--for=update", "--refresh"],
     });
     expect(result.code).toBe(0);

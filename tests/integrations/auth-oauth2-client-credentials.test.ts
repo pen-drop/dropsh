@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { testConfig } from "./helpers/config.js";
+import { oauth2Config } from "./helpers/config.js";
 import {
   type Auth,
   createTestNode,
@@ -24,10 +24,10 @@ describe("integration: auth oauth2 client_credentials grant", () => {
   });
 
   it("returns exit 3 with a wrong client_secret", async () => {
-    const cfg = testConfig();
+    const oauth = oauth2Config();
     const badAuth: Auth = {
       type: "oauth2_client_credentials",
-      clientId: cfg.oauth2.cc_client_id,
+      clientId: oauth.cc_client_id,
       clientSecret: "wrong-secret",
     };
 

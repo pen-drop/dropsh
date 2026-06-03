@@ -18,10 +18,14 @@ $permissions = [
   'delete any article_test content',
   'grant simple_oauth codes',
   'access schemata data models',
+  'create canvas_page',
+  'edit canvas_page',
+  'delete canvas_page',
 ];
 
+$available = array_keys(\Drupal::service('user.permissions')->getPermissions());
 foreach ($permissions as $permission) {
-  if (!$role->hasPermission($permission)) {
+  if (in_array($permission, $available, TRUE) && !$role->hasPermission($permission)) {
     $role->grantPermission($permission);
   }
 }

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type { AuthAdapter } from "../core/auth/types.js";
 import { createFileStore } from "../core/cache/file-store.js";
 import type { HttpClient } from "../core/http.js";
-import type { DrupalCliPlugin } from "../core/plugin.js";
+import type { DropSHPlugin } from "../core/plugin.js";
 import { fetchCatalog } from "../core/schema/catalog.js";
 import { fetchJsonSchema } from "../core/schema/jsonschema-source.js";
 import { type Operation, toOperationVariant } from "../core/schema/to-jsonschema.js";
@@ -22,7 +22,63 @@ export interface SchemaDeps {
   cwd: string;
   emit: (v: unknown) => void;
   warn: (m: string) => void;
-  plugins?: DrupalCliPlugin[];
+  plugins?: DropSHPlugin[];
+}
+
+export const SCHEMA_PIPELINE_VERSION = 2;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function operationHookPluginIds(plugins: DropSHPlugin[]): string[] {
+  return plugins.filter((plugin) => plugin.extendOperationSchema).map((plugin) => plugin.id);
+}
+
+export function schemaCacheMetadataMatches(
+  schema: unknown,
+  operationHookPlugins: string[],
+): boolean {
+  if (!isRecord(schema)) return false;
+  if (schema["x-dropsh-schema-pipeline-version"] !== SCHEMA_PIPELINE_VERSION) return false;
+  const cachedPlugins = schema["x-dropsh-operation-hook-plugins"];
+  if (!Array.isArray(cachedPlugins)) return false;
+  if (cachedPlugins.length !== operationHookPlugins.length) return false;
+  return cachedPlugins.every((plugin, index) => plugin === operationHookPlugins[index]);
+}
+
+export async function applyOperationSchemaPlugins(
+  schema: unknown,
+  args: {
+    entity: string;
+    bundle: string;
+    operation: Operation;
+  },
+  deps: {
+    http: HttpClient;
+    auth: AuthAdapter;
+    baseUrl: string;
+    plugins: DropSHPlugin[];
+  },
+): Promise<{ schema: unknown; extensions: string[] }> {
+  let current = schema;
+  const extensions: string[] = [];
+  const ctx = { http: deps.http, auth: deps.auth, baseUrl: deps.baseUrl };
+  for (const plugin of deps.plugins) {
+    if (!plugin.extendOperationSchema) continue;
+    const extended = await plugin.extendOperationSchema(
+      args.entity,
+      args.bundle,
+      args.operation,
+      current,
+      ctx,
+    );
+    if (extended !== current) {
+      current = extended;
+      extensions.push(plugin.id);
+    }
+  }
+  return { schema: current, extensions };
 }
 
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+$/;
@@ -56,10 +112,12 @@ export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<voi
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const [entity, bundle] = args.target.split("/", 2) as [string, string];
   const cacheKey = `schema/${entity}--${bundle}.${args.operation}.json`;
+  const plugins = deps.plugins ?? [];
+  const hookPluginIds = operationHookPluginIds(plugins);
 
   if (!args.refresh) {
     const hit = await store.read<unknown>(cacheKey);
-    if (hit !== undefined) {
+    if (hit !== undefined && schemaCacheMetadataMatches(hit, hookPluginIds)) {
       deps.emit(hit);
       return;
     }
@@ -73,15 +131,28 @@ export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<voi
     entity,
     bundle,
     warn: deps.warn,
-    plugins: deps.plugins ?? [],
+    plugins,
   });
   const transformed = toOperationVariant(raw, args.operation);
+  const operationExtended = await applyOperationSchemaPlugins(
+    transformed,
+    { entity, bundle, operation: args.operation },
+    {
+      http: deps.http,
+      auth: deps.auth,
+      baseUrl: deps.baseUrl,
+      plugins,
+    },
+  );
 
   const tagged = {
-    ...(transformed as Record<string, unknown>),
+    ...(operationExtended.schema as Record<string, unknown>),
     "x-dropsh-source": source,
     "x-dropsh-target": { entity_type: entity, bundle },
     "x-dropsh-operation": args.operation,
+    "x-dropsh-schema-extensions": operationExtended.extensions,
+    "x-dropsh-schema-pipeline-version": SCHEMA_PIPELINE_VERSION,
+    "x-dropsh-operation-hook-plugins": hookPluginIds,
   };
 
   await store.write(cacheKey, tagged);

@@ -8,7 +8,8 @@
   },
   "exports": {
     ".": "./dist/src/index.js",
-    "./plugin": "./dist/src/plugin-api.js"
+    "./plugin": "./dist/src/plugin-api.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",
@@ -18,7 +19,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build",
+    "build:packages": "npm --prefix packages/sdc-client run build",
+    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build && npm --prefix plugins/canvas run build",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
@@ -56,9 +58,19 @@
     "@types/node": "^20.14.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "^3.1.2",
+      "qs": "^6.15.2",
+      "vite": "^6.4.2",
+      "esbuild": "^0.25.0"
+    }
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "packageManager": "pnpm@10.29.1"
 }
