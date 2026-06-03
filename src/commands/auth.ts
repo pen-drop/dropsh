@@ -41,7 +41,6 @@ async function pickProvider(deps: AuthDeps, requestedId?: string): Promise<AuthP
     return found;
   }
   if (!deps.isTTY) throw new ConfigError("non-interactive: pass --provider <id>");
-  if (capable.length === 1) return capable[0] as AuthProvider;
   deps.stdout("Select an auth provider:\n");
   capable.forEach((p, i) => {
     deps.stdout(`  ${i + 1}) ${p.displayName} [${p.id}]\n`);

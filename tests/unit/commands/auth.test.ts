@@ -71,6 +71,17 @@ describe("auth login", () => {
     const rec = await readSession("https://example.com", stateDir);
     expect(rec?.activeProvider).toBe("b");
   });
+
+  it("shows the picker even when there is only one provider", async () => {
+    const stateDir = await tmp();
+    const stdout = vi.fn();
+    const prompt = vi.fn(async () => "1");
+    await runAuthLogin({}, { ...deps({ stateDir, stdout, prompt, providers: [provider("only")] }) });
+    expect(stdout.mock.calls.flat().join("")).toContain("Select an auth provider");
+    expect(prompt).toHaveBeenCalled();
+    const rec = await readSession("https://example.com", stateDir);
+    expect(rec?.activeProvider).toBe("only");
+  });
 });
 
 describe("auth logout / status", () => {
