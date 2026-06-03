@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import type { HttpClient } from "dropsh/plugin";
+import type { AuthSession, HttpClient } from "dropsh/plugin";
 import { AuthError, createHttpClient, loadConfig } from "dropsh/plugin";
 import { writeToken } from "./token-store.js";
 
@@ -58,7 +58,70 @@ export async function runLogin(deps: LoginDeps): Promise<void> {
   authUrl.searchParams.set("state", state);
   if (deps.scope) authUrl.searchParams.set("scope", deps.scope);
 
-  const code = await new Promise<string>((resolve, reject) => {
+  const openBrowser =
+    deps.openBrowser ??
+    (async (url: string) => {
+      const { default: open } = await import("open");
+      await open(url);
+    });
+  const code = await waitForCallbackCode({
+    port,
+    state,
+    timeoutMs,
+    authUrl,
+    deps: { openBrowser, stdout },
+  });
+
+  const params = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    code_verifier: pkce.verifier,
+    client_id: deps.clientId,
+    redirect_uri: redirectUri,
+  });
+
+  const res = await http.send({
+    method: "POST",
+    url: deps.tokenUrl,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+  const body = JSON.parse(res.body) as {
+    access_token?: unknown;
+    refresh_token?: unknown;
+    expires_in?: unknown;
+  };
+  if (typeof body.access_token !== "string") {
+    throw new AuthError("Token endpoint returned no access_token");
+  }
+
+  const ttlSec = typeof body.expires_in === "number" ? body.expires_in : 3600;
+  const expiresAt = now() + ttlSec * 1000 - 5000;
+  await writeToken(
+    tokenStorageKey,
+    {
+      access_token: body.access_token,
+      ...(typeof body.refresh_token === "string" ? { refresh_token: body.refresh_token } : {}),
+      expires_at: expiresAt,
+    },
+    deps.tokenDir,
+  );
+
+  stdout(`Logged in · token valid until ${new Date(expiresAt).toISOString()}`);
+}
+
+interface CallbackDeps {
+  port: number;
+  state: string;
+  timeoutMs: number;
+  authUrl: URL;
+  deps: { openBrowser: (url: string) => Promise<void>; stdout: (s: string) => void };
+}
+
+function waitForCallbackCode(c: CallbackDeps): Promise<string> {
+  const { port, state, timeoutMs, authUrl } = c;
+  const stdout = c.deps.stdout;
+  return new Promise<string>((resolve, reject) => {
     let settled = false;
     const finish = (fn: () => void): void => {
       if (settled) return;
@@ -104,22 +167,57 @@ export async function runLogin(deps: LoginDeps): Promise<void> {
     });
 
     const timer = setTimeout(() => {
-      finish(() => reject(new AuthError("Login timed out. Run 'dropsh login' to try again.")));
+      finish(() => reject(new AuthError("Login timed out. Run 'dropsh auth login' to try again.")));
     }, timeoutMs);
 
     server.listen(port, () => {
       stdout("Opening browser for login...");
       stdout(`If the browser does not open, visit:\n${authUrl.toString()}`);
-      const openBrowser =
-        deps.openBrowser ??
-        (async (url: string) => {
-          const { default: open } = await import("open");
-          await open(url);
-        });
-      openBrowser(authUrl.toString()).catch(() => {
+      c.deps.openBrowser(authUrl.toString()).catch(() => {
         // URL is printed above — user can open it manually.
       });
     });
+  });
+}
+
+export interface AcquireAuthCodeDeps {
+  baseUrl: string;
+  clientId: string;
+  tokenUrl: string;
+  scope?: string;
+  redirectPort?: number;
+  http: HttpClient;
+  openBrowser: (url: string) => Promise<void>;
+  stdout: (s: string) => void;
+  now: () => number;
+  timeoutMs?: number;
+  _generatePkce?: () => { verifier: string; challenge: string };
+  _generateState?: () => string;
+}
+
+/** Runs the PKCE browser flow and returns an AuthSession (no persistence). */
+export async function acquireAuthCodeSession(deps: AcquireAuthCodeDeps): Promise<AuthSession> {
+  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const port = deps.redirectPort ?? DEFAULT_PORT;
+  const pkce = (deps._generatePkce ?? generatePkce)();
+  const state = (deps._generateState ?? generateState)();
+  const baseUrl = deps.baseUrl.replace(/\/$/, "");
+  const redirectUri = `http://localhost:${port}/callback`;
+  const authUrl = new URL(`${baseUrl}/oauth/authorize`);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", deps.clientId);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("code_challenge", pkce.challenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("state", state);
+  if (deps.scope) authUrl.searchParams.set("scope", deps.scope);
+
+  const code = await waitForCallbackCode({
+    port,
+    state,
+    timeoutMs,
+    authUrl,
+    deps: { openBrowser: deps.openBrowser, stdout: deps.stdout },
   });
 
   const params = new URLSearchParams({
@@ -129,8 +227,7 @@ export async function runLogin(deps: LoginDeps): Promise<void> {
     client_id: deps.clientId,
     redirect_uri: redirectUri,
   });
-
-  const res = await http.send({
+  const res = await deps.http.send({
     method: "POST",
     url: deps.tokenUrl,
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -141,21 +238,12 @@ export async function runLogin(deps: LoginDeps): Promise<void> {
     refresh_token?: unknown;
     expires_in?: unknown;
   };
-  if (typeof body.access_token !== "string") {
+  if (typeof body.access_token !== "string")
     throw new AuthError("Token endpoint returned no access_token");
-  }
-
   const ttlSec = typeof body.expires_in === "number" ? body.expires_in : 3600;
-  const expiresAt = now() + ttlSec * 1000 - 5000;
-  await writeToken(
-    tokenStorageKey,
-    {
-      access_token: body.access_token,
-      ...(typeof body.refresh_token === "string" ? { refresh_token: body.refresh_token } : {}),
-      expires_at: expiresAt,
-    },
-    deps.tokenDir,
-  );
-
-  stdout(`Logged in · token valid until ${new Date(expiresAt).toISOString()}`);
+  return {
+    access_token: body.access_token,
+    ...(typeof body.refresh_token === "string" ? { refresh_token: body.refresh_token } : {}),
+    expires_at: deps.now() + ttlSec * 1000 - 5000,
+  };
 }
