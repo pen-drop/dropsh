@@ -6,9 +6,13 @@ This is the foundation CLI. Discovery, schema generation, and the skill layer ar
 
 ## Install
 
+This is a [pnpm](https://pnpm.io) workspace (root CLI + `plugins/*` + `playground`).
+The pinned pnpm version is declared in `package.json` (`packageManager`); enable it with
+`corepack enable`.
+
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ## Configure
@@ -59,10 +63,10 @@ Schemas are cached under `.dropsh/cache/` next to your `.dropsh.yml`. The `.drop
 ## Development
 
 ```bash
-npm test            # Vitest unit suite
-npm run test:watch
-npm run typecheck
-npm run build
+pnpm test            # Vitest unit suite
+pnpm run test:watch
+pnpm run typecheck
+pnpm run build
 ```
 
 ### Integration tests
@@ -70,9 +74,22 @@ npm run build
 Local-only, requires DDEV. See `tests/integrations/README.md`.
 
 ```bash
-npm run drupal:up
-npm run test:integration
-npm run drupal:down
+pnpm run drupal:up
+pnpm run test:integration
+pnpm run drupal:down
 ```
+
+## Publishing
+
+The CLI and both plugins are published together with a single command:
+
+```bash
+pnpm run release
+```
+
+This publishes `dropsh` (workspace root) plus `@dropsh/plugin-oauth2` and
+`@dropsh/plugin-schemata` (`plugins/*`). `prepublishOnly` runs typecheck + build
+for each package; scoped plugins publish with public access via their
+`publishConfig`. Log in first with `npm login`.
 
 See `docs/superpowers/specs/2026-04-21-dropsh-design.md` for the full design.

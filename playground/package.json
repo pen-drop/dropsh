@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "dropsh": "file:..",
-    "@dropsh/plugin-oauth2": "file:../plugins/oauth2",
-    "@dropsh/plugin-schemata": "file:../plugins/schemata"
+    "dropsh": "workspace:*",
+    "@dropsh/plugin-oauth2": "workspace:*",
+    "@dropsh/plugin-schemata": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

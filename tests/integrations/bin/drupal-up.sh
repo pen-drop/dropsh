@@ -55,4 +55,4 @@ EOF
 echo
 echo "Drupal is up at ${URL}"
 echo "Handover written to tests/integrations/drupal/.test-config.json"
-echo "Run: npm run test:integration"
+echo "Run: pnpm run test:integration"

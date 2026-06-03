@@ -11,9 +11,9 @@ Real Drupal 11 over DDEV. Local-only, not run in CI.
 ## Running
 
 ```bash
-npm run drupal:up
-npm run test:integration
-npm run drupal:down
+pnpm run drupal:up
+pnpm run test:integration
+pnpm run drupal:down
 ```
 
 ## How It Works
@@ -24,6 +24,6 @@ Each test spawns `node bin/dropsh` as a subprocess with a temporary `.dropsh.yml
 
 ## Troubleshooting
 
-- "Integration tests require a running DDEV" means `npm run drupal:up` has not been run.
-- If state gets stale, run `npm run drupal:down` and then `npm run drupal:up` again.
+- "Integration tests require a running DDEV" means `pnpm run drupal:up` has not been run.
+- If state gets stale, run `pnpm run drupal:down` and then `pnpm run drupal:up` again.
 - From `tests/integrations/drupal/`, `ddev describe` shows the live URL. Admin login is `admin / admin`, test user is `tester / tester-pw`.

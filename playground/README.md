@@ -1,16 +1,16 @@
 # Playground
 
 Ein Ordner, alle Beispiele. Arbeitet gegen die lokale DDEV-Testinstanz
-aus `npm run drupal:up` und zeigt die typischen Flows einmal durch.
+aus `pnpm run drupal:up` und zeigt die typischen Flows einmal durch.
 
 ## Setup
 
 ```bash
-npm run drupal:up
-npm run build           # Haupt-Package compilieren
-npm run build:plugins   # Plugins compilieren
+pnpm run drupal:up
+pnpm run build           # Haupt-Package compilieren
+pnpm run build:plugins   # Plugins compilieren
 cd playground
-npm install
+pnpm install
 ```
 
 `drupal:up` schreibt die echte DDEV-URL nach

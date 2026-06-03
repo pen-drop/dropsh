@@ -20,6 +20,6 @@ export function testConfig(): TestConfig {
   try {
     return JSON.parse(readFileSync(path, "utf8")) as TestConfig;
   } catch {
-    throw new Error("Integration tests require a running DDEV. Run: npm run drupal:up");
+    throw new Error("Integration tests require a running DDEV. Run: pnpm run drupal:up");
   }
 }

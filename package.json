@@ -18,18 +18,20 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build",
+    "build:plugins": "pnpm --filter \"./plugins/*\" run build",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:integration": "npm run build && vitest run -c vitest.config.integration.ts",
+    "test:integration": "pnpm run build && vitest run -c vitest.config.integration.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "lint:fix": "biome check --write src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
-    "prepublishOnly": "npm run typecheck && npm run build"
+    "prepublishOnly": "pnpm run typecheck && pnpm run build",
+    "release": "pnpm publish --no-git-checks && pnpm -r publish --no-git-checks"
   },
+  "packageManager": "pnpm@10.29.1",
   "keywords": [
     "drupal",
     "drupal11",
@@ -60,5 +62,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }
