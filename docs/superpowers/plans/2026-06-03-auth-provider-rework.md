@@ -15,7 +15,7 @@
 - Errors: `AuthError` (exit 3), `ConfigError` (exit 2) from `src/errors.ts`.
 - Before each commit the repo gate is `pnpm run lint && pnpm run typecheck && pnpm test`.
 
-**Transition strategy:** New code is added additively (Tasks 1–8) while the legacy `createAuthAdapter` path keeps the build green. Runtime is switched to sessions in Task 9. Legacy code is removed in Task 10. The build stays green after every task.
+**Transition strategy:** New code is added additively (Tasks 1–8). `pnpm run lint && pnpm run typecheck && pnpm test` stays green after **every** task — unit tests build the program with a stubbed `contextFactory`, so they never exercise the runtime auth resolver. Note: end-to-end CLI auth on a real config is intentionally non-functional between Task 6 (basic drops its legacy `createAuthAdapter`) and Task 9 (runtime switches to session resolution); this window is invisible to the test suite and is closed by Task 9. Execute Tasks 6→9 in one sitting. Legacy interface/types are removed in Task 10.
 
 ---
 
@@ -337,9 +337,9 @@ export interface PromptDeps {
 export type PromptFn = (opts: { label: string; secret?: boolean }) => Promise<string>;
 
 /**
- * Build a prompt function. Secret prompts suppress echo on a real TTY; on a
- * non-TTY stream (tests/pipes) input is read normally so the value is still
- * captured.
+ * Build a prompt function. Secret prompts use raw mode + manual key
+ * accumulation on a real TTY so the input is never echoed. On a non-TTY
+ * stream (tests/pipes) input is read as a line so the value is still captured.
  */
 export function createPrompt(deps: PromptDeps = {}): PromptFn {
   const input = deps.input ?? process.stdin;
@@ -347,18 +347,46 @@ export function createPrompt(deps: PromptDeps = {}): PromptFn {
   const isTTY = deps.isTTY ?? Boolean((input as NodeJS.ReadStream).isTTY);
 
   return ({ label, secret }) =>
-    new Promise<string>((resolve) => {
+    new Promise<string>((resolve, reject) => {
       write(`${label}: `);
-      const rl = createInterface({ input, terminal: isTTY && Boolean(secret) });
+
       if (secret && isTTY) {
-        // Suppress echo: overwrite each keystroke output.
-        const ttyOut = rl as unknown as { output?: { write: (s: string) => void } };
-        if (ttyOut.output) ttyOut.output.write = () => {};
+        const stdin = input as NodeJS.ReadStream;
+        const prevRaw = stdin.isRaw === true;
+        let buf = "";
+        stdin.setRawMode?.(true);
+        stdin.resume();
+        const cleanup = (): void => {
+          stdin.setRawMode?.(prevRaw);
+          stdin.pause();
+          stdin.off("data", onData);
+        };
+        const onData = (d: Buffer): void => {
+          for (const ch of d.toString("utf8")) {
+            if (ch === "\n" || ch === "\r") {
+              cleanup();
+              write("\n");
+              resolve(buf);
+              return;
+            }
+            if (ch === "\u0003") {
+              cleanup();
+              reject(new Error("input cancelled"));
+              return;
+            }
+            if (ch === "\u007f" || ch === "\b") buf = buf.slice(0, -1);
+            else buf += ch;
+          }
+        };
+        stdin.on("data", onData);
+        return;
       }
-      rl.question("", (answer) => {
+
+      // Non-secret, or non-TTY (tests/pipes): read a single line.
+      const rl = createInterface({ input });
+      rl.once("line", (line) => {
         rl.close();
-        if (secret && isTTY) write("\n");
-        resolve(answer.replace(/\r?\n$/, ""));
+        resolve(line.replace(/\r?\n$/, ""));
       });
     });
 }
@@ -378,106 +406,9 @@ git commit -m "feat(cli): add injectable interactive prompt helper"
 
 ---
 
-### Task 4: Provider registry
+### Task 4: Add `authProvider` to DropSHPlugin
 
-Collects `AuthProvider`s from the plugin list and resolves the login-capable set / a provider by id.
-
-**Files:**
-- Create: `src/core/auth/registry.ts`
-- Test: `tests/unit/core/auth/registry.test.ts`
-
-- [ ] **Step 1: Write the failing test**
-
-```ts
-// tests/unit/core/auth/registry.test.ts
-import { describe, expect, it } from "vitest";
-import { collectProviders, loginCapableProviders, providerById } from "../../../../src/core/auth/registry.js";
-import type { AuthProvider } from "../../../../src/core/auth/types.js";
-import type { DropSHPlugin } from "../../../../src/core/plugin.js";
-
-function fakeProvider(id: string, login: boolean): AuthProvider {
-  return {
-    id,
-    displayName: id.toUpperCase(),
-    capabilities: { login, logout: true, status: true },
-    async login() { return {}; },
-    async logout() {},
-    async status() { return { loggedIn: false }; },
-    createAdapter() { return { async apply(r) { return r; } }; },
-  };
-}
-
-function pluginWith(provider?: AuthProvider): DropSHPlugin {
-  return {
-    id: provider?.id ?? "noauth",
-    requiredModules: [],
-    ...(provider ? { authProvider: provider } : {}),
-    async extendSchema(_e, _b, s) { return s; },
-  };
-}
-
-describe("provider registry", () => {
-  it("collects only plugins that carry an authProvider", () => {
-    const p1 = fakeProvider("basic", true);
-    const providers = collectProviders([pluginWith(p1), pluginWith()]);
-    expect(providers.map((p) => p.id)).toEqual(["basic"]);
-  });
-
-  it("loginCapableProviders filters by capabilities.login", () => {
-    const providers = [fakeProvider("a", true), fakeProvider("b", false)];
-    expect(loginCapableProviders(providers).map((p) => p.id)).toEqual(["a"]);
-  });
-
-  it("providerById finds a provider or returns undefined", () => {
-    const providers = [fakeProvider("a", true)];
-    expect(providerById(providers, "a")?.id).toBe("a");
-    expect(providerById(providers, "missing")).toBeUndefined();
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `pnpm vitest run tests/unit/core/auth/registry.test.ts`
-Expected: FAIL — module `registry.js` not found (and `DropSHPlugin.authProvider` not yet a field; this also fails to typecheck until Task 5). To keep this task self-contained, do Step 3 and Task 5's field addition together if the typechecker blocks; the registry test references `authProvider`.
-
-> NOTE: Add the `authProvider?` field to `DropSHPlugin` now (see Task 5 Step 3) so this task compiles. Task 5 keeps its own adapter-removal test. If executing strictly in order, perform Task 5 Step 3 before Task 4 Step 3.
-
-- [ ] **Step 3: Implement the registry**
-
-```ts
-// src/core/auth/registry.ts
-import type { DropSHPlugin } from "../plugin.js";
-import type { AuthProvider } from "./types.js";
-
-export function collectProviders(plugins: DropSHPlugin[]): AuthProvider[] {
-  return plugins.map((p) => p.authProvider).filter((p): p is AuthProvider => p !== undefined);
-}
-
-export function loginCapableProviders(providers: AuthProvider[]): AuthProvider[] {
-  return providers.filter((p) => p.capabilities.login);
-}
-
-export function providerById(providers: AuthProvider[], id: string): AuthProvider | undefined {
-  return providers.find((p) => p.id === id);
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pnpm vitest run tests/unit/core/auth/registry.test.ts`
-Expected: PASS (3 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/core/auth/registry.ts tests/unit/core/auth/registry.test.ts
-git commit -m "feat(auth): add provider registry helpers"
-```
-
----
-
-### Task 5: Add `authProvider` to DropSHPlugin
+Done before the registry so the registry test compiles against a real field.
 
 **Files:**
 - Modify: `src/core/plugin.ts`
@@ -541,6 +472,103 @@ Expected: PASS.
 ```bash
 git add src/core/plugin.ts tests/unit/core/plugin.test.ts
 git commit -m "feat(auth): add optional authProvider field to DropSHPlugin"
+```
+
+---
+
+### Task 5: Provider registry
+
+Collects `AuthProvider`s from the plugin list and resolves the login-capable set / a provider by id. Depends on the `authProvider` field added in Task 4, so it compiles cleanly.
+
+**Files:**
+- Create: `src/core/auth/registry.ts`
+- Test: `tests/unit/core/auth/registry.test.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+```ts
+// tests/unit/core/auth/registry.test.ts
+import { describe, expect, it } from "vitest";
+import { collectProviders, loginCapableProviders, providerById } from "../../../../src/core/auth/registry.js";
+import type { AuthProvider } from "../../../../src/core/auth/types.js";
+import type { DropSHPlugin } from "../../../../src/core/plugin.js";
+
+function fakeProvider(id: string, login: boolean): AuthProvider {
+  return {
+    id,
+    displayName: id.toUpperCase(),
+    capabilities: { login, logout: true, status: true },
+    async login() { return {}; },
+    async logout() {},
+    async status() { return { loggedIn: false }; },
+    createAdapter() { return { async apply(r) { return r; } }; },
+  };
+}
+
+function pluginWith(provider?: AuthProvider): DropSHPlugin {
+  return {
+    id: provider?.id ?? "noauth",
+    requiredModules: [],
+    ...(provider ? { authProvider: provider } : {}),
+    async extendSchema(_e, _b, s) { return s; },
+  };
+}
+
+describe("provider registry", () => {
+  it("collects only plugins that carry an authProvider", () => {
+    const p1 = fakeProvider("basic", true);
+    const providers = collectProviders([pluginWith(p1), pluginWith()]);
+    expect(providers.map((p) => p.id)).toEqual(["basic"]);
+  });
+
+  it("loginCapableProviders filters by capabilities.login", () => {
+    const providers = [fakeProvider("a", true), fakeProvider("b", false)];
+    expect(loginCapableProviders(providers).map((p) => p.id)).toEqual(["a"]);
+  });
+
+  it("providerById finds a provider or returns undefined", () => {
+    const providers = [fakeProvider("a", true)];
+    expect(providerById(providers, "a")?.id).toBe("a");
+    expect(providerById(providers, "missing")).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm vitest run tests/unit/core/auth/registry.test.ts`
+Expected: FAIL — module `registry.js` not found.
+
+- [ ] **Step 3: Implement the registry**
+
+```ts
+// src/core/auth/registry.ts
+import type { DropSHPlugin } from "../plugin.js";
+import type { AuthProvider } from "./types.js";
+
+export function collectProviders(plugins: DropSHPlugin[]): AuthProvider[] {
+  return plugins.map((p) => p.authProvider).filter((p): p is AuthProvider => p !== undefined);
+}
+
+export function loginCapableProviders(providers: AuthProvider[]): AuthProvider[] {
+  return providers.filter((p) => p.capabilities.login);
+}
+
+export function providerById(providers: AuthProvider[], id: string): AuthProvider | undefined {
+  return providers.find((p) => p.id === id);
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pnpm vitest run tests/unit/core/auth/registry.test.ts`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/core/auth/registry.ts tests/unit/core/auth/registry.test.ts
+git commit -m "feat(auth): add provider registry helpers"
 ```
 
 ---
@@ -788,6 +816,8 @@ function waitForCallbackCode(c: CallbackDeps): Promise<string> {
     //   - `stdout(...)` instead of the local stdout closure
     //   - `c.deps.openBrowser` instead of deps.openBrowser
     //   - `authUrl` from the argument
+    //   - the timeout AuthError message updated to "Run 'dropsh auth login' to try again."
+    //   - state-mismatch / EADDRINUSE / no-code handling kept verbatim
   });
 }
 ```
@@ -963,23 +993,36 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
     },
 
     createAdapter(session: AuthSession, rt: AdapterRuntime): AuthAdapter {
+      // Mutable reference to the live session, updated in place after a refresh
+      // so subsequent requests reuse the new token instead of re-refreshing.
+      let current = session;
+      let refreshing: Promise<void> | null = null;
+
+      async function doRefresh(refreshToken: string): Promise<void> {
+        const params = new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          client_id: cfg.client_id,
+        });
+        const refreshed = await postToken(rt.http, cfg.token_url, params, rt.now);
+        if (typeof refreshed.refresh_token !== "string") refreshed.refresh_token = refreshToken;
+        current = refreshed;
+        await rt.save(refreshed);
+      }
+
       return {
         async apply(req) {
-          const token = session.access_token;
-          const expiresAt = typeof session.expires_at === "number" ? session.expires_at : 0;
-          const refresh = session.refresh_token;
-          if (typeof token !== "string") throw new AuthError("Run 'dropsh auth login' to authenticate.");
-          if (expiresAt - 30_000 > rt.now()) return { ...req, headers: bearer(req, token) };
-          if (typeof refresh !== "string") throw new AuthError("Session expired. Run 'dropsh auth login'.");
-          const params = new URLSearchParams({
-            grant_type: "refresh_token",
-            refresh_token: refresh,
-            client_id: cfg.client_id,
-          });
-          const refreshed = await postToken(rt.http, cfg.token_url, params, rt.now);
-          if (typeof refreshed.refresh_token !== "string") refreshed.refresh_token = refresh;
-          await rt.save(refreshed);
-          return { ...req, headers: bearer(req, refreshed.access_token as string) };
+          const token = current.access_token;
+          const expiresAt = typeof current.expires_at === "number" ? current.expires_at : 0;
+          if (typeof token === "string" && expiresAt - 30_000 > rt.now())
+            return { ...req, headers: bearer(req, token) };
+          const refresh = current.refresh_token;
+          if (typeof refresh !== "string")
+            throw new AuthError("Session expired. Run 'dropsh auth login'.");
+          // Coalesce concurrent refreshes so we exchange the token only once.
+          if (!refreshing) refreshing = doRefresh(refresh).finally(() => { refreshing = null; });
+          await refreshing;
+          return { ...req, headers: bearer(req, current.access_token as string) };
         },
       };
     },
@@ -987,7 +1030,43 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
 }
 ```
 
-Then in `plugins/oauth2/src/index.ts`, replace the returned object's `createAuthAdapter`/`registerCommands` with `authProvider`. Keep the `OAuth2Config` type and `validate()` unchanged. New return:
+Then update `plugins/oauth2/src/index.ts`. Drop the secret fields (`client_secret`, `password`) from `OAuth2Config` — they are now prompted at login, never stored in config. Keep the non-secret connection params, including `username` for the password grant (per spec: username stays in config). New `OAuth2Config` + `validate()`:
+
+```ts
+export type OAuth2Config =
+  | {
+      type: "oauth2_password";
+      client_id: string;
+      username: string;
+      token_url: string;
+      scope?: string;
+    }
+  | {
+      type: "oauth2_client_credentials";
+      client_id: string;
+      token_url: string;
+      scope?: string;
+    }
+  | {
+      type: "oauth2_authcode";
+      client_id: string;
+      token_url: string;
+      scope?: string;
+      redirect_port?: number;
+    };
+
+function validate(config: OAuth2Config): OAuth2Config {
+  if (!config.client_id) throw new ConfigError("oauth2Plugin: client_id required");
+  if (!config.token_url) throw new ConfigError("oauth2Plugin: token_url required");
+  if (config.type === "oauth2_password" && !config.username)
+    throw new ConfigError("oauth2Plugin: username required for oauth2_password");
+  return config;
+}
+```
+
+`provider.ts` reads `cfg.username` for the password grant (still typed) and prompts `client_secret` + `password`. Update `plugins/oauth2/tests/unit/oauth2.test.ts`-style fixtures and any config-example that passed `client_secret`/`password` (config example handled in Task 11).
+
+Then replace the returned object's `createAuthAdapter`/`registerCommands` with `authProvider`:
 
 ```ts
 import { oauth2Provider } from "./provider.js";
@@ -1200,8 +1279,14 @@ export async function runAuthLogout(_args: Record<string, never>, deps: AuthDeps
     return;
   }
   const provider = providerById(deps.providers, rec.activeProvider);
-  if (provider) await provider.logout(authContext(deps));
-  await clearSession(deps.baseUrl, deps.stateDir);
+  try {
+    if (provider) await provider.logout(authContext(deps));
+  } catch (err) {
+    // Best-effort revoke: never block local logout on a failing revoke call.
+    deps.stderr(`warning: provider logout failed: ${String(err)}\n`);
+  } finally {
+    await clearSession(deps.baseUrl, deps.stateDir);
+  }
   deps.stdout("logged out\n");
 }
 
@@ -1240,7 +1325,6 @@ In `src/index.ts`, add imports near the other command imports:
 import { runAuthLogin, runAuthLogout, runAuthStatus } from "./commands/auth.js";
 import { collectProviders } from "./core/auth/registry.js";
 import { createPrompt } from "./core/cli/prompt.js";
-import { defaultStateDir } from "./core/auth/session-store.js";
 ```
 
 Add a helper inside `buildProgram` that builds `AuthDeps` from the loaded config (it must load config independently of `contextFactory`, since auth runs before a session exists):
@@ -1375,6 +1459,12 @@ Expected: FAIL — `resolveAuth` not exported.
 
 Add to `src/index.ts`:
 
+Add `AuthError` to the existing `./errors.js` import in `src/index.ts` (it currently imports only `ConfigError, exitCodeFor`):
+
+```ts
+import { AuthError, ConfigError, exitCodeFor } from "./errors.js";
+```
+
 ```ts
 import { collectProviders, providerById } from "./core/auth/registry.js";
 import { readSession, writeSession } from "./core/auth/session-store.js";
@@ -1390,7 +1480,7 @@ export interface ResolveAuthDeps {
 
 export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
   const rec = await readSession(deps.baseUrl, deps.stateDir);
-  if (!rec) throw new ConfigError("Not authenticated. Run 'dropsh auth login'.");
+  if (!rec) throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
   const provider = providerById(collectProviders(deps.plugins), rec.activeProvider);
   if (!provider)
     throw new ConfigError(`active provider '${rec.activeProvider}' is not configured`);
@@ -1413,7 +1503,7 @@ Replace the `authPlugin`/`createAuthAdapter` block in `defaultContext` with:
   });
 ```
 
-(Use `ConfigError` for "not authenticated" so the missing-session exit code stays 2, matching the previous "no auth configured" behaviour. The provider's own runtime `apply` still throws `AuthError` for an expired token.)
+(Missing session throws `AuthError` → exit code 3, matching the spec's "runtime with no session → AuthError run dropsh auth login". A misconfigured/unknown active provider is a config problem → `ConfigError` (exit 2). The provider's own runtime `apply` also throws `AuthError` for an expired token.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1564,13 +1654,13 @@ git commit -m "docs+test(auth): document provider login and adapt integration te
 ## Self-Review
 
 **Spec coverage:**
-- Registry from `config.plugins` → Task 4 + Task 9 (`collectProviders`). ✓
+- Registry from `config.plugins` → Task 5 + Task 9 (`collectProviders`). ✓
 - Single active session, login replaces → Task 2 (`writeSession` overwrites) + Task 8. ✓
 - `auth login` picker over login-capable providers, `--provider`, non-TTY error, single-provider shortcut → Task 8. ✓
 - `auth logout` / `auth status` (+`--json`) on the active session → Task 8. ✓
 - Interactive credentials, stored in state dir, no secrets in config → Tasks 3, 6, 7 (prompts) + Task 11 (config example). ✓
-- Non-secret params stay in config → oauth2 `OAuth2Config` unchanged (Task 7); basic optional `username` (Task 6). ✓
-- `AuthProvider` interface + `AuthAdapter` runtime piece via `createAdapter` → Tasks 1, 5. ✓
+- Non-secret params stay in config → oauth2 `OAuth2Config` keeps `client_id`/`token_url`/`scope`/`redirect_port`/`username` but drops `client_secret`/`password` which are prompted (Task 7); basic optional `username` (Task 6). ✓
+- `AuthProvider` interface + `AuthAdapter` runtime piece via `createAdapter` → Task 1 (interface), Task 4 (plugin field). ✓
 - State store `~/.config/dropsh/<host>.json`, mode 0600, `{activeProvider, session}` → Task 2. ✓
 - Providers: oauth2-authcode/password/client_credentials + basic → Tasks 6, 7. ✓
 - Errors: ConfigError no-session/no-provider, AuthError expired → Tasks 8, 9. ✓
