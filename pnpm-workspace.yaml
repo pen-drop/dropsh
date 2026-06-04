@@ -1,3 +1,5 @@
 packages:
   - 'plugins/*'
   - 'packages/*'
+
+publishBranch: 1.x
