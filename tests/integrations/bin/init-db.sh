@@ -24,7 +24,6 @@ enable_modules "$URI" \
 restore_services_yml "$URI" "$SITE_DIR"
 make_jsonapi_writable "$URI"
 
-run_fixture "$URI" fixtures/patch-display-builder-metadata-api.php
 run_fixture "$URI" fixtures/setup-content-type.php
 run_fixture "$URI" fixtures/setup-users.php
 run_fixture "$URI" fixtures/setup-display-builder.php

@@ -33,12 +33,12 @@ describe("integration: Display Builder schema", () => {
       "properties",
     ]);
     const components = schema["x-dropsh-components"];
-    const sources = schema["x-dropsh-sources"];
 
     expect(schema["x-dropsh-builder"]).toBe("display-builder");
     expect(displayBuilder.override_field).toBe("field_display_builder_override");
+    expect(displayBuilder.component_library).toBeDefined();
+    expect(displayBuilder.source_tree).toBeDefined();
     expect(attributes.field_display_builder_override).toBeDefined();
     expect(Array.isArray(components) ? components.length : 0).toBeGreaterThan(0);
-    expect(Array.isArray(sources) ? sources.length : 0).toBeGreaterThan(0);
   });
 });

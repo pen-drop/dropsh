@@ -76,6 +76,9 @@ const activeDisplayResponse = {
       type: "entity_view_display--entity_view_display",
       id: "display-uuid",
       attributes: {
+        targetEntityType: "node",
+        bundle: "article",
+        mode: "default",
         third_party_settings: {
           display_builder: {
             profile: "default",
@@ -97,33 +100,14 @@ const profileResponse = {
       attributes: {
         drupal_internal__id: "default",
         label: "Default",
+        islands: {
+          component_library: {
+            status: true,
+          },
+        },
       },
     },
   ],
-};
-
-const computedMetadataResponse = {
-  enabled: true,
-  entity_type: "node",
-  bundle: "article",
-  view_mode: "default",
-  sources: [
-    {
-      id: "component",
-      label: "Component",
-      source_type: "component",
-      schema: { type: "object" },
-    },
-  ],
-  allowed_components: [
-    {
-      id: "olivero:teaser",
-      source_id: "olivero:teaser",
-      name: "Teaser",
-      schema: { type: "object" },
-    },
-  ],
-  unsupported_sources: [],
 };
 
 const sdcResponse = {
@@ -190,13 +174,12 @@ describe("displayBuilderPlugin", () => {
     });
   });
 
-  it("fetches active metadata and SDC, then enriches operation schemas", async () => {
+  it("fetches active JSON:API metadata and SDC, then enriches operation schemas", async () => {
     const plugin = displayBuilderPlugin();
     const extendOperationSchema = requireExtendOperationSchema(plugin);
     const context = ctx([
       { status: 200, body: JSON.stringify(activeDisplayResponse) },
       { status: 200, body: JSON.stringify(profileResponse) },
-      { status: 200, body: JSON.stringify(computedMetadataResponse) },
       { status: 200, body: JSON.stringify(sdcResponse) },
     ]);
 
@@ -209,43 +192,21 @@ describe("displayBuilderPlugin", () => {
     const data = recordProperty(recordProperty(properties, "data"), "properties");
     const attributes = recordProperty(recordProperty(data, "attributes"), "properties");
     const overrideField = recordProperty(attributes, "field_display_builder_override");
-    const items = recordProperty(overrideField, "items");
-    const oneOf = asArray(items.oneOf);
-    const variantProperties = recordProperty(asRecord(oneOf[0]), "properties");
-    const sourceProperties = recordProperty(
-      recordProperty(variantProperties, "source"),
-      "properties",
-    );
-    const componentProperties = recordProperty(
-      recordProperty(sourceProperties, "component"),
-      "properties",
-    );
-    const componentId = recordProperty(componentProperties, "component_id");
 
-    expect(context.http.send).toHaveBeenCalledTimes(4);
+    expect(context.http.send).toHaveBeenCalledTimes(3);
     expect(schema).not.toBe(operationSchema);
     expect(schema["x-dropsh-builder"]).toBe("display-builder");
+    expect(recordProperty(schema, "x-dropsh-display-builder").component_library).toEqual({
+      status: true,
+    });
     expect(component.id).toBe("olivero:teaser");
-    expect(componentId.enum).toEqual(["olivero:teaser"]);
-  });
-
-  it("propagates the metadata endpoint 404 diagnostic unchanged", async () => {
-    const plugin = displayBuilderPlugin();
-    const extendOperationSchema = requireExtendOperationSchema(plugin);
-    const context = ctx([
-      { status: 200, body: JSON.stringify(activeDisplayResponse) },
-      { status: 200, body: JSON.stringify(profileResponse) },
-      { status: 404, body: "not found" },
-    ]);
-
-    await expect(
-      extendOperationSchema("node", "article", "create", operationSchema, context),
-    ).rejects.toMatchObject({
-      code: "E_HTTP",
-      status: 404,
-      body: "not found",
-      message:
-        "Display Builder metadata endpoint is required. Apply or enable the Display Builder schema metadata API patch.",
+    expect(overrideField).toEqual({
+      type: "array",
+      description: "Display Builder source tree for the configured entity-view override field.",
+      items: {
+        type: "object",
+        additionalProperties: true,
+      },
     });
   });
 
@@ -255,7 +216,6 @@ describe("displayBuilderPlugin", () => {
     const context = ctx([
       { status: 200, body: JSON.stringify(activeDisplayResponse) },
       { status: 200, body: JSON.stringify(profileResponse) },
-      { status: 200, body: JSON.stringify(computedMetadataResponse) },
       { status: 404, body: "not found" },
     ]);
 
@@ -267,39 +227,6 @@ describe("displayBuilderPlugin", () => {
       body: "not found",
       message:
         "Display Builder plugin requires Drupal module jsonapi_sdc to build component schemas.",
-    });
-  });
-
-  it("throws 422 when active metadata references components unknown to jsonapi_sdc", async () => {
-    const plugin = displayBuilderPlugin();
-    const extendOperationSchema = requireExtendOperationSchema(plugin);
-    const context = ctx([
-      { status: 200, body: JSON.stringify(activeDisplayResponse) },
-      { status: 200, body: JSON.stringify(profileResponse) },
-      {
-        status: 200,
-        body: JSON.stringify({
-          ...computedMetadataResponse,
-          allowed_components: [
-            ...computedMetadataResponse.allowed_components,
-            {
-              id: "missing:id",
-              source_id: "missing:id",
-              name: "Missing",
-              schema: { type: "object" },
-            },
-          ],
-        }),
-      },
-      { status: 200, body: JSON.stringify(sdcResponse) },
-    ]);
-
-    await expect(
-      extendOperationSchema("node", "article", "create", operationSchema, context),
-    ).rejects.toMatchObject({
-      code: "E_HTTP",
-      status: 422,
-      message: "Display Builder metadata references components unknown to jsonapi_sdc: missing:id",
     });
   });
 });

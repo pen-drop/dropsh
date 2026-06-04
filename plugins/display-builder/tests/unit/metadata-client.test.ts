@@ -45,6 +45,9 @@ const activeDisplayResponse = {
       id: "display-uuid",
       attributes: {
         drupal_internal__id: "node.article.teaser",
+        targetEntityType: "node",
+        bundle: "article",
+        mode: "teaser",
         third_party_settings: {
           display_builder: {
             profile: "default",
@@ -67,7 +70,10 @@ const profileResponse = {
         drupal_internal__id: "default",
         label: "Default",
         islands: {
-          component_library: { status: true },
+          component_library: {
+            status: true,
+            filters: { provider: ["olivero"] },
+          },
         },
       },
     },
@@ -82,47 +88,15 @@ const overrideProfileResponse = {
       attributes: {
         drupal_internal__id: "content",
         label: "Content",
-      },
-    },
-  ],
-};
-
-const computedMetadataResponse = {
-  enabled: true,
-  entity_type: "node",
-  bundle: "article",
-  view_mode: "teaser",
-  instance_id: "node.article.teaser",
-  sources: [
-    {
-      id: "title",
-      label: "Title",
-      source_type: "base_field",
-      schema: { type: "string" },
-    },
-  ],
-  allowed_components: [
-    {
-      id: "sdc.olivero.teaser",
-      source_id: "olivero:teaser",
-      name: "Teaser",
-      schema: {
-        type: "object",
-        properties: {
-          title: { type: "string" },
+        islands: {
+          component_library: { status: true },
         },
       },
     },
   ],
-  unsupported_sources: [
-    {
-      id: "uid",
-      label: "Author",
-      source_type: "entity_reference",
-      reason: "Entity references are not supported.",
-    },
-  ],
 };
+const profileAttributes = profileResponse.data[0]?.attributes;
+const overrideProfileAttributes = overrideProfileResponse.data[0]?.attributes;
 
 describe("fetchDisplayBuilderMetadata", () => {
   it("fetches entity view display through standard JSON:API first", async () => {
@@ -155,18 +129,18 @@ describe("fetchDisplayBuilderMetadata", () => {
     });
   });
 
-  it("throws when valid JSON is not a metadata object", async () => {
+  it("throws when valid JSON is not a JSON:API object", async () => {
     const context = ctx([{ status: 200, body: "null" }]);
 
     await expect(fetchDisplayBuilderMetadata(context, "node", "article")).rejects.toMatchObject({
       code: "E_HTTP",
       status: 502,
       body: null,
-      message: "Display Builder metadata endpoint did not return a valid metadata object.",
+      message: "Display Builder JSON:API config response did not return a valid object.",
     });
   });
 
-  it("normalizes active metadata from entity view display, profile, and computed endpoint", async () => {
+  it("normalizes active metadata from entity view display and profiles only", async () => {
     const context = ctx([
       {
         status: 200,
@@ -180,10 +154,6 @@ describe("fetchDisplayBuilderMetadata", () => {
         status: 200,
         body: JSON.stringify(overrideProfileResponse),
       },
-      {
-        status: 200,
-        body: JSON.stringify(computedMetadataResponse),
-      },
     ]);
 
     await expect(
@@ -194,82 +164,47 @@ describe("fetchDisplayBuilderMetadata", () => {
       bundle: "article",
       viewMode: "teaser",
       profile: { id: "default", label: "Default" },
+      profileConfig: profileAttributes,
       overrideField: "field_display_builder",
       overrideProfile: { id: "content", label: "Content" },
-      instanceId: "node.article.teaser",
+      overrideProfileConfig: overrideProfileAttributes,
       sourceTree: [{ source_id: "component" }],
-      sources: [
-        {
-          id: "title",
-          label: "Title",
-          sourceType: "base_field",
-          schema: { type: "string" },
-        },
-      ],
-      allowedComponents: [
-        {
-          id: "sdc.olivero.teaser",
-          sourceId: "olivero:teaser",
-          name: "Teaser",
-          schema: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-            },
-          },
-        },
-      ],
-      unsupportedSources: [
-        {
-          id: "uid",
-          label: "Author",
-          sourceType: "entity_reference",
-          reason: "Entity references are not supported.",
-        },
-      ],
+      componentLibrary: {
+        status: true,
+        filters: { provider: ["olivero"] },
+      },
     });
+    expect(context.http.send).toHaveBeenCalledTimes(3);
   });
 
-  it("throws a patch diagnostic when the computed metadata endpoint is missing", async () => {
+  it("uses the profile as override profile when both profile ids are equal", async () => {
     const context = ctx([
-      { status: 200, body: JSON.stringify(activeDisplayResponse) },
-      { status: 200, body: JSON.stringify(profileResponse) },
-      { status: 200, body: JSON.stringify(overrideProfileResponse) },
-      { status: 404, body: "not found" },
-    ]);
-
-    await expect(fetchDisplayBuilderMetadata(context, "node", "article")).rejects.toMatchObject({
-      code: "E_HTTP",
-      status: 404,
-      body: "not found",
-      message:
-        "Display Builder metadata endpoint is required. Apply or enable the Display Builder schema metadata API patch.",
-    });
-  });
-
-  it("throws when active metadata does not include source schemas", async () => {
-    const context = ctx([
-      { status: 200, body: JSON.stringify(activeDisplayResponse) },
-      { status: 200, body: JSON.stringify(profileResponse) },
-      { status: 200, body: JSON.stringify(overrideProfileResponse) },
       {
         status: 200,
         body: JSON.stringify({
-          enabled: true,
-          entity_type: "node",
-          bundle: "article",
-          view_mode: "default",
-          sources: [{ id: "title", label: "Title", source_type: "base_field" }],
-          allowed_components: [],
-          unsupported_sources: [],
+          data: [
+            {
+              attributes: {
+                third_party_settings: {
+                  display_builder: {
+                    profile: "default",
+                    override_profile: "default",
+                    override_field: "field_display_builder",
+                  },
+                },
+              },
+            },
+          ],
         }),
       },
+      { status: 200, body: JSON.stringify(profileResponse) },
     ]);
 
-    await expect(fetchDisplayBuilderMetadata(context, "node", "article")).rejects.toMatchObject({
-      code: "E_HTTP",
-      status: 422,
-      message: "Display Builder metadata is active but does not include source schemas.",
+    await expect(fetchDisplayBuilderMetadata(context, "node", "article")).resolves.toMatchObject({
+      enabled: true,
+      overrideProfile: { id: "default", label: "Default" },
+      overrideProfileConfig: profileAttributes,
     });
+    expect(context.http.send).toHaveBeenCalledTimes(2);
   });
 });
