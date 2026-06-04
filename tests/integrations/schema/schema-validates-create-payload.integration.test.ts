@@ -16,7 +16,7 @@ describe("integration: create validates payload client-side against schema", () 
       site: "schemata",
       args: ["create", "node", "--bundle=article_test", `--data=@${badFile}`],
     });
-    expect(result.code).toBe(4);
+    expect(result.code, result.stderr).toBe(4);
     const errLine =
       result.stderr.split("\n").find((l) => l.includes("E_VALIDATION")) ?? result.stderr;
     const err = parseError(errLine);

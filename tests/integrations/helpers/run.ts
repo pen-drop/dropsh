@@ -203,7 +203,9 @@ export async function seedSession(url: string, auth: Auth): Promise<string> {
       throw new Error("openBrowser is not supported in non-interactive integration tests");
     },
     stdout() {},
-    now: () => 1_700_000_000_000,
+    // Must be the real clock: the provider computes the session's expires_at
+    // from now() + expires_in, and the spawned CLI checks it against Date.now().
+    now: () => Date.now(),
   };
 
   const session = await provider.login(ctx);

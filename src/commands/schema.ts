@@ -27,6 +27,16 @@ export interface SchemaDeps {
 
 export const SCHEMA_PIPELINE_VERSION = 2;
 
+/**
+ * Per-site schema cache root. Schemas differ between sites, so the cache is
+ * namespaced by the site host — two configs pointing at different base_urls
+ * from the same working directory must not share cached schemas.
+ */
+export function siteCacheRoot(cwd: string, baseUrl: string): string {
+  const host = new URL(baseUrl).host.toLowerCase().replace(/[^a-z0-9.-]/g, "_");
+  return join(cwd, ".dropsh/cache", host);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -84,7 +94,10 @@ export async function applyOperationSchemaPlugins(
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+$/;
 
 export async function runSchema(args: SchemaArgs, deps: SchemaDeps): Promise<void> {
-  const store = createFileStore({ rootDir: join(deps.cwd, ".dropsh/cache"), warn: deps.warn });
+  const store = createFileStore({
+    rootDir: siteCacheRoot(deps.cwd, deps.baseUrl),
+    warn: deps.warn,
+  });
 
   if (args.target === undefined) {
     if (!args.refresh) {
