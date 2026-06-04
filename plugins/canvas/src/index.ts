@@ -1,6 +1,6 @@
+import { fetchSdcComponents } from "@dropsh/sdc-client";
 import type { DropSHPlugin } from "dropsh/plugin";
 import { HttpError } from "dropsh/plugin";
-import { fetchSdcComponents } from "@dropsh/sdc-client";
 import { extendCanvasSchema } from "./canvas-schema.js";
 
 export function canvasPlugin(): DropSHPlugin {
@@ -15,7 +15,7 @@ export function canvasPlugin(): DropSHPlugin {
         return schema;
       }
 
-      let components;
+      let components: Awaited<ReturnType<typeof fetchSdcComponents>>;
       try {
         components = await fetchSdcComponents(ctx);
       } catch (err) {

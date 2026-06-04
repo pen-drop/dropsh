@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { HttpError, type PluginContext } from "dropsh/plugin";
+import { describe, expect, it, vi } from "vitest";
 import { canvasPlugin } from "../../src/index.js";
 
 function ctx(responses: Array<{ status: number; body: string }>): PluginContext {
@@ -77,9 +77,9 @@ describe("canvasPlugin", () => {
     const plugin = canvasPlugin();
     const schema = { type: "object" };
 
-    await expect(plugin.extendSchema("canvas_page", "canvas_page", schema, {} as any)).resolves.toBe(
-      schema,
-    );
+    await expect(
+      plugin.extendSchema("canvas_page", "canvas_page", schema, {} as any),
+    ).resolves.toBe(schema);
   });
 
   it("returns unrelated operation target schemas unchanged without fetching SDC", async () => {
@@ -88,13 +88,7 @@ describe("canvasPlugin", () => {
     const schema = { type: "object" };
 
     await expect(
-      plugin.extendOperationSchema!(
-        "node",
-        "article",
-        "create",
-        schema,
-        context,
-      ),
+      plugin.extendOperationSchema!("node", "article", "create", schema, context),
     ).resolves.toBe(schema);
     expect(context.http.send).not.toHaveBeenCalled();
   });

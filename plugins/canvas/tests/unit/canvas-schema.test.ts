@@ -1,7 +1,7 @@
+import type { SdcComponent } from "@dropsh/sdc-client";
 import Ajv from "ajv";
 import { describe, expect, it } from "vitest";
 import { extendCanvasSchema } from "../../src/canvas-schema.js";
-import type { SdcComponent } from "@dropsh/sdc-client";
 
 const baseSchema = {
   $schema: "https://json-schema.org/draft-07/schema",
@@ -150,7 +150,9 @@ describe("extendCanvasSchema", () => {
     schema.properties.data.properties.attributes.properties.title.type = "number";
 
     expect(baseSchema.properties.data.properties.attributes.properties.title.type).toBe("string");
-    expect((baseSchema.properties.data.properties.attributes.properties as any).components).toBeUndefined();
+    expect(
+      (baseSchema.properties.data.properties.attributes.properties as any).components,
+    ).toBeUndefined();
   });
 
   it("deep-clones component-derived schemas and metadata before embedding them", () => {
@@ -171,7 +173,10 @@ describe("extendCanvasSchema", () => {
   });
 
   it("compiles with Ajv and validates a discriminated component payload", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as Record<string, unknown>;
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as Record<
+      string,
+      unknown
+    >;
     const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false, logger: false });
     const validate = ajv.compile(schema);
 
@@ -197,7 +202,10 @@ describe("extendCanvasSchema", () => {
   });
 
   it("rejects misspelled slots", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as Record<string, unknown>;
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as Record<
+      string,
+      unknown
+    >;
     const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false, logger: false });
     const validate = ajv.compile(schema);
 

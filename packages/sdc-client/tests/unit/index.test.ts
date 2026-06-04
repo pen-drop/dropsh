@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { HttpError, type PluginContext } from "dropsh/plugin";
+import { describe, expect, it, vi } from "vitest";
 import { fetchSdcComponents, toSdcComponentId } from "../../src/index.js";
 
 function ctx(

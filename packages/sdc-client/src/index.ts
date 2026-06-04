@@ -120,11 +120,7 @@ export async function fetchSdcComponents(ctx: PluginContext): Promise<SdcCompone
     .filter((component): component is SdcComponent => component !== null);
 
   if (components.length === 0) {
-    throw new HttpError(
-      422,
-      "jsonapi_sdc returned no SDC components.",
-      jsonApiBody,
-    );
+    throw new HttpError(422, "jsonapi_sdc returned no SDC components.", jsonApiBody);
   }
 
   return components;

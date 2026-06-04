@@ -1,5 +1,5 @@
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolve, dirname } from "node:path";
 import { defineConfig } from "vitest/config";
 
 const dropshRoot = dirname(fileURLToPath(import.meta.resolve("dropsh/package.json")));

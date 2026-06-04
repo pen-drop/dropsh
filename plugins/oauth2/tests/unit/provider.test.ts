@@ -84,7 +84,7 @@ describe("oauth2 provider — refresh", () => {
       client_id: "cid",
       token_url: "https://example.com/oauth/token",
     }).authProvider!;
-    const save = vi.fn(async () => {});
+    const save = vi.fn(async (_session: { access_token: string }) => {});
     const adapter = provider.createAdapter(
       { access_token: "old", refresh_token: "rt", expires_at: 1 },
       {
@@ -96,7 +96,7 @@ describe("oauth2 provider — refresh", () => {
     const req = await adapter.apply({ method: "GET", url: "https://x" });
     expect(req.headers?.Authorization).toBe("Bearer fresh");
     expect(save).toHaveBeenCalledOnce();
-    expect((save.mock.calls[0]?.[0] as { access_token: string }).access_token).toBe("fresh");
+    expect(save.mock.calls[0]?.[0]?.access_token).toBe("fresh");
   });
 });
 

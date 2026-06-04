@@ -1,5 +1,5 @@
-import type { SchemaOperation } from "dropsh/plugin";
 import { type SdcComponent, toSdcComponentId } from "@dropsh/sdc-client";
+import type { SchemaOperation } from "dropsh/plugin";
 
 type JsonSchemaObject = Record<string, any>;
 
