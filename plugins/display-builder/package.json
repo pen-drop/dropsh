@@ -1,0 +1,33 @@
+{
+  "name": "@dropsh/plugin-display-builder",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/plugins/display-builder/src/index.js",
+  "exports": {
+    ".": "./dist/plugins/display-builder/src/index.js"
+  },
+  "files": [
+    "dist/plugins/display-builder/src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "dropsh": "*"
+  },
+  "dependencies": {
+    "@dropsh/sdc-client": "workspace:*"
+  },
+  "devDependencies": {
+    "dropsh": "workspace:*",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8"
+  }
+}
