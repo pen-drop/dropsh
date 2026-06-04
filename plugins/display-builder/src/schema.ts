@@ -1,7 +1,7 @@
 import type { SdcComponent } from "@dropsh/sdc-client";
 import type { DisplayBuilderMetadata } from "./metadata-client.js";
 
-type JsonSchemaObject = Record<string, any>;
+type JsonSchemaObject = Record<string, unknown>;
 type ActiveDisplayBuilderMetadata = Extract<DisplayBuilderMetadata, { enabled: true }> & {
   profile?: string | { id?: string };
   overrideProfile?: string | { id?: string };
@@ -18,9 +18,10 @@ function cloneSchema(schema: unknown): JsonSchemaObject {
 
 function ensureObjectProperty(parent: JsonSchemaObject, key: string): JsonSchemaObject {
   parent.properties ??= {};
-  parent.properties[key] ??= { type: "object" };
+  const properties = parent.properties as Record<string, JsonSchemaObject>;
+  properties[key] ??= { type: "object" };
 
-  const child = parent.properties[key] as JsonSchemaObject;
+  const child = properties[key];
   child.type ??= "object";
   child.properties ??= {};
   return child;
@@ -65,6 +66,25 @@ function componentSourceSchema(componentIds: string[]): JsonSchemaObject {
   };
 }
 
+function sourceTreeSchema(variants: JsonSchemaObject[]): JsonSchemaObject {
+  const description = "Display Builder source tree for the configured entity-view override field.";
+  if (variants.length === 0) {
+    return {
+      type: "array",
+      maxItems: 0,
+      description,
+    };
+  }
+
+  return {
+    type: "array",
+    description,
+    items: {
+      oneOf: variants,
+    },
+  };
+}
+
 function componentMetadata(component: SdcComponent): JsonSchemaObject {
   return {
     id: component.id,
@@ -99,16 +119,11 @@ export function extendDisplayBuilderSchema(
     .sort((a, b) => a.id.localeCompare(b.id));
   const matchedComponentIds = matchedComponents.map((component) => component.id);
   const variants = activeMetadata.sources
-    .filter((source) => source.id === "component")
+    .filter((source) => source.id === "component" && matchedComponentIds.length > 0)
     .map(() => componentSourceSchema(matchedComponentIds));
 
-  attributes.properties[activeMetadata.overrideField] = {
-    type: "array",
-    description: "Display Builder source tree for the configured entity-view override field.",
-    items: {
-      oneOf: variants,
-    },
-  };
+  const attributeProperties = attributes.properties as Record<string, JsonSchemaObject>;
+  attributeProperties[activeMetadata.overrideField] = sourceTreeSchema(variants);
 
   schema["x-dropsh-builder"] = "display-builder";
   schema["x-dropsh-display-builder"] = {

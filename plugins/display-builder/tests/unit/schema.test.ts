@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 import type { DisplayBuilderMetadata } from "../../src/metadata-client.js";
 import { extendDisplayBuilderSchema } from "../../src/schema.js";
 
+type JsonSchemaObject = Record<string, unknown>;
+type ActiveMetadataFixture = DisplayBuilderMetadata & {
+  enabled: true;
+  profile: { id: string; label: string };
+  overrideProfile: { id: string; label: string };
+  instanceId: string;
+};
+
 const baseSchema = {
   type: "object",
   properties: {
@@ -112,12 +120,36 @@ const activeMetadata = {
       reason: "Remote sources are not writable.",
     },
   ],
-} as DisplayBuilderMetadata & {
-  enabled: true;
-  profile: { id: string; label: string };
-  overrideProfile: { id: string; label: string };
-  instanceId: string;
-};
+} as ActiveMetadataFixture;
+
+function asSchemaObject(value: unknown): JsonSchemaObject {
+  expect(value).toBeTypeOf("object");
+  expect(value).not.toBeNull();
+  expect(Array.isArray(value)).toBe(false);
+  return value as JsonSchemaObject;
+}
+
+function schemaProperty(parent: JsonSchemaObject, key: string): JsonSchemaObject {
+  return asSchemaObject(asSchemaObject(parent.properties)[key]);
+}
+
+function overrideField(schema: unknown): JsonSchemaObject {
+  const root = asSchemaObject(schema);
+  const data = schemaProperty(root, "data");
+  const attributes = schemaProperty(data, "attributes");
+  return schemaProperty(attributes, "field_display_builder_override");
+}
+
+function sourceVariants(schema: unknown): JsonSchemaObject[] {
+  const items = asSchemaObject(overrideField(schema).items);
+  expect(Array.isArray(items.oneOf)).toBe(true);
+  return items.oneOf as JsonSchemaObject[];
+}
+
+function compileSchema(schema: unknown) {
+  const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
+  return ajv.compile(schema as Record<string, unknown>);
+}
 
 describe("extendDisplayBuilderSchema", () => {
   it("returns the same schema object for inactive metadata", () => {
@@ -137,17 +169,19 @@ describe("extendDisplayBuilderSchema", () => {
   });
 
   it("extends only data.attributes.<overrideField>", () => {
-    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]) as any;
+    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]);
 
-    const attrs = schema.properties.data.properties.attributes.properties;
+    const attrs = asSchemaObject(
+      schemaProperty(schemaProperty(asSchemaObject(schema), "data"), "attributes").properties,
+    );
     expect(attrs.title).toEqual(baseSchema.properties.data.properties.attributes.properties.title);
     expect(attrs.field_other).toEqual(
       baseSchema.properties.data.properties.attributes.properties.field_other,
     );
-    expect(attrs.field_display_builder_override.type).toBe("array");
-    expect(attrs.field_display_builder_override.items.oneOf).toHaveLength(1);
-    expect(schema["x-dropsh-builder"]).toBe("display-builder");
-    expect(schema["x-dropsh-display-builder"]).toEqual({
+    expect(asSchemaObject(attrs.field_display_builder_override).type).toBe("array");
+    expect(sourceVariants(schema)).toHaveLength(1);
+    expect(asSchemaObject(schema)["x-dropsh-builder"]).toBe("display-builder");
+    expect(asSchemaObject(schema)["x-dropsh-display-builder"]).toEqual({
       entity_type: "node",
       bundle: "article",
       view_mode: "default",
@@ -160,46 +194,103 @@ describe("extendDisplayBuilderSchema", () => {
   });
 
   it("restricts component_id to allowed Display Builder components present in SDC", () => {
-    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser, hero]) as any;
-    const component = schema.properties.data.properties.attributes.properties
-      .field_display_builder_override.items.oneOf[0].properties.source.properties.component;
+    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser, hero]);
+    const [variant] = sourceVariants(schema);
+    const source = schemaProperty(schemaProperty(asSchemaObject(variant), "source"), "component");
 
-    expect(component.properties.component_id.enum).toEqual(["olivero:teaser"]);
-    expect(component.properties.component_id.enum).not.toContain("sdc.olivero.teaser");
-    expect(component.properties.component_id.enum).not.toContain("my_theme:hero_card");
+    const componentId = schemaProperty(source, "component_id");
+    expect(componentId.enum).toEqual(["olivero:teaser"]);
+    expect(componentId.enum).not.toContain("sdc.olivero.teaser");
+    expect(componentId.enum).not.toContain("my_theme:hero_card");
   });
 
   it("adds only supported source plugins to oneOf and lists unsupported sources in metadata", () => {
-    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]) as any;
-    const oneOf = schema.properties.data.properties.attributes.properties
-      .field_display_builder_override.items.oneOf;
+    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]);
+    const oneOf = sourceVariants(schema);
 
-    expect(oneOf.map((variant: any) => variant.properties.source_id.const)).toEqual(["component"]);
-    expect(schema["x-dropsh-sources"]).toEqual(activeMetadata.sources);
-    expect(schema["x-dropsh-display-builder"].unsupported_sources).toEqual(
-      activeMetadata.unsupportedSources,
-    );
+    expect(oneOf.map((variant) => schemaProperty(variant, "source_id").const)).toEqual([
+      "component",
+    ]);
+    expect(asSchemaObject(schema)["x-dropsh-sources"]).toEqual(activeMetadata.sources);
+    expect(
+      asSchemaObject(asSchemaObject(schema)["x-dropsh-display-builder"]).unsupported_sources,
+    ).toEqual(activeMetadata.unsupportedSources);
+  });
+
+  it("emits a valid empty array field schema when no allowed components match SDC", () => {
+    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [hero]);
+    const field = overrideField(schema);
+    const validate = compileSchema(schema);
+
+    expect(field).toMatchObject({ type: "array", maxItems: 0 });
+    expect(field.items).toBeUndefined();
+    expect(
+      validate({
+        data: {
+          type: "node--article",
+          attributes: { field_display_builder_override: [] },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("emits a valid empty array field schema when no supported sources remain", () => {
+    const metadata = {
+      ...activeMetadata,
+      sources: activeMetadata.sources.filter((source) => source.id !== "component"),
+    };
+    const schema = extendDisplayBuilderSchema(baseSchema, metadata, [teaser]);
+    const field = overrideField(schema);
+    const validate = compileSchema(schema);
+
+    expect(field).toMatchObject({ type: "array", maxItems: 0 });
+    expect(field.items).toBeUndefined();
+    expect(
+      validate({
+        data: {
+          type: "node--article",
+          attributes: {
+            field_display_builder_override: [
+              {
+                source_id: "component",
+                source: { component: { component_id: "olivero:teaser" } },
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(false);
+    expect(
+      asSchemaObject(asSchemaObject(schema)["x-dropsh-display-builder"]).unsupported_sources,
+    ).toEqual(activeMetadata.unsupportedSources);
   });
 
   it("deep-clones the base schema, component metadata, and source metadata", () => {
-    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]) as any;
+    const schema = asSchemaObject(extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]));
 
-    schema.properties.data.properties.attributes.properties.title.type = "number";
-    schema["x-dropsh-components"][0].props.properties.title.type = "number";
-    schema["x-dropsh-components"][0].slots.content.title = "Changed";
-    schema["x-dropsh-components"][0].variants.default.title = "Changed";
-    schema["x-dropsh-sources"][0].schema.properties.component_id.type = "number";
+    schemaProperty(schemaProperty(schema, "data"), "attributes").properties = {
+      ...asSchemaObject(schemaProperty(schemaProperty(schema, "data"), "attributes").properties),
+      title: { type: "number" },
+    };
+    const [componentMetadata] = schema["x-dropsh-components"] as JsonSchemaObject[];
+    const props = asSchemaObject(componentMetadata?.props);
+    schemaProperty(props, "title").type = "number";
+    asSchemaObject(componentMetadata?.slots).content = { title: "Changed" };
+    asSchemaObject(componentMetadata?.variants).default = { title: "Changed" };
+    const [sourceMetadata] = schema["x-dropsh-sources"] as JsonSchemaObject[];
+    schemaProperty(asSchemaObject(sourceMetadata?.schema), "component_id").type = "number";
 
     expect(baseSchema.properties.data.properties.attributes.properties.title.type).toBe("string");
-    expect(baseSchema.properties.data.properties.attributes.properties.field_display_builder_override.type).toBe(
-      "object",
-    );
+    expect(
+      baseSchema.properties.data.properties.attributes.properties.field_display_builder_override
+        .type,
+    ).toBe("object");
     expect(teaser.props.properties).toEqual({
       title: { type: "string", title: "Title" },
     });
     expect(teaser.slots.content).toEqual({ title: "Content" });
     expect(teaser.variants.default).toEqual({ title: "Default" });
-    expect(activeMetadata.sources[0]!.schema.properties).toEqual({
+    expect(activeMetadata.sources[0]?.schema.properties).toEqual({
       component_id: { type: "string" },
     });
   });
@@ -209,8 +300,7 @@ describe("extendDisplayBuilderSchema", () => {
       string,
       unknown
     >;
-    const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false, logger: false });
-    const validate = ajv.compile(schema);
+    const validate = compileSchema(schema);
 
     expect(
       validate({
