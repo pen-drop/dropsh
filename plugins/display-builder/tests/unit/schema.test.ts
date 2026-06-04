@@ -272,6 +272,108 @@ describe("extendDisplayBuilderSchema", () => {
     });
   });
 
+  it("applies component-specific schemas to component source variants", () => {
+    const metadata = {
+      ...activeMetadata,
+      sources: [
+        {
+          id: "component",
+          label: "Component",
+          sourceType: "component",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              source_id: { type: "string", const: "component" },
+              source: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  component: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      component_id: { type: "string" },
+                      props: { type: "object", additionalProperties: true },
+                    },
+                    required: ["component_id"],
+                  },
+                },
+                required: ["component"],
+              },
+            },
+            required: ["source_id", "source"],
+          },
+        },
+      ],
+      allowedComponents: [
+        {
+          id: "olivero:teaser",
+          sourceId: "olivero:teaser",
+          name: "Teaser",
+          schema: {
+            type: "object",
+            properties: {
+              props: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  title: { type: "string" },
+                },
+                required: ["title"],
+              },
+            },
+            required: ["props"],
+          },
+        },
+      ],
+    };
+    const schema = extendDisplayBuilderSchema(baseSchema, metadata, [teaser]);
+    const validate = compileSchema(schema);
+
+    expect(sourceVariants(schema)).toHaveLength(1);
+    expect(
+      validate({
+        data: {
+          type: "node--article",
+          attributes: {
+            field_display_builder_override: [
+              {
+                source_id: "component",
+                source: {
+                  component: {
+                    component_id: "olivero:teaser",
+                    props: { title: "Hello" },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      validate({
+        data: {
+          type: "node--article",
+          attributes: {
+            field_display_builder_override: [
+              {
+                source_id: "component",
+                source: {
+                  component: {
+                    component_id: "olivero:teaser",
+                    props: { unexpected: true },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(false);
+  });
+
   it("adds only supported source plugins to oneOf and lists unsupported sources in metadata", () => {
     const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]);
     const oneOf = sourceVariants(schema);

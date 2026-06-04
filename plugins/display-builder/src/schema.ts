@@ -45,6 +45,10 @@ function metadataComponentId(component: ActiveDisplayBuilderMetadata["allowedCom
   return component.id.includes(":") ? component.id : component.sourceId;
 }
 
+function isSchemaObject(value: unknown): value is JsonSchemaObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function schemaProperties(schema: JsonSchemaObject): Record<string, JsonSchemaObject> {
   if (typeof schema.properties !== "object" || schema.properties === null) {
     schema.properties = {};
@@ -58,30 +62,43 @@ function restrictComponentIdProperty(schema: JsonSchemaObject, componentIds: str
   delete schema.const;
 }
 
-function restrictExistingComponentId(schema: JsonSchemaObject, componentIds: string[]): boolean {
-  let restricted = false;
-  const properties = schema.properties;
-  if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
-    return false;
-  }
-
-  for (const [key, value] of Object.entries(properties)) {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      continue;
+function mergeRequired(baseValue: unknown, overrideValue: unknown): string[] {
+  const values = new Set<string>();
+  if (Array.isArray(baseValue)) {
+    for (const value of baseValue) {
+      if (typeof value === "string") {
+        values.add(value);
+      }
     }
-    const propertySchema = value as JsonSchemaObject;
-    if (key === "component_id") {
-      restrictComponentIdProperty(propertySchema, componentIds);
-      restricted = true;
-      continue;
-    }
-    restricted = restrictExistingComponentId(propertySchema, componentIds) || restricted;
   }
-
-  return restricted;
+  if (Array.isArray(overrideValue)) {
+    for (const value of overrideValue) {
+      if (typeof value === "string") {
+        values.add(value);
+      }
+    }
+  }
+  return [...values];
 }
 
-function addComponentIdFallback(schema: JsonSchemaObject, componentIds: string[]) {
+function mergeSchema(base: JsonSchemaObject, override: JsonSchemaObject): JsonSchemaObject {
+  const merged = cloneSchema(base);
+  for (const [key, value] of Object.entries(override)) {
+    if (key === "required") {
+      merged.required = mergeRequired(merged.required, value);
+      continue;
+    }
+    const existingValue = merged[key];
+    if (isSchemaObject(existingValue) && isSchemaObject(value)) {
+      merged[key] = mergeSchema(existingValue, value);
+      continue;
+    }
+    merged[key] = cloneValue(value);
+  }
+  return merged;
+}
+
+function componentPayloadSchema(schema: JsonSchemaObject): JsonSchemaObject {
   schema.type ??= "object";
   const rootProperties = schemaProperties(schema);
   rootProperties.source_id ??= { type: "string", const: "component" };
@@ -94,19 +111,21 @@ function addComponentIdFallback(schema: JsonSchemaObject, componentIds: string[]
 
   const component = sourceProperties.component;
   component.type ??= "object";
-  const componentProperties = schemaProperties(component);
-  componentProperties.component_id ??= {};
-  restrictComponentIdProperty(componentProperties.component_id, componentIds);
+  return component;
 }
 
 function componentSourceSchema(
   sourceSchema: JsonSchemaObject,
-  componentIds: string[],
+  componentSchema: JsonSchemaObject,
+  componentId: string,
 ): JsonSchemaObject {
   const schema = cloneSchema(sourceSchema);
-  if (!restrictExistingComponentId(schema, componentIds)) {
-    addComponentIdFallback(schema, componentIds);
-  }
+  const component = componentPayloadSchema(schema);
+  const mergedComponent = mergeSchema(component, componentSchema);
+  const componentProperties = schemaProperties(mergedComponent);
+  componentProperties.component_id ??= {};
+  restrictComponentIdProperty(componentProperties.component_id, [componentId]);
+  Object.assign(component, mergedComponent);
   return schema;
 }
 
@@ -161,10 +180,32 @@ export function extendDisplayBuilderSchema(
   const matchedComponents = components
     .filter((component) => allowedIds.has(component.id))
     .sort((a, b) => a.id.localeCompare(b.id));
-  const matchedComponentIds = matchedComponents.map((component) => component.id);
+  const allowedComponentsById = new Map(
+    activeMetadata.allowedComponents.map((component) => [
+      metadataComponentId(component),
+      component,
+    ]),
+  );
+  const matchedAllowedComponents = matchedComponents
+    .map((component) => ({
+      component,
+      metadata: allowedComponentsById.get(component.id),
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        component: SdcComponent;
+        metadata: ActiveDisplayBuilderMetadata["allowedComponents"][number];
+      } => entry.metadata !== undefined,
+    );
   const variants = activeMetadata.sources
-    .filter((source) => source.id === "component" && matchedComponentIds.length > 0)
-    .map((source) => componentSourceSchema(source.schema, matchedComponentIds));
+    .filter((source) => source.id === "component" && matchedAllowedComponents.length > 0)
+    .flatMap((source) =>
+      matchedAllowedComponents.map(({ component, metadata }) =>
+        componentSourceSchema(source.schema, metadata.schema, component.id),
+      ),
+    );
 
   const attributeProperties = attributes.properties as Record<string, JsonSchemaObject>;
   attributeProperties[activeMetadata.overrideField] = sourceTreeSchema(variants);
