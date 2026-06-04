@@ -42,7 +42,7 @@ const missingEndpointMessage =
   "Display Builder metadata endpoint is required. Apply or enable the Display Builder schema metadata API patch.";
 const missingSourceSchemasMessage =
   "Display Builder metadata is active but does not include source schemas.";
-const invalidMetadataMessage = "Display Builder metadata endpoint did not return valid JSON.";
+const invalidJsonMessage = "Display Builder metadata endpoint did not return valid JSON.";
 const invalidMetadataObjectMessage =
   "Display Builder metadata endpoint did not return a valid metadata object.";
 
@@ -100,28 +100,23 @@ function hasSchema(source: Record<string, unknown>): boolean {
   );
 }
 
-/**
- * Fetches Display Builder schema metadata for an entity view display and
- * normalises the Drupal patch endpoint's snake_case response.
- */
-export async function fetchDisplayBuilderMetadata(
+async function fetchJson(
   ctx: PluginContext,
-  entityType: string,
-  bundle: string,
-  viewMode = "default",
-): Promise<DisplayBuilderMetadata> {
+  url: string,
+  notFoundMessage?: string,
+): Promise<Record<string, unknown>> {
   const request = await ctx.auth.apply({
     method: "GET",
-    url: `${ctx.baseUrl.replace(/\/+$/, "")}/api/display-builder/schema/entity-view/${entityType}/${bundle}/${viewMode}`,
-    headers: { Accept: "application/json" },
+    url,
+    headers: { Accept: "application/vnd.api+json" },
   });
 
   let response: Awaited<ReturnType<PluginContext["http"]["send"]>>;
   try {
     response = await ctx.http.send(request);
   } catch (error) {
-    if (error instanceof HttpError && error.status === 404) {
-      throw new HttpError(error.status, missingEndpointMessage, error.body);
+    if (notFoundMessage && error instanceof HttpError && error.status === 404) {
+      throw new HttpError(error.status, notFoundMessage, error.body);
     }
     throw error;
   }
@@ -130,18 +125,92 @@ export async function fetchDisplayBuilderMetadata(
   try {
     body = JSON.parse(response.body);
   } catch {
-    throw new HttpError(502, invalidMetadataMessage, response.body);
+    throw new HttpError(502, invalidJsonMessage, response.body);
   }
 
   if (!isObject(body)) {
     throw new HttpError(502, invalidMetadataObjectMessage, body);
   }
+  return body;
+}
 
-  const metadata = body;
-  if (metadata.enabled !== true) {
+function singleResource(body: Record<string, unknown>): Record<string, unknown> | null {
+  if (!Array.isArray(body.data) || body.data.length === 0) {
+    return null;
+  }
+  return asObject(body.data[0]);
+}
+
+async function fetchJsonApiConfigResource(
+  ctx: PluginContext,
+  resourceType: string,
+  internalId: string,
+): Promise<Record<string, unknown> | null> {
+  const baseUrl = ctx.baseUrl.replace(/\/+$/, "");
+  const body = await fetchJson(
+    ctx,
+    `${baseUrl}/jsonapi/${resourceType}/${resourceType}?filter%5Bdrupal_internal__id%5D=${encodeURIComponent(internalId)}`,
+  );
+  const resource = singleResource(body);
+  return resource ? asObject(resource.attributes) : null;
+}
+
+async function fetchComputedMetadata(
+  ctx: PluginContext,
+  entityType: string,
+  bundle: string,
+  viewMode: string,
+): Promise<Record<string, unknown>> {
+  const baseUrl = ctx.baseUrl.replace(/\/+$/, "");
+  return await fetchJson(
+    ctx,
+    `${baseUrl}/api/display-builder/schema/entity-view/${entityType}/${bundle}/${viewMode}`,
+    missingEndpointMessage,
+  );
+}
+
+/**
+ * Fetches Display Builder schema metadata for an entity view display and
+ * normalises standard JSON:API config resources plus computed Display Builder
+ * metadata from the Drupal patch endpoint.
+ */
+export async function fetchDisplayBuilderMetadata(
+  ctx: PluginContext,
+  entityType: string,
+  bundle: string,
+  viewMode = "default",
+): Promise<DisplayBuilderMetadata> {
+  const display = await fetchJsonApiConfigResource(
+    ctx,
+    "entity_view_display",
+    `${entityType}.${bundle}.${viewMode}`,
+  );
+  if (!display) {
     return { enabled: false };
   }
 
+  const displayBuilderSettings = asObject(asObject(display.third_party_settings).display_builder);
+  const profileId = asString(displayBuilderSettings.profile);
+  if (!profileId) {
+    return { enabled: false };
+  }
+
+  const profile = await fetchJsonApiConfigResource(ctx, "display_builder_profile", profileId);
+  if (!profile) {
+    return { enabled: false };
+  }
+  const overrideProfileId = asString(displayBuilderSettings.override_profile);
+  const overrideProfile =
+    overrideProfileId && overrideProfileId !== profileId
+      ? await fetchJsonApiConfigResource(ctx, "display_builder_profile", overrideProfileId)
+      : profile;
+
+  const computed = await fetchComputedMetadata(ctx, entityType, bundle, viewMode);
+  if (computed.enabled !== true) {
+    return { enabled: false };
+  }
+
+  const metadata = computed;
   const rawSources = asArray(metadata.sources);
   if (rawSources.length === 0 || rawSources.some((source) => !hasSchema(source))) {
     throw new HttpError(422, missingSourceSchemasMessage, metadata);
@@ -152,13 +221,23 @@ export async function fetchDisplayBuilderMetadata(
     entityType: asString(metadata.entity_type, entityType),
     bundle: asString(metadata.bundle, bundle),
     viewMode: asString(metadata.view_mode, viewMode),
-    ...(metadata.profile !== undefined ? { profile: metadata.profile } : {}),
-    overrideField: asString(metadata.override_field),
-    ...(metadata.override_profile !== undefined
-      ? { overrideProfile: metadata.override_profile }
+    profile: {
+      id: profileId,
+      label: asString(profile.label, profileId),
+    },
+    overrideField: asString(displayBuilderSettings.override_field),
+    ...(overrideProfileId
+      ? {
+          overrideProfile: {
+            id: overrideProfileId,
+            label: asString(overrideProfile?.label, overrideProfileId),
+          },
+        }
       : {}),
     ...(asString(metadata.instance_id) ? { instanceId: asString(metadata.instance_id) } : {}),
-    ...(metadata.source_tree !== undefined ? { sourceTree: metadata.source_tree } : {}),
+    ...(displayBuilderSettings.sources !== undefined
+      ? { sourceTree: displayBuilderSettings.sources }
+      : {}),
     sources: rawSources.map((source) => normalizeSource(source)),
     allowedComponents: asArray(metadata.allowed_components).map((component) =>
       normalizeComponent(component),

@@ -70,12 +70,43 @@ const operationSchema = {
   required: ["data"],
 };
 
-const activeMetadataResponse = {
+const activeDisplayResponse = {
+  data: [
+    {
+      type: "entity_view_display--entity_view_display",
+      id: "display-uuid",
+      attributes: {
+        third_party_settings: {
+          display_builder: {
+            profile: "default",
+            override_profile: "default",
+            override_field: "field_display_builder_override",
+            sources: [],
+          },
+        },
+      },
+    },
+  ],
+};
+
+const profileResponse = {
+  data: [
+    {
+      type: "display_builder_profile--display_builder_profile",
+      id: "profile-uuid",
+      attributes: {
+        drupal_internal__id: "default",
+        label: "Default",
+      },
+    },
+  ],
+};
+
+const computedMetadataResponse = {
   enabled: true,
   entity_type: "node",
   bundle: "article",
   view_mode: "default",
-  override_field: "field_display_builder_override",
   sources: [
     {
       id: "component",
@@ -144,7 +175,7 @@ describe("displayBuilderPlugin", () => {
   it("fetches inactive metadata and returns operation schemas unchanged without fetching SDC", async () => {
     const plugin = displayBuilderPlugin();
     const extendOperationSchema = requireExtendOperationSchema(plugin);
-    const context = ctx([{ status: 200, body: JSON.stringify({ enabled: false }) }]);
+    const context = ctx([{ status: 200, body: JSON.stringify({ data: [] }) }]);
     const schema = { type: "object" };
 
     await expect(extendOperationSchema("node", "article", "create", schema, context)).resolves.toBe(
@@ -154,8 +185,8 @@ describe("displayBuilderPlugin", () => {
     expect(context.http.send).toHaveBeenCalledTimes(1);
     expect(context.auth.apply).toHaveBeenCalledWith({
       method: "GET",
-      url: "https://example.com/api/display-builder/schema/entity-view/node/article/default",
-      headers: { Accept: "application/json" },
+      url: "https://example.com/jsonapi/entity_view_display/entity_view_display?filter%5Bdrupal_internal__id%5D=node.article.default",
+      headers: { Accept: "application/vnd.api+json" },
     });
   });
 
@@ -163,7 +194,9 @@ describe("displayBuilderPlugin", () => {
     const plugin = displayBuilderPlugin();
     const extendOperationSchema = requireExtendOperationSchema(plugin);
     const context = ctx([
-      { status: 200, body: JSON.stringify(activeMetadataResponse) },
+      { status: 200, body: JSON.stringify(activeDisplayResponse) },
+      { status: 200, body: JSON.stringify(profileResponse) },
+      { status: 200, body: JSON.stringify(computedMetadataResponse) },
       { status: 200, body: JSON.stringify(sdcResponse) },
     ]);
 
@@ -189,7 +222,7 @@ describe("displayBuilderPlugin", () => {
     );
     const componentId = recordProperty(componentProperties, "component_id");
 
-    expect(context.http.send).toHaveBeenCalledTimes(2);
+    expect(context.http.send).toHaveBeenCalledTimes(4);
     expect(schema).not.toBe(operationSchema);
     expect(schema["x-dropsh-builder"]).toBe("display-builder");
     expect(component.id).toBe("olivero:teaser");
@@ -199,7 +232,11 @@ describe("displayBuilderPlugin", () => {
   it("propagates the metadata endpoint 404 diagnostic unchanged", async () => {
     const plugin = displayBuilderPlugin();
     const extendOperationSchema = requireExtendOperationSchema(plugin);
-    const context = ctx([{ status: 404, body: "not found" }]);
+    const context = ctx([
+      { status: 200, body: JSON.stringify(activeDisplayResponse) },
+      { status: 200, body: JSON.stringify(profileResponse) },
+      { status: 404, body: "not found" },
+    ]);
 
     await expect(
       extendOperationSchema("node", "article", "create", operationSchema, context),
@@ -216,7 +253,9 @@ describe("displayBuilderPlugin", () => {
     const plugin = displayBuilderPlugin();
     const extendOperationSchema = requireExtendOperationSchema(plugin);
     const context = ctx([
-      { status: 200, body: JSON.stringify(activeMetadataResponse) },
+      { status: 200, body: JSON.stringify(activeDisplayResponse) },
+      { status: 200, body: JSON.stringify(profileResponse) },
+      { status: 200, body: JSON.stringify(computedMetadataResponse) },
       { status: 404, body: "not found" },
     ]);
 
@@ -235,12 +274,14 @@ describe("displayBuilderPlugin", () => {
     const plugin = displayBuilderPlugin();
     const extendOperationSchema = requireExtendOperationSchema(plugin);
     const context = ctx([
+      { status: 200, body: JSON.stringify(activeDisplayResponse) },
+      { status: 200, body: JSON.stringify(profileResponse) },
       {
         status: 200,
         body: JSON.stringify({
-          ...activeMetadataResponse,
+          ...computedMetadataResponse,
           allowed_components: [
-            ...activeMetadataResponse.allowed_components,
+            ...computedMetadataResponse.allowed_components,
             {
               id: "missing:id",
               source_id: "missing:id",

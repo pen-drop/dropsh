@@ -25,23 +25,130 @@ function ctx(
   };
 }
 
+const inactiveDisplayResponse = {
+  data: [
+    {
+      type: "entity_view_display--entity_view_display",
+      id: "display-uuid",
+      attributes: {
+        drupal_internal__id: "node.article.default",
+        third_party_settings: {},
+      },
+    },
+  ],
+};
+
+const activeDisplayResponse = {
+  data: [
+    {
+      type: "entity_view_display--entity_view_display",
+      id: "display-uuid",
+      attributes: {
+        drupal_internal__id: "node.article.teaser",
+        third_party_settings: {
+          display_builder: {
+            profile: "default",
+            override_profile: "content",
+            override_field: "field_display_builder",
+            sources: [{ source_id: "component" }],
+          },
+        },
+      },
+    },
+  ],
+};
+
+const profileResponse = {
+  data: [
+    {
+      type: "display_builder_profile--display_builder_profile",
+      id: "profile-uuid",
+      attributes: {
+        drupal_internal__id: "default",
+        label: "Default",
+        islands: {
+          component_library: { status: true },
+        },
+      },
+    },
+  ],
+};
+
+const overrideProfileResponse = {
+  data: [
+    {
+      type: "display_builder_profile--display_builder_profile",
+      id: "override-profile-uuid",
+      attributes: {
+        drupal_internal__id: "content",
+        label: "Content",
+      },
+    },
+  ],
+};
+
+const computedMetadataResponse = {
+  enabled: true,
+  entity_type: "node",
+  bundle: "article",
+  view_mode: "teaser",
+  instance_id: "node.article.teaser",
+  sources: [
+    {
+      id: "title",
+      label: "Title",
+      source_type: "base_field",
+      schema: { type: "string" },
+    },
+  ],
+  allowed_components: [
+    {
+      id: "sdc.olivero.teaser",
+      source_id: "olivero:teaser",
+      name: "Teaser",
+      schema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+        },
+      },
+    },
+  ],
+  unsupported_sources: [
+    {
+      id: "uid",
+      label: "Author",
+      source_type: "entity_reference",
+      reason: "Entity references are not supported.",
+    },
+  ],
+};
+
 describe("fetchDisplayBuilderMetadata", () => {
-  it("fetches the entity-view metadata endpoint with JSON headers through auth", async () => {
-    const context = ctx([{ status: 200, body: JSON.stringify({ enabled: false }) }]);
+  it("fetches entity view display through standard JSON:API first", async () => {
+    const context = ctx([{ status: 200, body: JSON.stringify({ data: [] }) }]);
 
     await fetchDisplayBuilderMetadata(context, "node", "article");
 
     const request = {
       method: "GET",
-      url: "https://example.com/api/display-builder/schema/entity-view/node/article/default",
-      headers: { Accept: "application/json" },
+      url: "https://example.com/jsonapi/entity_view_display/entity_view_display?filter%5Bdrupal_internal__id%5D=node.article.default",
+      headers: { Accept: "application/vnd.api+json" },
     };
     expect(context.auth.apply).toHaveBeenCalledWith(request);
     expect(context.http.send).toHaveBeenCalledWith(request);
   });
 
-  it("normalizes inactive metadata", async () => {
-    const context = ctx([{ status: 200, body: JSON.stringify({ enabled: false }) }]);
+  it("returns inactive metadata when the entity view display is not found", async () => {
+    const context = ctx([{ status: 200, body: JSON.stringify({ data: [] }) }]);
+
+    await expect(fetchDisplayBuilderMetadata(context, "node", "article")).resolves.toEqual({
+      enabled: false,
+    });
+  });
+
+  it("returns inactive metadata when the entity view display has no Display Builder profile", async () => {
+    const context = ctx([{ status: 200, body: JSON.stringify(inactiveDisplayResponse) }]);
 
     await expect(fetchDisplayBuilderMetadata(context, "node", "article")).resolves.toEqual({
       enabled: false,
@@ -59,50 +166,23 @@ describe("fetchDisplayBuilderMetadata", () => {
     });
   });
 
-  it("normalizes active snake_case API metadata", async () => {
+  it("normalizes active metadata from entity view display, profile, and computed endpoint", async () => {
     const context = ctx([
       {
         status: 200,
-        body: JSON.stringify({
-          enabled: true,
-          entity_type: "node",
-          bundle: "article",
-          view_mode: "teaser",
-          profile: { id: "default", label: "Default" },
-          override_field: "field_display_builder",
-          override_profile: { id: "content", label: "Content" },
-          instance_id: "node.article.teaser",
-          source_tree: [{ source_id: "component" }],
-          sources: [
-            {
-              id: "title",
-              label: "Title",
-              source_type: "base_field",
-              schema: { type: "string" },
-            },
-          ],
-          allowed_components: [
-            {
-              id: "sdc.olivero.teaser",
-              source_id: "olivero:teaser",
-              name: "Teaser",
-              schema: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                },
-              },
-            },
-          ],
-          unsupported_sources: [
-            {
-              id: "uid",
-              label: "Author",
-              source_type: "entity_reference",
-              reason: "Entity references are not supported.",
-            },
-          ],
-        }),
+        body: JSON.stringify(activeDisplayResponse),
+      },
+      {
+        status: 200,
+        body: JSON.stringify(profileResponse),
+      },
+      {
+        status: 200,
+        body: JSON.stringify(overrideProfileResponse),
+      },
+      {
+        status: 200,
+        body: JSON.stringify(computedMetadataResponse),
       },
     ]);
 
@@ -150,8 +230,13 @@ describe("fetchDisplayBuilderMetadata", () => {
     });
   });
 
-  it("throws a patch diagnostic when the metadata endpoint is missing", async () => {
-    const context = ctx([{ status: 404, body: "not found" }]);
+  it("throws a patch diagnostic when the computed metadata endpoint is missing", async () => {
+    const context = ctx([
+      { status: 200, body: JSON.stringify(activeDisplayResponse) },
+      { status: 200, body: JSON.stringify(profileResponse) },
+      { status: 200, body: JSON.stringify(overrideProfileResponse) },
+      { status: 404, body: "not found" },
+    ]);
 
     await expect(fetchDisplayBuilderMetadata(context, "node", "article")).rejects.toMatchObject({
       code: "E_HTTP",
@@ -164,6 +249,9 @@ describe("fetchDisplayBuilderMetadata", () => {
 
   it("throws when active metadata does not include source schemas", async () => {
     const context = ctx([
+      { status: 200, body: JSON.stringify(activeDisplayResponse) },
+      { status: 200, body: JSON.stringify(profileResponse) },
+      { status: 200, body: JSON.stringify(overrideProfileResponse) },
       {
         status: 200,
         body: JSON.stringify({

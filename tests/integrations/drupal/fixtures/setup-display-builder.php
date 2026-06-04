@@ -55,5 +55,13 @@ if ($role && !$role->hasPermission('access sdc components')) {
   $role->grantPermission('access sdc components');
   $role->save();
 }
+if ($role && !$role->hasPermission('administer node display')) {
+  $role->grantPermission('administer node display');
+  $role->save();
+}
+if ($role && !$role->hasPermission('use display builder default')) {
+  $role->grantPermission('use display builder default');
+  $role->save();
+}
 
 echo "Display Builder setup complete\n";
