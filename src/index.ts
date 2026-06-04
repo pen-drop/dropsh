@@ -11,6 +11,7 @@ import {
   runSchema,
   SCHEMA_PIPELINE_VERSION,
   schemaCacheMetadataMatches,
+  siteCacheRoot,
 } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
@@ -163,7 +164,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     op: "create" | "update",
   ): Promise<unknown> {
     const store = createFileStore({
-      rootDir: `${ctx.cwd}/.dropsh/cache`,
+      rootDir: siteCacheRoot(ctx.cwd, ctx.baseUrl),
       warn: (m) => stderr(`${m}\n`),
     });
     const [entity, bundle] = target.split("/", 2) as [string, string];

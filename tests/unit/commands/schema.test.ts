@@ -28,7 +28,8 @@ function seqHttp(responses: Array<{ status: number; body: string }>): HttpClient
 }
 
 function writeCachedSchema(dir: string, relPath: string, schema: unknown): void {
-  const abs = join(dir, ".dropsh/cache", relPath);
+  // Mirrors siteCacheRoot() for the tests' baseUrl "https://ex".
+  const abs = join(dir, ".dropsh/cache", "ex", relPath);
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, JSON.stringify(schema, null, 2), "utf8");
 }
