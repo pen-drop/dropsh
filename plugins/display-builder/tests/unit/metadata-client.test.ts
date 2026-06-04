@@ -10,7 +10,10 @@ function ctx(
   return {
     http: {
       send: vi.fn(async () => {
-        const r = responses[i++]!;
+        const r = responses[i++];
+        if (!r) {
+          throw new Error("Unexpected metadata client request.");
+        }
         if (r.status >= 200 && r.status < 300) {
           return { status: r.status, headers: {}, body: r.body };
         }
@@ -42,6 +45,17 @@ describe("fetchDisplayBuilderMetadata", () => {
 
     await expect(fetchDisplayBuilderMetadata(context, "node", "article")).resolves.toEqual({
       enabled: false,
+    });
+  });
+
+  it("throws when valid JSON is not a metadata object", async () => {
+    const context = ctx([{ status: 200, body: "null" }]);
+
+    await expect(fetchDisplayBuilderMetadata(context, "node", "article")).rejects.toMatchObject({
+      code: "E_HTTP",
+      status: 502,
+      body: null,
+      message: "Display Builder metadata endpoint did not return a valid metadata object.",
     });
   });
 

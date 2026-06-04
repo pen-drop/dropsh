@@ -39,12 +39,18 @@ const missingEndpointMessage =
 const missingSourceSchemasMessage =
   "Display Builder metadata is active but does not include source schemas.";
 const invalidMetadataMessage = "Display Builder metadata endpoint did not return valid JSON.";
+const invalidMetadataObjectMessage =
+  "Display Builder metadata endpoint did not return a valid metadata object.";
 
 function asObject(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return {};
   }
   return value as Record<string, unknown>;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function asString(value: unknown, fallback = ""): string {
@@ -64,9 +70,7 @@ function normalizeSource(source: Record<string, unknown>): DisplayBuilderSourceM
   };
 }
 
-function normalizeComponent(
-  component: Record<string, unknown>,
-): DisplayBuilderComponentMetadata {
+function normalizeComponent(component: Record<string, unknown>): DisplayBuilderComponentMetadata {
   return {
     id: asString(component.id),
     sourceId: asString(component.source_id),
@@ -87,7 +91,9 @@ function normalizeUnsupportedSource(
 }
 
 function hasSchema(source: Record<string, unknown>): boolean {
-  return typeof source.schema === "object" && source.schema !== null && !Array.isArray(source.schema);
+  return (
+    typeof source.schema === "object" && source.schema !== null && !Array.isArray(source.schema)
+  );
 }
 
 /**
@@ -123,7 +129,11 @@ export async function fetchDisplayBuilderMetadata(
     throw new HttpError(502, invalidMetadataMessage, response.body);
   }
 
-  const metadata = asObject(body);
+  if (!isObject(body)) {
+    throw new HttpError(502, invalidMetadataObjectMessage, body);
+  }
+
+  const metadata = body;
   if (metadata.enabled !== true) {
     return { enabled: false };
   }
