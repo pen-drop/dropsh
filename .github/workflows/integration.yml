@@ -50,7 +50,7 @@ jobs:
             | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
           curl -s -H "Authorization: Bearer $TOKEN" \
             "http://schemata.dropsh-test.ddev.site/schemata/node/article_test?_format=schema_json&_describes=api_json" \
-            | python3 -m json.tool | head -120
+            | python3 -c "import sys,json; d=json.load(sys.stdin); data=d['properties']['data']; print('data.required:', data.get('required')); print('attributes.required:', data['properties']['attributes'].get('required')); print('attributes.props:', sorted(data['properties']['attributes']['properties'].keys()))"
 
       - name: Run integration tests
         run: pnpm run test:integration
