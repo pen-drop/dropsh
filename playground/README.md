@@ -8,7 +8,7 @@ eigene `dropsh.config.js` für ein konkretes Integrations-Szenario.
 | `plain/`    | `http://dropsh-test.ddev.site`              | `oauth2Plugin` (OAuth 2.0 Authcode + PKCE)|
 | `schemata/` | `http://schemata.dropsh-test.ddev.site`     | `basicAuthPlugin` + `schemataPlugin`      |
 | `canvas/`   | `http://canvas.dropsh-test.ddev.site`       | `basicAuthPlugin` + `canvasPlugin`        |
-| `db/`       | `http://db.dropsh-test.ddev.site`           | `basicAuthPlugin` (display_builder Stub)  |
+| `db/`       | `http://db.dropsh-test.ddev.site`           | `basicAuthPlugin` + `displayBuilderPlugin` |
 
 ## Setup
 
@@ -65,13 +65,12 @@ cd canvas
 npx dropsh --config dropsh.config.js schema canvas_page/canvas_page --for=create
 ```
 
-## db/ — Display Builder (Stub)
+## db/ — Display Builder
 
-Site ist provisioniert, aber das `@dropsh/plugin-display-builder` Paket
-existiert noch nicht. Sobald es landet, in `db/dropsh.config.js` einbauen.
+Display-Builder-Schema mit Metadaten aus der Drupal Entity-View-Display-
+Konfiguration:
 
 ```bash
 cd db
-# nur Basis-Operationen (kein display_builder-Plugin aktiv)
-npx dropsh --config dropsh.config.js schema
+npx dropsh --config dropsh.config.js schema node/article --for=create
 ```
