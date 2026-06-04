@@ -28,7 +28,11 @@ export type DisplayBuilderMetadata =
       entityType: string;
       bundle: string;
       viewMode: string;
+      profile?: unknown;
       overrideField: string;
+      overrideProfile?: unknown;
+      instanceId?: string;
+      sourceTree?: unknown;
       sources: DisplayBuilderSourceMetadata[];
       allowedComponents: DisplayBuilderComponentMetadata[];
       unsupportedSources: DisplayBuilderUnsupportedSourceMetadata[];
@@ -148,7 +152,13 @@ export async function fetchDisplayBuilderMetadata(
     entityType: asString(metadata.entity_type, entityType),
     bundle: asString(metadata.bundle, bundle),
     viewMode: asString(metadata.view_mode, viewMode),
+    ...(metadata.profile !== undefined ? { profile: metadata.profile } : {}),
     overrideField: asString(metadata.override_field),
+    ...(metadata.override_profile !== undefined
+      ? { overrideProfile: metadata.override_profile }
+      : {}),
+    ...(asString(metadata.instance_id) ? { instanceId: asString(metadata.instance_id) } : {}),
+    ...(metadata.source_tree !== undefined ? { sourceTree: metadata.source_tree } : {}),
     sources: rawSources.map((source) => normalizeSource(source)),
     allowedComponents: asArray(metadata.allowed_components).map((component) =>
       normalizeComponent(component),

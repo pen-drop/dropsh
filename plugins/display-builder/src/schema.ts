@@ -3,12 +3,15 @@ import type { DisplayBuilderMetadata } from "./metadata-client.js";
 
 type JsonSchemaObject = Record<string, unknown>;
 type ActiveDisplayBuilderMetadata = Extract<DisplayBuilderMetadata, { enabled: true }> & {
-  profile?: string | { id?: string };
-  overrideProfile?: string | { id?: string };
+  profile?: unknown;
+  overrideProfile?: unknown;
   instanceId?: string;
 };
 
 function cloneValue<T>(value: T): T {
+  if (value === undefined) {
+    return value;
+  }
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
@@ -27,43 +30,84 @@ function ensureObjectProperty(parent: JsonSchemaObject, key: string): JsonSchema
   return child;
 }
 
-function idValue(value: string | { id?: string } | undefined): string | undefined {
+function idValue(value: unknown): string | undefined {
   if (typeof value === "string") {
     return value;
   }
-  return value?.id;
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const id = (value as Record<string, unknown>).id;
+    return typeof id === "string" ? id : undefined;
+  }
+  return undefined;
 }
 
 function metadataComponentId(component: ActiveDisplayBuilderMetadata["allowedComponents"][number]) {
   return component.id.includes(":") ? component.id : component.sourceId;
 }
 
-function componentSourceSchema(componentIds: string[]): JsonSchemaObject {
-  return {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      source_id: { type: "string", const: "component" },
-      source: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          component: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              component_id: { type: "string", enum: componentIds },
-              props: { type: "object", additionalProperties: true },
-              slots: { type: "object", additionalProperties: true },
-            },
-            required: ["component_id"],
-          },
-        },
-        required: ["component"],
-      },
-    },
-    required: ["source_id", "source"],
-  };
+function schemaProperties(schema: JsonSchemaObject): Record<string, JsonSchemaObject> {
+  if (typeof schema.properties !== "object" || schema.properties === null) {
+    schema.properties = {};
+  }
+  return schema.properties as Record<string, JsonSchemaObject>;
+}
+
+function restrictComponentIdProperty(schema: JsonSchemaObject, componentIds: string[]) {
+  schema.type ??= "string";
+  schema.enum = componentIds;
+  delete schema.const;
+}
+
+function restrictExistingComponentId(schema: JsonSchemaObject, componentIds: string[]): boolean {
+  let restricted = false;
+  const properties = schema.properties;
+  if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
+    return false;
+  }
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      continue;
+    }
+    const propertySchema = value as JsonSchemaObject;
+    if (key === "component_id") {
+      restrictComponentIdProperty(propertySchema, componentIds);
+      restricted = true;
+      continue;
+    }
+    restricted = restrictExistingComponentId(propertySchema, componentIds) || restricted;
+  }
+
+  return restricted;
+}
+
+function addComponentIdFallback(schema: JsonSchemaObject, componentIds: string[]) {
+  schema.type ??= "object";
+  const rootProperties = schemaProperties(schema);
+  rootProperties.source_id ??= { type: "string", const: "component" };
+  rootProperties.source ??= { type: "object" };
+
+  const source = rootProperties.source;
+  source.type ??= "object";
+  const sourceProperties = schemaProperties(source);
+  sourceProperties.component ??= { type: "object" };
+
+  const component = sourceProperties.component;
+  component.type ??= "object";
+  const componentProperties = schemaProperties(component);
+  componentProperties.component_id ??= {};
+  restrictComponentIdProperty(componentProperties.component_id, componentIds);
+}
+
+function componentSourceSchema(
+  sourceSchema: JsonSchemaObject,
+  componentIds: string[],
+): JsonSchemaObject {
+  const schema = cloneSchema(sourceSchema);
+  if (!restrictExistingComponentId(schema, componentIds)) {
+    addComponentIdFallback(schema, componentIds);
+  }
+  return schema;
 }
 
 function sourceTreeSchema(variants: JsonSchemaObject[]): JsonSchemaObject {
@@ -120,7 +164,7 @@ export function extendDisplayBuilderSchema(
   const matchedComponentIds = matchedComponents.map((component) => component.id);
   const variants = activeMetadata.sources
     .filter((source) => source.id === "component" && matchedComponentIds.length > 0)
-    .map(() => componentSourceSchema(matchedComponentIds));
+    .map((source) => componentSourceSchema(source.schema, matchedComponentIds));
 
   const attributeProperties = attributes.properties as Record<string, JsonSchemaObject>;
   attributeProperties[activeMetadata.overrideField] = sourceTreeSchema(variants);
@@ -134,6 +178,7 @@ export function extendDisplayBuilderSchema(
     override_field: activeMetadata.overrideField,
     override_profile: idValue(activeMetadata.overrideProfile),
     instance_id: activeMetadata.instanceId,
+    source_tree: cloneValue(activeMetadata.sourceTree),
     unsupported_sources: cloneValue(activeMetadata.unsupportedSources),
   };
   schema["x-dropsh-components"] = matchedComponents.map(componentMetadata);

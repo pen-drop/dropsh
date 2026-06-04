@@ -84,12 +84,50 @@ const activeMetadata = {
   overrideField: "field_display_builder_override",
   overrideProfile: { id: "content", label: "Content" },
   instanceId: "node.article.default",
+  sourceTree: [{ source_id: "component" }],
   sources: [
     {
       id: "component",
       label: "Component",
       sourceType: "component",
-      schema: { type: "object", properties: { component_id: { type: "string" } } },
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source_id: { type: "string", const: "component" },
+          source: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              component: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  component_id: { type: "string" },
+                  props: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      title: { type: "string" },
+                    },
+                    required: ["title"],
+                  },
+                  slots: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      content: { type: "string" },
+                    },
+                  },
+                },
+                required: ["component_id", "props"],
+              },
+            },
+            required: ["component"],
+          },
+        },
+        required: ["source_id", "source"],
+      },
     },
     {
       id: "unsupported_remote",
@@ -189,6 +227,7 @@ describe("extendDisplayBuilderSchema", () => {
       override_field: "field_display_builder_override",
       override_profile: "content",
       instance_id: "node.article.default",
+      source_tree: [{ source_id: "component" }],
       unsupported_sources: activeMetadata.unsupportedSources,
     });
   });
@@ -202,6 +241,35 @@ describe("extendDisplayBuilderSchema", () => {
     expect(componentId.enum).toEqual(["olivero:teaser"]);
     expect(componentId.enum).not.toContain("sdc.olivero.teaser");
     expect(componentId.enum).not.toContain("my_theme:hero_card");
+  });
+
+  it("preserves the Display Builder component source schema constraints", () => {
+    const schema = extendDisplayBuilderSchema(baseSchema, activeMetadata, [teaser]);
+    const [variant] = sourceVariants(schema);
+    const component = schemaProperty(
+      schemaProperty(asSchemaObject(variant), "source"),
+      "component",
+    );
+    const props = schemaProperty(component, "props");
+    const slots = schemaProperty(component, "slots");
+
+    expect(component.additionalProperties).toBe(false);
+    expect(component.required).toEqual(["component_id", "props"]);
+    expect(props).toEqual({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        title: { type: "string" },
+      },
+      required: ["title"],
+    });
+    expect(slots).toEqual({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        content: { type: "string" },
+      },
+    });
   });
 
   it("adds only supported source plugins to oneOf and lists unsupported sources in metadata", () => {
@@ -278,7 +346,10 @@ describe("extendDisplayBuilderSchema", () => {
     asSchemaObject(componentMetadata?.slots).content = { title: "Changed" };
     asSchemaObject(componentMetadata?.variants).default = { title: "Changed" };
     const [sourceMetadata] = schema["x-dropsh-sources"] as JsonSchemaObject[];
-    schemaProperty(asSchemaObject(sourceMetadata?.schema), "component_id").type = "number";
+    schemaProperty(
+      schemaProperty(schemaProperty(asSchemaObject(sourceMetadata?.schema), "source"), "component"),
+      "component_id",
+    ).type = "number";
 
     expect(baseSchema.properties.data.properties.attributes.properties.title.type).toBe("string");
     expect(
@@ -290,8 +361,9 @@ describe("extendDisplayBuilderSchema", () => {
     });
     expect(teaser.slots.content).toEqual({ title: "Content" });
     expect(teaser.variants.default).toEqual({ title: "Default" });
-    expect(activeMetadata.sources[0]?.schema.properties).toEqual({
-      component_id: { type: "string" },
+    expect(schemaProperty(asSchemaObject(activeMetadata.sources[0]?.schema), "source_id")).toEqual({
+      type: "string",
+      const: "component",
     });
   });
 
@@ -314,7 +386,7 @@ describe("extendDisplayBuilderSchema", () => {
                   component: {
                     component_id: "olivero:teaser",
                     props: { title: "Hello" },
-                    slots: {},
+                    slots: { content: "Body" },
                   },
                 },
               },
@@ -323,6 +395,27 @@ describe("extendDisplayBuilderSchema", () => {
         },
       }),
     ).toBe(true);
+    expect(
+      validate({
+        data: {
+          type: "node--article",
+          attributes: {
+            field_display_builder_override: [
+              {
+                source_id: "component",
+                source: {
+                  component: {
+                    component_id: "olivero:teaser",
+                    props: { title: 123 },
+                    slots: { content: "Body" },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(false);
     expect(
       validate({
         data: {

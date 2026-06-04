@@ -4,6 +4,10 @@ import { HttpError } from "dropsh/plugin";
 import { fetchDisplayBuilderMetadata } from "./metadata-client.js";
 import { extendDisplayBuilderSchema } from "./schema.js";
 
+function metadataComponentId(component: { id: string; sourceId: string }) {
+  return component.id.includes(":") ? component.id : component.sourceId;
+}
+
 export function displayBuilderPlugin(): DropSHPlugin {
   return {
     id: "display-builder",
@@ -29,6 +33,18 @@ export function displayBuilderPlugin(): DropSHPlugin {
           );
         }
         throw err;
+      }
+
+      const sdcComponentIds = new Set(components.map((component) => component.id));
+      const missingComponentIds = metadata.allowedComponents
+        .map((component) => metadataComponentId(component))
+        .filter((componentId) => !sdcComponentIds.has(componentId));
+      if (missingComponentIds.length > 0) {
+        throw new HttpError(
+          422,
+          `Display Builder metadata references components unknown to jsonapi_sdc: ${missingComponentIds.join(", ")}`,
+          { component_ids: missingComponentIds },
+        );
       }
 
       return extendDisplayBuilderSchema(schema, metadata, components);

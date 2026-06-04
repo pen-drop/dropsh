@@ -230,4 +230,35 @@ describe("displayBuilderPlugin", () => {
         "Display Builder plugin requires Drupal module jsonapi_sdc to build component schemas.",
     });
   });
+
+  it("throws 422 when active metadata references components unknown to jsonapi_sdc", async () => {
+    const plugin = displayBuilderPlugin();
+    const extendOperationSchema = requireExtendOperationSchema(plugin);
+    const context = ctx([
+      {
+        status: 200,
+        body: JSON.stringify({
+          ...activeMetadataResponse,
+          allowed_components: [
+            ...activeMetadataResponse.allowed_components,
+            {
+              id: "missing:id",
+              source_id: "missing:id",
+              name: "Missing",
+              schema: { type: "object" },
+            },
+          ],
+        }),
+      },
+      { status: 200, body: JSON.stringify(sdcResponse) },
+    ]);
+
+    await expect(
+      extendOperationSchema("node", "article", "create", operationSchema, context),
+    ).rejects.toMatchObject({
+      code: "E_HTTP",
+      status: 422,
+      message: "Display Builder metadata references components unknown to jsonapi_sdc: missing:id",
+    });
+  });
 });

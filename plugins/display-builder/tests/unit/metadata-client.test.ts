@@ -68,7 +68,11 @@ describe("fetchDisplayBuilderMetadata", () => {
           entity_type: "node",
           bundle: "article",
           view_mode: "teaser",
+          profile: { id: "default", label: "Default" },
           override_field: "field_display_builder",
+          override_profile: { id: "content", label: "Content" },
+          instance_id: "node.article.teaser",
+          source_tree: [{ source_id: "component" }],
           sources: [
             {
               id: "title",
@@ -109,7 +113,11 @@ describe("fetchDisplayBuilderMetadata", () => {
       entityType: "node",
       bundle: "article",
       viewMode: "teaser",
+      profile: { id: "default", label: "Default" },
       overrideField: "field_display_builder",
+      overrideProfile: { id: "content", label: "Content" },
+      instanceId: "node.article.teaser",
+      sourceTree: [{ source_id: "component" }],
       sources: [
         {
           id: "title",
