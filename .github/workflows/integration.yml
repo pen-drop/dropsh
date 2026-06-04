@@ -43,6 +43,15 @@ jobs:
       - name: Provision DDEV multisite fixture
         run: pnpm run drupal:up
 
+      - name: Debug schemata schema (temporary)
+        run: |
+          TOKEN=$(curl -s -X POST http://schemata.dropsh-test.ddev.site/oauth/token \
+            -d "grant_type=password&client_id=tests-password&client_secret=tests-password-secret&username=tester&password=tester-pw&scope=integration:content" \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+          curl -s -H "Authorization: Bearer $TOKEN" \
+            "http://schemata.dropsh-test.ddev.site/schemata/node/article_test?_format=schema_json&_describes=api_json" \
+            | python3 -m json.tool | head -120
+
       - name: Run integration tests
         run: pnpm run test:integration
 
