@@ -12,12 +12,14 @@ $bundle = 'article';
 $field_name = 'field_display_builder_override';
 
 if (!FieldStorageConfig::loadByName($entity_type, $field_name)) {
-  FieldStorageConfig::create([
+  $field_storage = FieldStorageConfig::create([
     'field_name' => $field_name,
     'entity_type' => $entity_type,
-    'type' => 'map',
-    'cardinality' => 1,
-  ])->save();
+    'type' => 'ui_patterns_source',
+  ]);
+  $field_storage->setTranslatable(TRUE);
+  $field_storage->setCardinality(-1);
+  $field_storage->save();
   echo "Created field storage {$field_name}\n";
 }
 
