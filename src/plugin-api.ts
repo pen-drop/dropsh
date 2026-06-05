@@ -12,5 +12,7 @@ export type { Config, SiteConfig } from "./core/config.js";
 export { loadConfig } from "./core/config.js";
 export type { HttpClient, HttpRequest } from "./core/http.js";
 export { createHttpClient } from "./core/http.js";
+export type { JsonApiClient, JsonApiOptions } from "./core/jsonapi/client.js";
+export { createJsonApiClient } from "./core/jsonapi/client.js";
 export type { DropSHPlugin, PluginContext, SchemaOperation } from "./core/plugin.js";
 export { AuthError, ConfigError, HttpError } from "./errors.js";
