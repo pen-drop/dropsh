@@ -58,7 +58,7 @@ const PLUGIN_BY_SITE: Record<SiteName, string | null> = {
   plain: null,
   schemata: "schemata",
   canvas: "canvas",
-  db: null,
+  db: "display-builder",
 };
 
 function pluginImport(plugin: string): { importLine: string; instantiation: string } {
@@ -73,6 +73,12 @@ function pluginImport(plugin: string): { importLine: string; instantiation: stri
     return {
       importLine: `import { canvasPlugin } from ${JSON.stringify(sourcePath)};`,
       instantiation: "canvasPlugin()",
+    };
+  }
+  if (plugin === "display-builder") {
+    return {
+      importLine: `import { displayBuilderPlugin } from ${JSON.stringify(sourcePath)};`,
+      instantiation: "displayBuilderPlugin()",
     };
   }
   throw new Error(`Unknown plugin '${plugin}'`);

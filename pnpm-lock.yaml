@@ -74,6 +74,22 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@20.19.39)(vite@6.4.3(@types/node@20.19.39)(tsx@4.21.0))
 
+  plugins/display-builder:
+    dependencies:
+      '@dropsh/sdc-client':
+        specifier: workspace:*
+        version: link:../../packages/sdc-client
+    devDependencies:
+      dropsh:
+        specifier: workspace:*
+        version: link:../..
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@20.19.39)(vite@6.4.3(@types/node@20.19.39)(tsx@4.21.0))
+
   plugins/oauth2:
     devDependencies:
       dropsh:

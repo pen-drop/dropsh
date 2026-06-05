@@ -22,6 +22,7 @@
     "drupal/schemata": "1.x-dev",
     "drupal/simple_oauth": "^6",
     "drupal/simple_oauth_password_grant": "^2.1",
+    "drupal/ui_patterns": "^2",
     "drush/drush": "^13"
   },
   "config": {
