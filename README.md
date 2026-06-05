@@ -6,9 +6,10 @@ payloads instead of guessing field names, required properties, component shapes,
 or authentication details.
 
 The CLI can read and search existing content, print schemas for create and update
-payloads, validate data locally, and then send the JSON:API request. Plugins add
-the Drupal-specific schema sources and builder metadata an agent needs for more
-complex sites.
+payloads, validate data locally, and then send the JSON:API request. Plugins can
+extend those schemas with site-specific fields, component metadata, builder
+constraints, and other context the agent needs to do the job. Authentication for
+common Drupal setups is handled through plugins as well.
 
 ## Concept
 
@@ -20,7 +21,9 @@ content without hard-coding every content model.
 - Agents can inspect existing records with `search` and `read` before generating
   new data.
 - Plugins can replace shallow inferred schemas with authoritative Drupal schemas
-  or builder-specific component metadata.
+  and enrich payload schemas with the extra context an agent needs.
+- Auth plugins support common Drupal authentication systems without changing the
+  commands that use them.
 - A skill can use dropsh as its Drupal execution layer and focus on the workflow.
 
 ## Install
@@ -135,6 +138,12 @@ A plugin can contribute one or more of these capabilities:
 - schema extensions
 - operation-specific schema changes for `create` or `update`
 - additional CLI commands
+
+Schema plugins are the main way to make dropsh useful for agents on real sites.
+They can add required fields, component definitions, builder-specific structures,
+allowed values, and other metadata that helps the agent produce a valid payload.
+Auth plugins keep the same command interface while supporting common Drupal
+authentication systems such as basic auth or OAuth2.
 
 Bundled plugins:
 
