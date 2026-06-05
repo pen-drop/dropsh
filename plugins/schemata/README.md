@@ -40,7 +40,14 @@ falls back to the base schema.
 ## Required Drupal modules
 
 - [`schemata`](https://www.drupal.org/project/schemata)
-- `jsonapi_schema` (provided by the schemata project)
+- `schemata_json_schema` (submodule of the schemata project)
+
+Install and enable both on the Drupal site:
+
+```bash
+composer require drupal/schemata
+drush en schemata schemata_json_schema
+```
 
 ## License
 
