@@ -49,23 +49,32 @@ function slotSchema(knownSlots: string[]): JsonSchemaObject {
   };
 }
 
-function componentItemVariant(component: SdcComponent, knownSlots: string[]): JsonSchemaObject {
+function componentItemVariant(
+  component: SdcComponent,
+  knownSlots: string[],
+  version: string,
+): JsonSchemaObject {
   return {
     type: "object",
     additionalProperties: false,
     properties: {
       uuid: { type: "string", format: "uuid" },
       component_id: { type: "string", const: toSdcComponentId(component.id) },
+      component_version: {
+        type: "string",
+        const: version,
+        description: "Active version hash of the Canvas component config entity.",
+      },
       parent_uuid: { type: ["string", "null"], format: "uuid" },
       slot: slotSchema(knownSlots),
       inputs: inputSchema(component),
       label: { type: ["string", "null"] },
     },
-    required: ["uuid", "component_id", "inputs"],
+    required: ["uuid", "component_id", "component_version", "inputs"],
   };
 }
 
-function componentMetadata(component: SdcComponent): JsonSchemaObject {
+function componentMetadata(component: SdcComponent, version: string | null): JsonSchemaObject {
   return {
     id: toSdcComponentId(component.id),
     source_id: component.id,
@@ -73,6 +82,7 @@ function componentMetadata(component: SdcComponent): JsonSchemaObject {
     description: component.description,
     provider: component.provider,
     status: component.status,
+    version,
     props: cloneValue(component.props),
     slots: cloneValue(component.slots),
     variants: cloneValue(component.variants),
@@ -83,6 +93,7 @@ export function extendCanvasSchema(
   baseSchema: unknown,
   operation: SchemaOperation,
   components: SdcComponent[],
+  versions: Map<string, string>,
 ): unknown {
   const schema = cloneSchema(baseSchema);
   const data = ensureObjectProperty(schema, "data");
@@ -92,9 +103,21 @@ export function extendCanvasSchema(
 
   const attributes = ensureObjectProperty(data, "attributes");
   const knownSlots = slotNames(components);
-  const componentItemVariants = [...components]
-    .sort((a, b) => toSdcComponentId(a.id).localeCompare(toSdcComponentId(b.id)))
-    .map((component) => componentItemVariant(component, knownSlots));
+  const sortedComponents = [...components].sort((a, b) =>
+    toSdcComponentId(a.id).localeCompare(toSdcComponentId(b.id)),
+  );
+  // Only components with a Canvas `Component` config entity can be placed:
+  // the server validates component_id against that config and requires its
+  // active version hash on every tree item.
+  const componentItemVariants = sortedComponents
+    .filter((component) => versions.has(toSdcComponentId(component.id)))
+    .map((component) =>
+      componentItemVariant(
+        component,
+        knownSlots,
+        versions.get(toSdcComponentId(component.id)) as string,
+      ),
+    );
 
   attributes.properties.components = {
     type: "array",
@@ -106,7 +129,9 @@ export function extendCanvasSchema(
   };
 
   schema["x-dropsh-builder"] = "canvas";
-  schema["x-dropsh-components"] = components.map(componentMetadata);
+  schema["x-dropsh-components"] = components.map((component) =>
+    componentMetadata(component, versions.get(toSdcComponentId(component.id)) ?? null),
+  );
 
   return schema;
 }

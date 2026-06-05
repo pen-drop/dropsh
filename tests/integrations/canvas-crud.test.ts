@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { parseJson, runCli } from "./helpers/run.js";
 
+interface ComponentItem {
+  uuid: string;
+  component_id: string;
+  component_version: string;
+  parent_uuid?: string | null;
+  slot?: string | null;
+  inputs: Record<string, unknown>;
+  label?: string | null;
+}
+
 interface CanvasPage {
-  data: { id: string; attributes: { title: string; components: unknown[] } };
+  data: { id: string; attributes: { title: string; components: ComponentItem[] } };
+}
+
+interface CanvasSchema {
+  "x-dropsh-components": { id: string; version: string | null }[];
 }
 
 function createPayload(title: string, components: unknown[] = []): string {
@@ -99,5 +113,93 @@ describe("integration: canvas CRUD (canvas_page entity)", () => {
       args: ["read", `canvas_page/canvas_page/${uuid}`],
     });
     expect(afterDelete.code).toBe(5);
+  });
+});
+
+// Regression guard for the component write path. The schema-only test never
+// posted a component, which hid two gaps at once: the server requires
+// component_version (the Canvas component config's active version hash) on
+// every tree item, and the plugin schema used to reject that property via
+// additionalProperties: false — making component writes impossible with
+// client-side validation enabled.
+describe("integration: canvas component round-trip (canvas_page entity)", () => {
+  const componentId = "sdc.olivero.teaser";
+  let version: string;
+  let uuid: string;
+  let componentUuid: string;
+
+  it("schema — exposes the active component version in metadata", async () => {
+    const result = await runCli({
+      site: "canvas",
+      args: ["schema", "canvas_page/canvas_page", "--for=create", "--refresh"],
+    });
+    expect(result.code, result.stderr).toBe(0);
+
+    const schema = parseJson<CanvasSchema>(result.stdout);
+    const teaser = schema["x-dropsh-components"].find((c) => c.id === componentId);
+    expect(teaser, `component ${componentId} missing from schema metadata`).toBeDefined();
+    expect(teaser?.version).toMatch(/^[0-9a-f]{16}$/);
+    version = teaser?.version as string;
+  });
+
+  it("create — POST canvas_page with a component stores the tree item", async () => {
+    expect(version).toBeDefined();
+    componentUuid = crypto.randomUUID();
+
+    const result = await runCli({
+      site: "canvas",
+      args: [
+        "create",
+        "canvas_page",
+        "--bundle=canvas_page",
+        `--data=${createPayload(`it-canvas-component-${componentUuid}`, [
+          {
+            uuid: componentUuid,
+            component_id: componentId,
+            component_version: version,
+            parent_uuid: null,
+            slot: null,
+            inputs: {},
+            label: "Round-trip teaser",
+          },
+        ])}`,
+      ],
+    });
+    expect(result.code, result.stderr).toBe(0);
+
+    const body = parseJson<CanvasPage>(result.stdout);
+    uuid = body.data.id;
+    const item = body.data.attributes.components[0];
+    expect(item?.uuid).toBe(componentUuid);
+    expect(item?.component_id).toBe(componentId);
+    expect(item?.component_version).toBe(version);
+    expect(item?.label).toBe("Round-trip teaser");
+  });
+
+  it("read — GET canvas_page returns the stored component", async () => {
+    expect(uuid).toBeDefined();
+
+    const result = await runCli({
+      site: "canvas",
+      args: ["read", `canvas_page/canvas_page/${uuid}`],
+    });
+    expect(result.code, result.stderr).toBe(0);
+
+    const body = parseJson<CanvasPage>(result.stdout);
+    const item = body.data.attributes.components[0];
+    expect(item?.uuid).toBe(componentUuid);
+    expect(item?.component_id).toBe(componentId);
+    expect(item?.component_version).toBe(version);
+  });
+
+  it("delete — DELETE canvas_page cleans up", async () => {
+    expect(uuid).toBeDefined();
+
+    const deleted = await runCli({
+      site: "canvas",
+      args: ["delete", `canvas_page/canvas_page/${uuid}`],
+    });
+    expect(deleted.code, deleted.stderr).toBe(0);
+    expect(parseJson<{ ok: boolean }>(deleted.stdout).ok).toBe(true);
   });
 });
