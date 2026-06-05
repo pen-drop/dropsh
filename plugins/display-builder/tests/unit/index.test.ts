@@ -153,7 +153,7 @@ describe("displayBuilderPlugin", () => {
     const context = ctx([]);
     const schema = { type: "object" };
 
-    await expect(plugin.extendSchema("node", "article", schema, context)).resolves.toBe(schema);
+    await expect(plugin.extendSchema!("node", "article", schema, context)).resolves.toBe(schema);
   });
 
   it("fetches inactive metadata and returns operation schemas unchanged without fetching SDC", async () => {

@@ -25,7 +25,7 @@ describe("schemataPlugin", () => {
     const plugin = schemataPlugin();
     const schemataSchema = { properties: { data: { type: "object" } } };
     const ctx = makeCtx([{ status: 200, body: JSON.stringify(schemataSchema) }]);
-    const result = await plugin.extendSchema("node", "article", { type: "object" }, ctx);
+    const result = await plugin.extendSchema!("node", "article", { type: "object" }, ctx);
     expect(result).toEqual(schemataSchema);
   });
 
@@ -33,7 +33,7 @@ describe("schemataPlugin", () => {
     const plugin = schemataPlugin();
     const base = { type: "object", properties: {} };
     const ctx = makeCtx([{ status: 404, body: "" }]);
-    const result = await plugin.extendSchema("node", "article", base, ctx);
+    const result = await plugin.extendSchema!("node", "article", base, ctx);
     expect(result).toBe(base);
   });
 
@@ -41,7 +41,7 @@ describe("schemataPlugin", () => {
     const plugin = schemataPlugin();
     const base = { type: "object" };
     const ctx = makeCtx([{ status: 500, body: "error" }]);
-    const result = await plugin.extendSchema("node", "article", base, ctx);
+    const result = await plugin.extendSchema!("node", "article", base, ctx);
     expect(result).toBe(base);
   });
 

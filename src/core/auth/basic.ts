@@ -47,8 +47,5 @@ export function basicAuthPlugin(config: BasicAuthConfig = {}): DropSHPlugin {
     id: "basic",
     requiredModules: [],
     authProvider: basicAuthProvider(config),
-    async extendSchema(_entityType, _bundle, schema, _ctx) {
-      return schema;
-    },
   };
 }

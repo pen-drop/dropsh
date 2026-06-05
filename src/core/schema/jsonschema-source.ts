@@ -55,6 +55,7 @@ export async function fetchJsonSchema(deps: JsonSchemaDeps): Promise<JsonSchemaR
 
   // Run each plugin's extendSchema — a plugin may replace the schema entirely (e.g. schemata)
   for (const plugin of plugins) {
+    if (!plugin.extendSchema) continue;
     const extended = await plugin.extendSchema(entity, bundle, schema, ctx);
     if (extended !== schema) {
       schema = extended;
