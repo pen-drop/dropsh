@@ -7,8 +7,8 @@ eigene `dropsh.config.js` für ein konkretes Integrations-Szenario.
 |-------------|---------------------------------------------|-------------------------------------------|
 | `plain/`    | `http://dropsh-test.ddev.site`              | `oauth2Plugin` (OAuth 2.0 Authcode + PKCE)|
 | `schemata/` | `http://schemata.dropsh-test.ddev.site`     | `basicAuthPlugin` + `schemataPlugin`      |
-| `canvas/`   | `http://canvas.dropsh-test.ddev.site`       | `basicAuthPlugin` + `canvasPlugin`        |
-| `db/`       | `http://db.dropsh-test.ddev.site`           | `basicAuthPlugin` + `displayBuilderPlugin` |
+| `canvas/`   | `http://canvas.dropsh-test.ddev.site`       | `oauth2Plugin` + `canvasPlugin`           |
+| `db/`       | `http://db.dropsh-test.ddev.site`           | `oauth2Plugin` + `displayBuilderPlugin`   |
 
 ## Setup
 
@@ -24,7 +24,7 @@ Zugangsdaten (alle vier Sites teilen dieselben Werte aus der Fixture):
 
 - Admin: `admin / admin`
 - Tester: `tester / tester-pw`
-- OAuth Consumer auf der plain-Site: `tests-authcode`
+- OAuth Consumer (plain, canvas, db): `tests-authcode`
 
 ## plain/ — Basic CRUD + OAuth
 
@@ -72,5 +72,7 @@ Konfiguration:
 
 ```bash
 cd db
+# einmalig: OAuth-Login (öffnet Browser)
+npx dropsh --config dropsh.config.js login
 npx dropsh --config dropsh.config.js schema node/article --for=create
 ```
