@@ -1,27 +1,27 @@
 # dropsh
 
-dropsh is an entity-agnostic CLI for Drupal JSON:API. It gives humans, scripts,
-and AI agents a small command surface for reading, searching, creating, updating,
-deleting, uploading files, authenticating, and asking a Drupal site for schemas.
+dropsh is a CLI for Drupal JSON:API with JSON Schema output and request
+validation. It is meant to give agents enough structure to build reliable Drupal
+payloads instead of guessing field names, required properties, component shapes,
+or authentication details.
 
-The core idea is simple: Drupal remains the source of truth, JSON:API remains the
-transport, and dropsh provides the repeatable shell interface around it. Plugins
-add site-specific knowledge such as OAuth2 authentication, authoritative Drupal
-schemas, Canvas component schemas, or Display Builder metadata.
+The CLI can read and search existing content, print schemas for create and update
+payloads, validate data locally, and then send the JSON:API request. Plugins add
+the Drupal-specific schema sources and builder metadata an agent needs for more
+complex sites.
 
 ## Concept
 
-dropsh is built for editorial and automation workflows where a tool needs to work
-with Drupal content without hard-coding every content model.
+dropsh is built for workflows where an agent or script needs to work with Drupal
+content without hard-coding every content model.
 
-- Commands operate on JSON:API resource targets like `node/article` or
-  `node/article/<uuid>`.
-- Authentication is provider-based. You configure available providers once, then
-  log in per host.
-- Schema output lets clients validate payloads before sending `create` or
-  `update` requests.
-- Plugins extend dropsh without forking the CLI.
-- Agent skills can call dropsh commands as their Drupal execution layer.
+- `dropsh schema` returns JSON Schema for targets like `node/article`.
+- `create` and `update` validate payloads before sending them to Drupal.
+- Agents can inspect existing records with `search` and `read` before generating
+  new data.
+- Plugins can replace shallow inferred schemas with authoritative Drupal schemas
+  or builder-specific component metadata.
+- A skill can use dropsh as its Drupal execution layer and focus on the workflow.
 
 ## Install
 
