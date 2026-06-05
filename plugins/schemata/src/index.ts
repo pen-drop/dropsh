@@ -5,7 +5,7 @@ import { fetchSchemata, SCHEMATA_MISS } from "./schemata.js";
 export function schemataPlugin(): DropSHPlugin {
   return {
     id: "schemata",
-    requiredModules: ["schemata", "jsonapi_schema"],
+    requiredModules: ["schemata", "schemata_json_schema"],
 
     async extendSchema(
       entityType: string,

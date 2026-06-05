@@ -49,8 +49,8 @@ describe("schemataPlugin", () => {
     expect(schemataPlugin().id).toBe("schemata");
   });
 
-  it("requiredModules includes schemata and jsonapi_schema", () => {
+  it("requiredModules includes schemata and schemata_json_schema", () => {
     expect(schemataPlugin().requiredModules).toContain("schemata");
-    expect(schemataPlugin().requiredModules).toContain("jsonapi_schema");
+    expect(schemataPlugin().requiredModules).toContain("schemata_json_schema");
   });
 });

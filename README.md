@@ -55,9 +55,43 @@ Optional modules unlock stricter schemas or builder-specific support:
 | Feature | Drupal modules |
 | --- | --- |
 | OAuth2 login | `simple_oauth` |
-| Authoritative schemas | `schemata`, `jsonapi_schema` |
+| Authoritative schemas | `schemata`, `schemata_json_schema` |
 | Canvas schemas | `canvas`, `jsonapi_sdc` |
 | Display Builder schemas | `display_builder`, `display_builder_entity_view`, `jsonapi_sdc` |
+
+dropsh works without the Schemata modules. In that case, `dropsh schema` falls
+back to a shallow schema inferred from JSON:API sample records. Installing
+`schemata` and `schemata_json_schema` lets `@dropsh/plugin-schemata` return a
+more precise schema with Drupal's required fields and constraints.
+
+### Installing the Drupal modules
+
+JSON:API ships with Drupal core; enable it together with the optional modules
+you need:
+
+```bash
+# Minimum: JSON:API (Drupal core)
+drush en jsonapi
+
+# Optional: OAuth2 login
+composer require drupal/simple_oauth
+drush en simple_oauth
+
+# Optional: authoritative schemas (schemata_json_schema is a submodule
+# of the schemata project)
+composer require drupal/schemata
+drush en schemata schemata_json_schema
+drush role:perm:add "content_editor" "access schemata data models"
+```
+
+Grant `access schemata data models` to the role used by dropsh. For OAuth2, that
+means the user role or client credential access context that reads the Schemata
+endpoint.
+
+By default JSON:API only accepts read operations. To create, update, or delete
+entities through dropsh, set **Accept all JSON:API create, read, update, and
+delete operations** at `/admin/config/services/jsonapi` (or via
+`drush config:set jsonapi.settings read_only 0`).
 
 ## Configuration
 
@@ -140,10 +174,11 @@ A plugin can contribute one or more of these capabilities:
 - additional CLI commands
 
 Schema plugins are the main way to make dropsh useful for agents on real sites.
-They can add required fields, component definitions, builder-specific structures,
-allowed values, and other metadata that helps the agent produce a valid payload.
-Auth plugins keep the same command interface while supporting common Drupal
-authentication systems such as basic auth or OAuth2.
+dropsh can generate a basic schema without them, but plugins can make that schema
+more precise by adding required fields, component definitions, builder-specific
+structures, allowed values, and other metadata that helps the agent produce a
+valid payload. Auth plugins keep the same command interface while supporting
+common Drupal authentication systems such as basic auth or OAuth2.
 
 Bundled plugins:
 
