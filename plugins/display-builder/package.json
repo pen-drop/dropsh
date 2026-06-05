@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/plugin-display-builder",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/plugins/display-builder/src/index.js",
   "exports": {
