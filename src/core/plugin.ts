@@ -16,7 +16,11 @@ export interface DropSHPlugin {
   readonly requiredModules: string[];
   /** Provider-based auth (login/logout/status/createAdapter). */
   authProvider?: AuthProvider;
-  extendSchema(
+  /**
+   * Optional schema extension. Plugins that contribute other capabilities
+   * (auth, commands, or consumer-defined slots) can omit it.
+   */
+  extendSchema?(
     entityType: string,
     bundle: string,
     baseSchema: unknown,

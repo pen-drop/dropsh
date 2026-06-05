@@ -97,7 +97,7 @@ describe("canvasPlugin", () => {
     const schema = { type: "object" };
 
     await expect(
-      plugin.extendSchema("canvas_page", "canvas_page", schema, {} as any),
+      plugin.extendSchema!("canvas_page", "canvas_page", schema, {} as any),
     ).resolves.toBe(schema);
   });
 

@@ -165,7 +165,7 @@ Pass `--no-validate` when you intentionally want to skip local validation.
 
 ## Plugins
 
-Plugins are regular JavaScript or TypeScript modules that return a `DropSHPlugin`.
+Plugins are regular JavaScript or TypeScript modules that return a `dropshPlugin`.
 A plugin can contribute one or more of these capabilities:
 
 - an auth provider
@@ -192,9 +192,9 @@ Bundled plugins:
 Plugin APIs are exported from `dropsh/plugin`:
 
 ```ts
-import type { DropSHPlugin } from "dropsh/plugin";
+import type { dropshPlugin } from "dropsh/plugin";
 
-export function examplePlugin(): DropSHPlugin {
+export function examplePlugin(): dropshPlugin {
   return {
     id: "example",
     requiredModules: [],
@@ -217,36 +217,19 @@ export default {
 };
 ```
 
-## Example Skill
+## Example Skills
 
-A dropsh skill does not need to know Drupal internals. It can describe when to use
-the CLI, which config to load, and which commands to run for a workflow.
+A dropsh skill does not need to know every Drupal internal. Keep `SKILL.md` as a
+small orchestrator that decides when the skill applies, which dropsh plugins are
+expected, and which workflow file to load. Put the concrete command sequences,
+schema checks, payload rules, and error handling into separate workflow files.
 
-Minimal starting point for your own skill:
+See [docs/examples/skills](docs/examples/skills/README.md) for three example
+skill structures:
 
-```md
-# Drupal Publishing Skill
-
-Use dropsh for Drupal content operations.
-
-## Setup
-
-- Run commands from the project that contains `dropsh.config.js`.
-- If authentication is missing, run `dropsh auth login`.
-- Use `dropsh schema <entity_type>/<bundle> --for=create` before creating new
-  content.
-
-## Workflow
-
-1. Search existing content with `dropsh search`.
-2. Read full records with `dropsh read`.
-3. Validate planned payloads against `dropsh schema`.
-4. Create or update with `dropsh create` or `dropsh update`.
-5. Use `--dry-run` before destructive or high-impact changes.
-```
-
-Keep the skill focused on the workflow and let dropsh handle transport,
-authentication, schemas, and validation.
+- Article publishing over standard JSON:API nodes
+- Canvas pages driven by component schemas
+- Display Builder pages driven by display metadata and override fields
 
 ## Development
 

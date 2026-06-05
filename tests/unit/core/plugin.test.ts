@@ -17,7 +17,7 @@ describe("DropSHPlugin interface", () => {
     expect(plugin.id).toBe("test");
     expect(plugin.requiredModules).toEqual(["some_module"]);
     const schema = { type: "object" };
-    const extended = await plugin.extendSchema("node", "article", schema, ctx);
+    const extended = await plugin.extendSchema!("node", "article", schema, ctx);
     expect(extended).toBe(schema);
   });
 
@@ -25,9 +25,9 @@ describe("DropSHPlugin interface", () => {
     const plugin: DropSHPlugin = {
       id: "minimal",
       requiredModules: [],
-      async extendSchema(_e, _b, s) { return s; },
     };
     expect(plugin.authProvider).toBeUndefined();
+    expect(plugin.extendSchema).toBeUndefined();
     expect(plugin.registerCommands).toBeUndefined();
   });
 
