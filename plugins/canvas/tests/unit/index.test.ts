@@ -2,12 +2,17 @@ import { HttpError, type PluginContext } from "dropsh/plugin";
 import { describe, expect, it, vi } from "vitest";
 import { canvasPlugin } from "../../src/index.js";
 
-function ctx(responses: Array<{ status: number; body: string }>): PluginContext {
-  let i = 0;
+function ctx(responsesByUrl: Record<string, { status: number; body: string }>): PluginContext {
   return {
     http: {
-      send: vi.fn(async () => {
-        const r = responses[i++]!;
+      send: vi.fn(async (req: { url: string }) => {
+        const match = Object.entries(responsesByUrl).find(([fragment]) =>
+          req.url.includes(fragment),
+        );
+        if (!match) {
+          throw new HttpError(404, "HTTP 404", `no mock for ${req.url}`);
+        }
+        const r = match[1];
         if (r.status >= 200 && r.status < 300) {
           return { status: r.status, headers: {}, body: r.body };
         }
@@ -65,6 +70,20 @@ const sdcResponse = {
   ],
 };
 
+const componentConfigResponse = {
+  data: [
+    {
+      type: "component--component",
+      id: "44463ffa-8bbe-4933-9655-f4743c00e67c",
+      attributes: {
+        drupal_internal__id: "sdc.olivero.teaser",
+        active_version: "1ffd95fb3b766ab6",
+        status: true,
+      },
+    },
+  ],
+};
+
 describe("canvasPlugin", () => {
   it("requires Canvas and JSON:API SDC Drupal modules", () => {
     const plugin = canvasPlugin();
@@ -84,7 +103,7 @@ describe("canvasPlugin", () => {
 
   it("returns unrelated operation target schemas unchanged without fetching SDC", async () => {
     const plugin = canvasPlugin();
-    const context = ctx([]);
+    const context = ctx({});
     const schema = { type: "object" };
 
     await expect(
@@ -93,9 +112,15 @@ describe("canvasPlugin", () => {
     expect(context.http.send).not.toHaveBeenCalled();
   });
 
-  it("fetches SDC and enriches canvas_page operation schemas", async () => {
+  it("fetches SDC plus component versions and enriches canvas_page operation schemas", async () => {
     const plugin = canvasPlugin();
-    const context = ctx([{ status: 200, body: JSON.stringify(sdcResponse) }]);
+    const context = ctx({
+      "/jsonapi/sdc_component": { status: 200, body: JSON.stringify(sdcResponse) },
+      "/jsonapi/component/component": {
+        status: 200,
+        body: JSON.stringify(componentConfigResponse),
+      },
+    });
 
     const schema = (await plugin.extendOperationSchema!(
       "canvas_page",
@@ -105,19 +130,27 @@ describe("canvasPlugin", () => {
       context,
     )) as any;
 
-    expect(context.http.send).toHaveBeenCalledTimes(1);
+    expect(context.http.send).toHaveBeenCalledTimes(2);
     expect(schema).not.toBe(operationSchema);
     expect(schema["x-dropsh-builder"]).toBe("canvas");
     expect(schema["x-dropsh-components"][0].id).toBe("sdc.olivero.teaser");
-    expect(
-      schema.properties.data.properties.attributes.properties.components.items.oneOf[0].properties
-        .component_id.const,
-    ).toBe("sdc.olivero.teaser");
+    expect(schema["x-dropsh-components"][0].version).toBe("1ffd95fb3b766ab6");
+    const componentItem =
+      schema.properties.data.properties.attributes.properties.components.items.oneOf[0];
+    expect(componentItem.properties.component_id.const).toBe("sdc.olivero.teaser");
+    expect(componentItem.properties.component_version.const).toBe("1ffd95fb3b766ab6");
+    expect(componentItem.required).toContain("component_version");
   });
 
   it("propagates a clear missing module message when jsonapi_sdc returns 404", async () => {
     const plugin = canvasPlugin();
-    const context = ctx([{ status: 404, body: "not found" }]);
+    const context = ctx({
+      "/jsonapi/sdc_component": { status: 404, body: "not found" },
+      "/jsonapi/component/component": {
+        status: 200,
+        body: JSON.stringify(componentConfigResponse),
+      },
+    });
 
     await expect(
       plugin.extendOperationSchema!(
@@ -131,7 +164,8 @@ describe("canvasPlugin", () => {
       code: "E_HTTP",
       status: 404,
       body: "not found",
-      message: "Canvas plugin requires Drupal module jsonapi_sdc to build component schemas.",
+      message:
+        "Canvas plugin requires Drupal modules canvas and jsonapi_sdc to build component schemas.",
     });
   });
 });

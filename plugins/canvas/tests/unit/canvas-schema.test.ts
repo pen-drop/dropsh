@@ -67,9 +67,14 @@ const hero: SdcComponent = {
   variants: {},
 };
 
+const versions = new Map([
+  ["sdc.olivero.teaser", "1ffd95fb3b766ab6"],
+  ["sdc.my_theme.hero_card", "a1b2c3d4e5f60718"],
+]);
+
 describe("extendCanvasSchema", () => {
   it("adds Canvas component payload structure and metadata", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as any;
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero], versions) as any;
 
     const attrs = schema.properties.data.properties.attributes;
     const components = attrs.properties.components;
@@ -84,6 +89,7 @@ describe("extendCanvasSchema", () => {
         description: "A teaser component.",
         provider: "olivero",
         status: "stable",
+        version: "1ffd95fb3b766ab6",
         props: teaser.props,
         slots: teaser.slots,
         variants: teaser.variants,
@@ -95,6 +101,7 @@ describe("extendCanvasSchema", () => {
         description: "A hero component.",
         provider: "my_theme",
         status: "experimental",
+        version: "a1b2c3d4e5f60718",
         props: hero.props,
         slots: hero.slots,
         variants: hero.variants,
@@ -103,14 +110,20 @@ describe("extendCanvasSchema", () => {
     expect(components.type).toBe("array");
     expect(componentItem.oneOf).toHaveLength(2);
     expect(componentItem.oneOf[0].additionalProperties).toBe(false);
-    expect(componentItem.oneOf[0].required).toEqual(["uuid", "component_id", "inputs"]);
+    expect(componentItem.oneOf[0].required).toEqual([
+      "uuid",
+      "component_id",
+      "component_version",
+      "inputs",
+    ]);
     expect(componentItem.oneOf[0].properties.component_id.const).toBe("sdc.my_theme.hero_card");
     expect(componentItem.oneOf[1].properties.component_id.const).toBe("sdc.olivero.teaser");
     expect(componentItem.oneOf.map((item: any) => item.properties.component_id.const)).toEqual([
       "sdc.my_theme.hero_card",
       "sdc.olivero.teaser",
     ]);
-    expect(componentItem.oneOf[1].properties.component_version).toBeUndefined();
+    expect(componentItem.oneOf[0].properties.component_version.const).toBe("a1b2c3d4e5f60718");
+    expect(componentItem.oneOf[1].properties.component_version.const).toBe("1ffd95fb3b766ab6");
     expect(componentItem.oneOf[1].properties.inputs_resolved).toBeUndefined();
     expect(componentItem.oneOf[1].properties.slot.enum).toEqual([null, "content", "media"]);
     expect(componentItem.oneOf[1].properties.slot.description).toContain("content");
@@ -119,9 +132,24 @@ describe("extendCanvasSchema", () => {
     expect(componentItem.oneOf[1].properties.inputs.required).toEqual(["title"]);
   });
 
+  it("excludes components without a Component config entity from placement", () => {
+    const teaserOnly = new Map([["sdc.olivero.teaser", "1ffd95fb3b766ab6"]]);
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero], teaserOnly) as any;
+
+    const componentItem = schema.properties.data.properties.attributes.properties.components.items;
+    expect(componentItem.oneOf).toHaveLength(1);
+    expect(componentItem.oneOf[0].properties.component_id.const).toBe("sdc.olivero.teaser");
+
+    // Metadata still lists the component so clients can see it exists.
+    const heroMeta = schema["x-dropsh-components"].find(
+      (c: any) => c.id === "sdc.my_theme.hero_card",
+    );
+    expect(heroMeta.version).toBeNull();
+  });
+
   it("preserves create schema requirements and marks id as required only for update schemas", () => {
-    const createSchema = extendCanvasSchema(baseSchema, "create", [teaser]) as any;
-    const updateSchema = extendCanvasSchema(baseSchema, "update", [teaser]) as any;
+    const createSchema = extendCanvasSchema(baseSchema, "create", [teaser], versions) as any;
+    const updateSchema = extendCanvasSchema(baseSchema, "update", [teaser], versions) as any;
 
     expect(createSchema.properties.data.required).toEqual(["type"]);
     expect(updateSchema.properties.data.required).toEqual(["type", "id"]);
@@ -139,13 +167,13 @@ describe("extendCanvasSchema", () => {
       },
     };
 
-    const schema = extendCanvasSchema(sparseSchema, "create", [teaser]) as any;
+    const schema = extendCanvasSchema(sparseSchema, "create", [teaser], versions) as any;
 
     expect(schema.properties.data.properties.attributes.properties.components.type).toBe("array");
   });
 
   it("deep-clones the base schema before extending it", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser]) as any;
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser], versions) as any;
 
     schema.properties.data.properties.attributes.properties.title.type = "number";
 
@@ -156,7 +184,7 @@ describe("extendCanvasSchema", () => {
   });
 
   it("deep-clones component-derived schemas and metadata before embedding them", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser]) as any;
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser], versions) as any;
 
     schema["x-dropsh-components"][0].props.properties.title.type = "number";
     schema["x-dropsh-components"][0].slots.content.title = "Changed";
@@ -173,7 +201,37 @@ describe("extendCanvasSchema", () => {
   });
 
   it("compiles with Ajv and validates a discriminated component payload", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as Record<
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero], versions) as Record<
+      string,
+      unknown
+    >;
+    const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false, logger: false });
+    const validate = ajv.compile(schema);
+
+    expect(
+      validate({
+        data: {
+          type: "canvas_page--canvas_page",
+          attributes: {
+            components: [
+              {
+                uuid: "11111111-1111-4111-8111-111111111111",
+                component_id: "sdc.olivero.teaser",
+                component_version: "1ffd95fb3b766ab6",
+                parent_uuid: null,
+                slot: null,
+                inputs: { title: "Hello" },
+                label: "Intro teaser",
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects a component payload without component_version", () => {
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero], versions) as Record<
       string,
       unknown
     >;
@@ -192,17 +250,16 @@ describe("extendCanvasSchema", () => {
                 parent_uuid: null,
                 slot: null,
                 inputs: { title: "Hello" },
-                label: "Intro teaser",
               },
             ],
           },
         },
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("rejects misspelled slots", () => {
-    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero]) as Record<
+    const schema = extendCanvasSchema(baseSchema, "create", [teaser, hero], versions) as Record<
       string,
       unknown
     >;
@@ -218,6 +275,7 @@ describe("extendCanvasSchema", () => {
               {
                 uuid: "11111111-1111-4111-8111-111111111111",
                 component_id: "sdc.olivero.teaser",
+                component_version: "1ffd95fb3b766ab6",
                 parent_uuid: null,
                 slot: "contents",
                 inputs: { title: "Hello" },
