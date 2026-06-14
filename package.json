@@ -1,6 +1,6 @@
 {
   "name": "dropsh",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the dropsh Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
