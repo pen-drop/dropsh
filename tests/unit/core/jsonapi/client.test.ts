@@ -73,3 +73,151 @@ describe("JsonApiClient", () => {
     expect(res).toEqual({ data: { id: "file-uuid" } });
   });
 });
+
+describe("JsonApiClient ergonomic layer", () => {
+  it("resource() GETs entity/bundle/<id> and maps to a Resource", async () => {
+    const http = httpStub((req) => {
+      expect(req.method).toBe("GET");
+      expect(req.url).toBe("https://site/jsonapi/gaia_run/gaia_run/r1");
+      return {
+        status: 200,
+        body: '{"data":{"id":"r1","type":"gaia_run--gaia_run","attributes":{"title":"T"}}}',
+      };
+    });
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    const r = await client.resource("gaia_run", "r1");
+    expect(r.id).toBe("r1");
+    expect(r.attr("title")).toBe("T");
+  });
+
+  it("create() POSTs a {data:{type,...}} envelope and returns a Resource", async () => {
+    const http = httpStub((req) => {
+      expect(req.method).toBe("POST");
+      expect(req.url).toBe("https://site/jsonapi/node/article");
+      expect(JSON.parse(req.body as string)).toEqual({
+        data: { type: "node--article", attributes: { title: "New" } },
+      });
+      return {
+        status: 201,
+        body: '{"data":{"id":"n1","type":"node--article","attributes":{"title":"New"}}}',
+      };
+    });
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    const r = await client.create("node/article", { attributes: { title: "New" } });
+    expect(r.id).toBe("n1");
+    expect(r.attr("title")).toBe("New");
+  });
+
+  it("update() PATCHes entity/bundle/<id> with a {data:{type,id,...}} envelope", async () => {
+    const calls: HttpRequest[] = [];
+    const http: HttpClient = {
+      async send(req) {
+        calls.push(req);
+        return {
+          status: 200,
+          headers: {},
+          body: '{"data":{"id":"n1","type":"node--article","attributes":{"title":"Up"}}}',
+        };
+      },
+    };
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    const r = await client.update("node/article", "n1", { attributes: { title: "Up" } });
+    expect(calls[0]!.method).toBe("PATCH");
+    expect(calls[0]!.url).toBe("https://site/jsonapi/node/article/n1");
+    expect(JSON.parse(calls[0]!.body as string)).toEqual({
+      data: { type: "node--article", id: "n1", attributes: { title: "Up" } },
+    });
+    expect(r.attr("title")).toBe("Up");
+  });
+
+  it("upsert() PATCHes the existing match when one is found", async () => {
+    const calls: HttpRequest[] = [];
+    const http: HttpClient = {
+      async send(req) {
+        calls.push(req);
+        if (req.method === "GET") {
+          return {
+            status: 200,
+            headers: {},
+            body: '{"data":[{"id":"n1","type":"node--article","attributes":{"title":"Old"}}]}',
+          };
+        }
+        return {
+          status: 200,
+          headers: {},
+          body: '{"data":{"id":"n1","type":"node--article","attributes":{"title":"Merged"}}}',
+        };
+      },
+    };
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    const r = await client.upsert(
+      "node/article",
+      { path: "field_key", value: "k" },
+      { attributes: { title: "Merged" } },
+    );
+    expect(calls[0]!.method).toBe("GET");
+    expect(decodeURIComponent(calls[0]!.url)).toContain("filter[field_key]=k");
+    expect(decodeURIComponent(calls[0]!.url)).toContain("page[limit]=1");
+    expect(calls[1]!.method).toBe("PATCH");
+    expect(calls[1]!.url).toBe("https://site/jsonapi/node/article/n1");
+    expect(r.attr("title")).toBe("Merged");
+  });
+
+  it("upsert() POSTs a new resource when no match is found", async () => {
+    const calls: HttpRequest[] = [];
+    const http: HttpClient = {
+      async send(req) {
+        calls.push(req);
+        if (req.method === "GET") {
+          return { status: 200, headers: {}, body: '{"data":[]}' };
+        }
+        return {
+          status: 201,
+          headers: {},
+          body: '{"data":{"id":"n2","type":"node--article","attributes":{"title":"Fresh"}}}',
+        };
+      },
+    };
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    const r = await client.upsert(
+      "node/article",
+      { path: "field_key", value: "k" },
+      { attributes: { title: "Fresh" } },
+    );
+    expect(calls[0]!.method).toBe("GET");
+    expect(calls[1]!.method).toBe("POST");
+    expect(calls[1]!.url).toBe("https://site/jsonapi/node/article");
+    expect(JSON.parse(calls[1]!.body as string)).toEqual({
+      data: { type: "node--article", attributes: { title: "Fresh" } },
+    });
+    expect(r.id).toBe("n2");
+  });
+
+  it("me() reads the uuid from meta.links.me.meta.id", async () => {
+    const http = httpStub((req) => {
+      expect(req.method).toBe("GET");
+      expect(req.url).toBe("https://site/jsonapi/");
+      return {
+        status: 200,
+        body: '{"meta":{"links":{"me":{"href":"https://site/jsonapi/user/user/uuid-123","meta":{"id":"uuid-123"}}}}}',
+      };
+    });
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    expect(await client.me()).toBe("uuid-123");
+  });
+
+  it("me() falls back to the last path segment of meta.links.me.href", async () => {
+    const http = httpStub(() => ({
+      status: 200,
+      body: '{"meta":{"links":{"me":{"href":"https://site/jsonapi/user/user/uuid-456"}}}}',
+    }));
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    expect(await client.me()).toBe("uuid-456");
+  });
+
+  it("me() throws when meta.links.me is absent", async () => {
+    const http = httpStub(() => ({ status: 200, body: '{"meta":{"links":{}}}' }));
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: passthroughAuth });
+    await expect(client.me()).rejects.toThrow();
+  });
+});

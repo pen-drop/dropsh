@@ -7,6 +7,7 @@ function client(): JsonApiClient {
   return {
     get: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn(),
     post: vi.fn(async () => ({ data: { id: "new-uuid" } })),
+    collection: vi.fn(), resource: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn(), me: vi.fn(),
   };
 }
 
