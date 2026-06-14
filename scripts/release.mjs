@@ -44,4 +44,15 @@ run("git", ["tag", tag]);
 // prepublishOnly runs typecheck + build before each package is published.
 run("pnpm", ["-r", "--include-workspace-root", "publish", "--no-git-checks"]);
 
-console.log(`\nReleased ${answer}. Push with: git push --follow-tags`);
+console.log(`\nReleased ${answer}.`);
+
+const pushRl = createInterface({ input: stdin, output: stdout });
+const push = (await pushRl.question(`Push commit and tag ${tag} now? [y/N]: `)).trim().toLowerCase();
+pushRl.close();
+
+if (push === "y" || push === "yes") {
+  run("git", ["push", "--follow-tags"]);
+  console.log("Pushed.");
+} else {
+  console.log(`Skipped. Push later with: git push --follow-tags`);
+}
