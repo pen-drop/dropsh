@@ -31,7 +31,7 @@
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
     "prepublishOnly": "pnpm run typecheck && pnpm run build",
-    "release": "pnpm -r --include-workspace-root publish --no-git-checks"
+    "release": "node scripts/release.mjs"
   },
   "keywords": [
     "drupal",
@@ -63,7 +63,9 @@
     "vitest": "^4.1.8"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"],
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
     "overrides": {
       "fast-uri": "^3.1.2",
       "qs": "^6.15.2",
