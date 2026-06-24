@@ -75,7 +75,8 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
         });
       }
       const params = new URLSearchParams({ client_id: cfg.client_id });
-      const secret = cfg.client_secret ?? (await ctx.prompt({ label: "Client secret", secret: true }));
+      const secret =
+        cfg.client_secret ?? (await ctx.prompt({ label: "Client secret", secret: true }));
       params.set("client_secret", secret);
       if (cfg.type === "oauth2_password") {
         const password = await ctx.prompt({ label: "Password", secret: true });
@@ -167,7 +168,10 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
           if (typeof token === "string" && expiresAt - 30_000 > rt.now())
             return { ...req, headers: bearer(req, token) };
           // Coalesce concurrent renewals so we hit the token endpoint once.
-          if (!inflight) inflight = renew().finally(() => { inflight = null; });
+          if (!inflight)
+            inflight = renew().finally(() => {
+              inflight = null;
+            });
           await inflight;
           return { ...req, headers: bearer(req, current.access_token as string) };
         },
