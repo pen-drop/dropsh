@@ -16,9 +16,9 @@ import {
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
-import { collectProviders, providerById } from "./core/auth/registry.js";
+import { collectProviders, providerById, sessionlessProvider } from "./core/auth/registry.js";
 import { readSession, writeSession } from "./core/auth/session-store.js";
-import type { AuthAdapter } from "./core/auth/types.js";
+import type { AuthAdapter, AuthStatusInfo } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
 import { createPrompt } from "./core/cli/prompt.js";
@@ -64,15 +64,46 @@ export interface ResolveAuthDeps {
 }
 
 export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
+  const providers = collectProviders(deps.plugins);
   const rec = await readSession(deps.baseUrl, deps.stateDir);
-  if (!rec) throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
-  const provider = providerById(collectProviders(deps.plugins), rec.activeProvider);
+  if (!rec) {
+    const sessionless = sessionlessProvider(providers);
+    if (sessionless) {
+      return sessionless.createAdapter(undefined, {
+        http: deps.http,
+        now: deps.now,
+        save: async () => {},
+      });
+    }
+    throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
+  }
+  const provider = providerById(providers, rec.activeProvider);
   if (!provider) throw new ConfigError(`active provider '${rec.activeProvider}' is not configured`);
   return provider.createAdapter(rec.session, {
     http: deps.http,
     now: deps.now,
     save: (session) => writeSession(deps.baseUrl, provider.id, session, deps.stateDir),
   });
+}
+
+export interface AuthStatusDeps {
+  baseUrl: string;
+  plugins: DropSHPlugin[];
+  stateDir?: string;
+}
+
+export async function authStatus(deps: AuthStatusDeps): Promise<AuthStatusInfo> {
+  const providers = collectProviders(deps.plugins);
+  const rec = await readSession(deps.baseUrl, deps.stateDir);
+  if (!rec) {
+    const sessionless = sessionlessProvider(providers);
+    return sessionless
+      ? { loggedIn: true, provider: sessionless.id, sessionless: true }
+      : { loggedIn: false };
+  }
+  const provider = providerById(providers, rec.activeProvider);
+  if (!provider) return { loggedIn: false };
+  return provider.status(rec.session);
 }
 
 async function defaultContext(configPath: string): Promise<CommandContext> {

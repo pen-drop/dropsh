@@ -13,6 +13,7 @@ export interface AuthStatusInfo {
   host?: string;
   expiresAt?: number;
   state?: "valid" | "expired";
+  sessionless?: boolean;
 }
 
 /** I/O the core supplies to a provider during login/logout so providers stay testable. */
@@ -42,5 +43,5 @@ export interface AuthProvider {
   login(ctx: AuthContext): Promise<AuthSession>;
   logout(ctx: AuthContext): Promise<void>;
   status(session: AuthSession | null): Promise<AuthStatusInfo>;
-  createAdapter(session: AuthSession, rt: AdapterRuntime): AuthAdapter;
+  createAdapter(session: AuthSession | undefined, rt: AdapterRuntime): AuthAdapter;
 }
