@@ -21,5 +21,6 @@ export function providerById(providers: AuthProvider[], id: string): AuthProvide
 export function sessionlessProvider(providers: AuthProvider[]): AuthProvider | undefined {
   if (providers.length !== 1) return undefined;
   const only = providers[0];
+  if (!only) return undefined;
   return only.capabilities.login === false ? only : undefined;
 }

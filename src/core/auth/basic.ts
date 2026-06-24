@@ -34,7 +34,7 @@ export function basicAuthProvider(config: BasicAuthConfig = {}): AuthProvider {
     async status(session) {
       return { loggedIn: session !== null, provider: "basic" };
     },
-    createAdapter(session): AuthAdapter {
+    createAdapter(session: AuthSession): AuthAdapter {
       const b64 = session.basic_b64;
       if (typeof b64 !== "string") throw new ConfigError("basic auth: corrupt session");
       return adapterFromB64(b64);

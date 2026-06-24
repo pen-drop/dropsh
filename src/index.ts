@@ -16,7 +16,7 @@ import {
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
-import { collectProviders, providerById } from "./core/auth/registry.js";
+import { collectProviders, providerById, sessionlessProvider } from "./core/auth/registry.js";
 import { readSession, writeSession } from "./core/auth/session-store.js";
 import type { AuthAdapter } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
@@ -64,9 +64,20 @@ export interface ResolveAuthDeps {
 }
 
 export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
+  const providers = collectProviders(deps.plugins);
   const rec = await readSession(deps.baseUrl, deps.stateDir);
-  if (!rec) throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
-  const provider = providerById(collectProviders(deps.plugins), rec.activeProvider);
+  if (!rec) {
+    const sessionless = sessionlessProvider(providers);
+    if (sessionless) {
+      return sessionless.createAdapter(undefined, {
+        http: deps.http,
+        now: deps.now,
+        save: async () => {},
+      });
+    }
+    throw new AuthError("Not authenticated. Run 'dropsh auth login'.");
+  }
+  const provider = providerById(providers, rec.activeProvider);
   if (!provider) throw new ConfigError(`active provider '${rec.activeProvider}' is not configured`);
   return provider.createAdapter(rec.session, {
     http: deps.http,

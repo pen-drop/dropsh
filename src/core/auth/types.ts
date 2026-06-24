@@ -42,5 +42,5 @@ export interface AuthProvider {
   login(ctx: AuthContext): Promise<AuthSession>;
   logout(ctx: AuthContext): Promise<void>;
   status(session: AuthSession | null): Promise<AuthStatusInfo>;
-  createAdapter(session: AuthSession, rt: AdapterRuntime): AuthAdapter;
+  createAdapter(session: AuthSession | undefined, rt: AdapterRuntime): AuthAdapter;
 }
