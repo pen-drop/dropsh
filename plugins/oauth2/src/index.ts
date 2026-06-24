@@ -9,12 +9,14 @@ export type OAuth2Config =
       username: string;
       token_url: string;
       scope?: string;
+      client_secret?: string;
     }
   | {
       type: "oauth2_client_credentials";
       client_id: string;
       token_url: string;
       scope?: string;
+      client_secret?: string;
     }
   | {
       type: "oauth2_authcode";

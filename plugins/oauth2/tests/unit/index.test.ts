@@ -12,6 +12,17 @@ describe("oauth2Plugin", () => {
     expect(plugin.requiredModules).toContain("simple_oauth");
   });
 
+  it("accepts client_secret in oauth2_client_credentials config", () => {
+    const plugin = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "c",
+      token_url: "https://x/oauth/token",
+      client_secret: "shh",
+    });
+    expect(plugin.id).toBe("oauth2");
+    expect(plugin.authProvider?.id).toBe("oauth2_client_credentials");
+  });
+
   it("validates required fields", () => {
     expect(() =>
       oauth2Plugin({ type: "oauth2_authcode", client_id: "", token_url: "https://x/oauth/token" }),

@@ -1,4 +1,4 @@
-import type { AuthContext, HttpClient } from "dropsh/plugin";
+import type { AuthContext, HttpClient, HttpRequest } from "dropsh/plugin";
 import { AuthError } from "dropsh/plugin";
 import { describe, expect, it, vi } from "vitest";
 import { oauth2Plugin } from "../../src/index.js";
@@ -97,6 +97,73 @@ describe("oauth2 provider — refresh", () => {
     expect(req.headers?.Authorization).toBe("Bearer fresh");
     expect(save).toHaveBeenCalledOnce();
     expect(save.mock.calls[0]?.[0]?.access_token).toBe("fresh");
+  });
+});
+
+describe("oauth2 provider — client_credentials headless", () => {
+  it("login uses cfg.client_secret without prompting", async () => {
+    const send = vi.fn(async (_req: HttpRequest) => ({
+      status: 200,
+      headers: {},
+      body: JSON.stringify({ access_token: "tok", expires_in: 3600 }),
+    }));
+    const prompt = vi.fn(async () => {
+      throw new Error("should not prompt");
+    });
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "c",
+      token_url: "https://x/token",
+      client_secret: "shh",
+    }).authProvider!;
+    const session = await provider.login(
+      ctx({ http: { send }, prompt }),
+    );
+    expect(prompt).not.toHaveBeenCalled();
+    expect(session.access_token).toBe("tok");
+    const body = send.mock.calls[0]?.[0]?.body ?? "";
+    expect(body).toContain("grant_type=client_credentials");
+    expect(body).toContain("client_secret=shh");
+  });
+
+  it("createAdapter re-mints on expiry from client_secret", async () => {
+    const send = vi.fn(async (_req: HttpRequest) => ({
+      status: 200,
+      headers: {},
+      body: JSON.stringify({ access_token: "fresh", expires_in: 3600 }),
+    }));
+    const saved: unknown[] = [];
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "c",
+      token_url: "https://x/token",
+      client_secret: "shh",
+    }).authProvider!;
+    const adapter = provider.createAdapter(
+      { access_token: "stale", expires_at: 0 },
+      { http: { send }, now: () => 1_000_000, save: async (s) => { saved.push(s); } },
+    );
+    const out = await adapter.apply({ method: "GET", url: "/x", headers: {} });
+    expect(out.headers?.Authorization).toBe("Bearer fresh");
+    expect(saved).toHaveLength(1);
+    const body = send.mock.calls[0]?.[0]?.body ?? "";
+    expect(body).toContain("grant_type=client_credentials");
+    expect(body).toContain("client_secret=shh");
+  });
+
+  it("createAdapter without client_secret still throws on expiry", async () => {
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "c",
+      token_url: "https://x/token",
+    }).authProvider!;
+    const adapter = provider.createAdapter(
+      { access_token: "stale", expires_at: 0 },
+      { http: { send: vi.fn() }, now: () => 1_000_000, async save() {} },
+    );
+    await expect(adapter.apply({ method: "GET", url: "/x", headers: {} })).rejects.toThrow(
+      "Session expired",
+    );
   });
 });
 
