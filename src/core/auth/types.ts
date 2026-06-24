@@ -13,6 +13,7 @@ export interface AuthStatusInfo {
   host?: string;
   expiresAt?: number;
   state?: "valid" | "expired";
+  sessionless?: boolean;
 }
 
 /** I/O the core supplies to a provider during login/logout so providers stay testable. */

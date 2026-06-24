@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildProgram, type CommandContext, resolveAuth } from "../../src/index.js";
+import { authStatus, buildProgram, type CommandContext, resolveAuth } from "../../src/index.js";
 import { basicAuthPlugin } from "../../src/core/auth/basic.js";
 import { writeSession } from "../../src/core/auth/session-store.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
@@ -159,5 +159,75 @@ describe("buildProgram", () => {
         stateDir: dir,
       }),
     ).rejects.toThrow("Not authenticated");
+  });
+});
+
+describe("authStatus", () => {
+  it("reports a session-less provider as logged in", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    const b64 = Buffer.from("u:p").toString("base64");
+    const sessionlessPlugin = {
+      id: "static-basic",
+      requiredModules: [],
+      authProvider: {
+        id: "static-basic",
+        displayName: "Static Basic",
+        capabilities: { login: false, logout: false, status: false },
+        async login() { return {}; },
+        async logout() {},
+        async status() { return { loggedIn: true }; },
+        createAdapter() {
+          return {
+            async apply(req: { method: string; url: string; headers: Record<string, string> }) {
+              return { ...req, headers: { ...(req.headers ?? {}), Authorization: `Basic ${b64}` } };
+            },
+          };
+        },
+      },
+    };
+    const st = await authStatus({
+      baseUrl: "https://example.com",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      plugins: [sessionlessPlugin as any],
+      stateDir: dir,
+    });
+    expect(st.loggedIn).toBe(true);
+    expect(st.sessionless).toBe(true);
+  });
+
+  it("reports not-logged-in for a login-capable provider with no session", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    const loginCapable = {
+      id: "oauth",
+      requiredModules: [],
+      authProvider: {
+        id: "oauth",
+        displayName: "OAuth",
+        capabilities: { login: true, logout: true, status: true },
+        async login() { return {}; },
+        async logout() {},
+        async status() { return { loggedIn: false }; },
+        createAdapter() { return { async apply(r: unknown) { return r; } }; },
+      },
+    };
+    const st = await authStatus({
+      baseUrl: "https://example.com",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      plugins: [loginCapable as any],
+      stateDir: dir,
+    });
+    expect(st.loggedIn).toBe(false);
+  });
+
+  it("delegates to provider.status when a session exists", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    const b64 = Buffer.from("u:p").toString("base64");
+    await writeSession("https://example.com", "basic", { basic_b64: b64 }, dir);
+    const st = await authStatus({
+      baseUrl: "https://example.com",
+      plugins: [basicAuthPlugin()],
+      stateDir: dir,
+    });
+    expect(st.loggedIn).toBe(true);
   });
 });
