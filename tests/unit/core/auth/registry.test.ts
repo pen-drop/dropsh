@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectProviders, loginCapableProviders, providerById } from "../../../../src/core/auth/registry.js";
+import { collectProviders, loginCapableProviders, providerById, sessionlessProvider } from "../../../../src/core/auth/registry.js";
 import type { AuthProvider } from "../../../../src/core/auth/types.js";
 import type { DropSHPlugin } from "../../../../src/core/plugin.js";
 
@@ -40,5 +40,23 @@ describe("provider registry", () => {
     const providers = [fakeProvider("a", true)];
     expect(providerById(providers, "a")?.id).toBe("a");
     expect(providerById(providers, "missing")).toBeUndefined();
+  });
+});
+
+describe("sessionlessProvider", () => {
+  it("returns the sole login:false provider", () => {
+    const p = fakeProvider("basic", false);
+    expect(sessionlessProvider([p])).toBe(p);
+  });
+  it("returns undefined when the sole provider is login-capable", () => {
+    expect(sessionlessProvider([fakeProvider("oauth", true)])).toBeUndefined();
+  });
+  it("returns undefined for zero providers", () => {
+    expect(sessionlessProvider([])).toBeUndefined();
+  });
+  it("returns undefined for multiple providers", () => {
+    expect(
+      sessionlessProvider([fakeProvider("a", false), fakeProvider("b", false)]),
+    ).toBeUndefined();
   });
 });
