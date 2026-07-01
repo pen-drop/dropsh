@@ -231,3 +231,41 @@ describe("oauth2 provider — profile identity (id decoupled from type)", () => 
     expect(p.default).toBe(true);
   });
 });
+
+describe("oauth2 adapter — reactive renew()", () => {
+  it("client_credentials re-mints and reports renewed=true when a secret is configured", async () => {
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      client_secret: "sec",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    const saved: unknown[] = [];
+    const adapter = provider.createAdapter(
+      { access_token: "old", expires_at: 5 },
+      {
+        http: tokenHttp({ access_token: "new", expires_in: 3600 }),
+        now: () => 1_000_000,
+        async save(s) { saved.push(s); },
+      },
+    );
+    expect(await adapter.renew!()).toBe(true);
+    // The freshly minted token is applied and persisted.
+    const req = await adapter.apply({ method: "GET", url: "/x", headers: {} });
+    expect(req.headers?.Authorization).toBe("Bearer new");
+    expect(saved).toHaveLength(1);
+  });
+
+  it("reports renewed=false when it cannot renew (no secret, no refresh_token)", async () => {
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    const adapter = provider.createAdapter(
+      { access_token: "old", expires_at: 5 },
+      { http: tokenHttp({ access_token: "x" }), now: () => 1_000_000, async save() {} },
+    );
+    expect(await adapter.renew!()).toBe(false);
+  });
+});

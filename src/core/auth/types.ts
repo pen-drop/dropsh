@@ -2,6 +2,13 @@ import type { HttpClient, HttpRequest } from "../http.js";
 
 export interface AuthAdapter {
   apply(req: HttpRequest): Promise<HttpRequest>;
+  /**
+   * Force a credential refresh after the server rejected the current token (401),
+   * then persist it. Returns true if renewal succeeded (caller retries the request
+   * once), false if it could not renew (caller surfaces the original 401).
+   * Providers that cannot renew (e.g. basic auth) omit this.
+   */
+  renew?(): Promise<boolean>;
 }
 
 /** Provider-specific opaque session payload persisted to the state dir. */

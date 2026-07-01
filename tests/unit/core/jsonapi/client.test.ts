@@ -3,6 +3,7 @@ import { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import { createJsonApiClient } from "../../../../src/core/jsonapi/client.js";
 import type { HttpClient, HttpRequest } from "../../../../src/core/http.js";
 import type { AuthAdapter } from "../../../../src/core/auth/types.js";
+import { HttpError } from "../../../../src/errors.js";
 
 function httpStub(respond: (req: HttpRequest) => { status: number; body: string }): HttpClient {
   return { async send(req) { const r = respond(req); return { status: r.status, headers: {}, body: r.body }; } };
@@ -58,6 +59,77 @@ describe("JsonApiClient", () => {
     const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth: { apply: authSpy } });
     await client.get("node/article");
     expect(authSpy).toHaveBeenCalledOnce();
+  });
+
+  it("on 401 renews via the adapter and retries the request once", async () => {
+    let call = 0;
+    const http: HttpClient = {
+      async send(req) {
+        call += 1;
+        // First attempt: server rejects the (stale) token.
+        if (call === 1) throw new HttpError(401, "HTTP 401");
+        // Retry after renewal carries the fresh token.
+        expect(req.headers?.Authorization).toBe("Bearer fresh");
+        return { status: 200, headers: {}, body: '{"data":{"id":"ok"}}' };
+      },
+    };
+    let token = "stale";
+    const auth: AuthAdapter = {
+      apply: async (r) => ({ ...r, headers: { ...r.headers, Authorization: `Bearer ${token}` } }),
+      renew: vi.fn(async () => {
+        token = "fresh";
+        return true;
+      }),
+    };
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth });
+    const res = await client.get("node/article");
+    expect(res).toEqual({ data: { id: "ok" } });
+    expect(auth.renew).toHaveBeenCalledOnce();
+    expect(call).toBe(2);
+  });
+
+  it("surfaces the 401 when the adapter cannot renew", async () => {
+    const http: HttpClient = {
+      async send() {
+        throw new HttpError(401, "HTTP 401");
+      },
+    };
+    const auth: AuthAdapter = { apply: async (r) => r, renew: async () => false };
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth });
+    await expect(client.get("node/article")).rejects.toThrow(HttpError);
+  });
+
+  it("does not retry a 401 when the adapter has no renew (e.g. basic auth)", async () => {
+    let call = 0;
+    const http: HttpClient = {
+      async send() {
+        call += 1;
+        throw new HttpError(401, "HTTP 401");
+      },
+    };
+    const client = createJsonApiClient({
+      baseUrl: "https://site",
+      prefix: "/jsonapi",
+      http,
+      auth: passthroughAuth,
+    });
+    await expect(client.get("node/article")).rejects.toThrow(HttpError);
+    expect(call).toBe(1);
+  });
+
+  it("does not retry non-401 errors", async () => {
+    let call = 0;
+    const http: HttpClient = {
+      async send() {
+        call += 1;
+        throw new HttpError(500, "HTTP 500");
+      },
+    };
+    const auth: AuthAdapter = { apply: async (r) => r, renew: vi.fn(async () => true) };
+    const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth });
+    await expect(client.get("node/article")).rejects.toThrow(HttpError);
+    expect(auth.renew).not.toHaveBeenCalled();
+    expect(call).toBe(1);
   });
 
   it("upload sends binary body with Content-Disposition", async () => {

@@ -45,22 +45,41 @@ dropsh auth login --provider oauth2_authcode
 dropsh auth status
 ```
 
+## Named profiles
+
+Every `oauth2Plugin` is one auth **profile**, identified by its `id`. `id` defaults
+to the grant `type`, but set it explicitly to run several profiles of the same
+grant flow side by side (e.g. two `client_credentials` with different scopes).
+Mark one profile `default: true` to make it the fallback when none is selected.
+
+```js
+oauth2Plugin({ id: "session", default: true, type: "oauth2_client_credentials",
+  client_id: "my-client", client_secret, token_url, scope: "some:scope" }),
+oauth2Plugin({ id: "pm", type: "oauth2_client_credentials",
+  client_id: "my-client", client_secret, token_url, scope: "other:scope" }),
+```
+
+See the [dropsh README](../../README.md#named-profiles--many-identities-per-host)
+for `auth use`, `--auth-profile`, and selection precedence.
+
 ## Grant types
 
-| `type`                        | Interactive login prompts        | Token refresh        |
-| ----------------------------- | -------------------------------- | -------------------- |
-| `oauth2_authcode`             | opens browser (PKCE, public client) | yes (refresh token) |
-| `oauth2_password`             | client secret + user password    | re-login on expiry   |
-| `oauth2_client_credentials`   | client secret                     | re-login on expiry   |
+| `type`                        | Interactive login prompts        | Auto-renew (proactive + on 401) |
+| ----------------------------- | -------------------------------- | ------------------------------- |
+| `oauth2_authcode`             | opens browser (PKCE, public client) | yes — via `refresh_token`     |
+| `oauth2_password`             | client secret + user password    | yes — if `client_secret` in config |
+| `oauth2_client_credentials`   | client secret                     | yes — if `client_secret` in config |
 
-Config fields per grant:
+Config fields per grant (all accept the shared `id` and `default`):
 
 - `oauth2_authcode` — `client_id`, `token_url`, optional `scope`, `redirect_port`
-- `oauth2_password` — `client_id`, `token_url`, `username`, optional `scope`
-- `oauth2_client_credentials` — `client_id`, `token_url`, optional `scope`
+- `oauth2_password` — `client_id`, `token_url`, `username`, optional `scope`, `client_secret`
+- `oauth2_client_credentials` — `client_id`, `token_url`, optional `scope`, `client_secret`
 
-`client_secret` and the user `password` are **prompted at login**, never stored
-in config.
+`client_secret` and the user `password` may be **prompted at login** and are never
+stored on disk. For unattended runs, put `client_secret` in config so dropsh can
+re-mint tokens automatically; a purely prompted secret cannot be renewed and needs
+a fresh `dropsh auth login` when the token expires.
 
 ## Required Drupal module
 
