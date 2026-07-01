@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/plugin-schemata",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "main": "./dist/plugins/schemata/src/index.js",
   "exports": {
