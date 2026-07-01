@@ -58,11 +58,11 @@ describe("auth login", () => {
     await expect(runAuthLogin({}, { ...deps({ stateDir, isTTY: false }) })).rejects.toThrow(/non-interactive/);
   });
 
-  it("non-TTY with a single provider and no --provider errors", async () => {
+  it("non-TTY with a single provider and no --provider uses that provider", async () => {
     const stateDir = await tmp();
-    await expect(
-      runAuthLogin({}, { ...deps({ stateDir, isTTY: false, providers: [provider("only")] }) }),
-    ).rejects.toThrow(/non-interactive/);
+    await runAuthLogin({}, { ...deps({ stateDir, isTTY: false, providers: [provider("only")] }) });
+    const rec = await readSession("https://example.com", stateDir);
+    expect(rec?.activeProvider).toBe("only");
   });
 
   it("interactive picker selects by number", async () => {
@@ -72,15 +72,29 @@ describe("auth login", () => {
     expect(rec?.activeProvider).toBe("b");
   });
 
-  it("shows the picker even when there is only one provider", async () => {
+  it("uses the sole provider directly without prompting", async () => {
     const stateDir = await tmp();
     const stdout = vi.fn();
     const prompt = vi.fn(async () => "1");
     await runAuthLogin({}, { ...deps({ stateDir, stdout, prompt, providers: [provider("only")] }) });
-    expect(stdout.mock.calls.flat().join("")).toContain("Select an auth provider");
-    expect(prompt).toHaveBeenCalled();
+    expect(stdout.mock.calls.flat().join("")).not.toContain("Select an auth provider");
+    expect(prompt).not.toHaveBeenCalled();
     const rec = await readSession("https://example.com", stateDir);
     expect(rec?.activeProvider).toBe("only");
+  });
+
+  it("falls back to the default:true provider without prompting", async () => {
+    const stateDir = await tmp();
+    const prompt = vi.fn(async () => "1");
+    const withDefault = provider("b");
+    withDefault.default = true;
+    await runAuthLogin(
+      {},
+      { ...deps({ stateDir, prompt, providers: [provider("a"), withDefault] }) },
+    );
+    expect(prompt).not.toHaveBeenCalled();
+    const rec = await readSession("https://example.com", stateDir);
+    expect(rec?.activeProvider).toBe("b");
   });
 });
 
