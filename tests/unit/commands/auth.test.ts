@@ -2,8 +2,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { runAuthLogin, runAuthLogout, runAuthStatus } from "../../../src/commands/auth.js";
-import { readSession } from "../../../src/core/auth/session-store.js";
+import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "../../../src/commands/auth.js";
+import { readProfile, readProfiles, readSession } from "../../../src/core/auth/session-store.js";
 import type { AuthProvider } from "../../../src/core/auth/types.js";
 
 function provider(id: string, login = true): AuthProvider {
@@ -97,5 +97,72 @@ describe("auth logout / status", () => {
     const stdout = vi.fn();
     await runAuthStatus({}, { ...deps({ stateDir, stdout }) });
     expect(stdout.mock.calls.flat().join("")).toContain("not logged in");
+  });
+});
+
+describe("auth multi-profile commands", () => {
+  it("login writes a named profile and makes it active", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    const file = await readProfiles("https://example.com", stateDir);
+    expect(Object.keys(file?.profiles ?? {}).sort()).toEqual(["a", "b"]);
+    expect(file?.active).toBe("b"); // last login is active
+    // First profile's session survived the second login.
+    expect(await readProfile("https://example.com", "a", stateDir)).not.toBeNull();
+  });
+
+  it("use switches the active profile without re-login", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthUse({ profile: "a" }, { ...deps({ stateDir }) });
+    expect((await readProfiles("https://example.com", stateDir))?.active).toBe("a");
+  });
+
+  it("use errors for an unknown profile", async () => {
+    const stateDir = await tmp();
+    await expect(runAuthUse({ profile: "ghost" }, { ...deps({ stateDir }) })).rejects.toThrow(
+      /no auth profile 'ghost'/,
+    );
+  });
+
+  it("logout --profile clears one slot and leaves the other", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthLogout({ profile: "a" }, { ...deps({ stateDir }) });
+    const file = await readProfiles("https://example.com", stateDir);
+    expect(Object.keys(file?.profiles ?? {})).toEqual(["b"]);
+  });
+
+  it("logout --all clears every profile", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthLogout({ all: true }, { ...deps({ stateDir }) });
+    expect(await readProfiles("https://example.com", stateDir)).toBeNull();
+  });
+
+  it("status lists all profiles with an active marker", async () => {
+    const stateDir = await tmp();
+    const stdout = vi.fn();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthUse({ profile: "a" }, { ...deps({ stateDir }) });
+    await runAuthStatus({}, { ...deps({ stateDir, stdout }) });
+    const out = stdout.mock.calls.flat().join("");
+    expect(out).toContain("* a:");
+    expect(out).toContain("  b:");
+  });
+
+  it("status --json emits a keyed map with the active pointer", async () => {
+    const stateDir = await tmp();
+    const stdout = vi.fn();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthStatus({ json: true }, { ...deps({ stateDir, stdout }) });
+    const parsed = JSON.parse(stdout.mock.calls.flat().join(""));
+    expect(parsed.active).toBe("a");
+    expect(parsed.profiles.a.loggedIn).toBe(true);
   });
 });

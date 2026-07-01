@@ -116,9 +116,7 @@ describe("oauth2 provider — client_credentials headless", () => {
       token_url: "https://x/token",
       client_secret: "shh",
     }).authProvider!;
-    const session = await provider.login(
-      ctx({ http: { send }, prompt }),
-    );
+    const session = await provider.login(ctx({ http: { send }, prompt }));
     expect(prompt).not.toHaveBeenCalled();
     expect(session.access_token).toBe("tok");
     const body = send.mock.calls[0]?.[0]?.body ?? "";
@@ -141,7 +139,13 @@ describe("oauth2 provider — client_credentials headless", () => {
     }).authProvider!;
     const adapter = provider.createAdapter(
       { access_token: "stale", expires_at: 0 },
-      { http: { send }, now: () => 1_000_000, save: async (s) => { saved.push(s); } },
+      {
+        http: { send },
+        now: () => 1_000_000,
+        save: async (s) => {
+          saved.push(s);
+        },
+      },
     );
     const out = await adapter.apply({ method: "GET", url: "/x", headers: {} });
     expect(out.headers?.Authorization).toBe("Bearer fresh");
@@ -177,5 +181,97 @@ describe("oauth2 provider — status", () => {
     const info = await provider.status({ access_token: "t", expires_at: 5 });
     expect(info.loggedIn).toBe(true);
     expect(info.state).toBe("expired");
+  });
+});
+
+describe("oauth2 provider — profile identity (id decoupled from type)", () => {
+  it("defaults id to type when no id is given (backward compatible)", () => {
+    const p = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    expect(p.id).toBe("oauth2_client_credentials");
+    expect(p.default).toBe(false);
+  });
+
+  it("uses an explicit id and annotates the display name", () => {
+    const p = oauth2Plugin({
+      id: "pm",
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    expect(p.id).toBe("pm");
+    expect(p.displayName).toContain("[pm]");
+  });
+
+  it("two client_credentials profiles get distinct ids", () => {
+    const a = oauth2Plugin({
+      id: "session",
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+      scope: "gaia:session",
+    }).authProvider!;
+    const b = oauth2Plugin({
+      id: "pm",
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+      scope: "gaia:project_manager",
+    }).authProvider!;
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("propagates default:true", () => {
+    const p = oauth2Plugin({
+      id: "session",
+      default: true,
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    expect(p.default).toBe(true);
+  });
+});
+
+describe("oauth2 adapter — reactive renew()", () => {
+  it("client_credentials re-mints and reports renewed=true when a secret is configured", async () => {
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      client_secret: "sec",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    const saved: unknown[] = [];
+    const adapter = provider.createAdapter(
+      { access_token: "old", expires_at: 5 },
+      {
+        http: tokenHttp({ access_token: "new", expires_in: 3600 }),
+        now: () => 1_000_000,
+        async save(s) {
+          saved.push(s);
+        },
+      },
+    );
+    expect(await adapter.renew!()).toBe(true);
+    // The freshly minted token is applied and persisted.
+    const req = await adapter.apply({ method: "GET", url: "/x", headers: {} });
+    expect(req.headers?.Authorization).toBe("Bearer new");
+    expect(saved).toHaveLength(1);
+  });
+
+  it("reports renewed=false when it cannot renew (no secret, no refresh_token)", async () => {
+    const provider = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    const adapter = provider.createAdapter(
+      { access_token: "old", expires_at: 5 },
+      { http: tokenHttp({ access_token: "x" }), now: () => 1_000_000, async save() {} },
+    );
+    expect(await adapter.renew!()).toBe(false);
   });
 });

@@ -141,8 +141,76 @@ dropsh auth status
 dropsh auth logout
 ```
 
-Secrets and tokens are never written to `dropsh.config.js`. The active session is
-stored per host under `~/.config/dropsh/<host>.json` with file mode `0600`.
+Secrets and tokens are never written to `dropsh.config.js`. Sessions are stored
+per host under `~/.config/dropsh/<host>.json` with file mode `0600`.
+
+### Named profiles — many identities per host
+
+A host can hold several **named auth profiles** at once (e.g. two OAuth2 scopes)
+and you switch between them without logging in again. Each auth provider is one
+profile, identified by its `id`. For OAuth2, give each `oauth2Plugin` an explicit
+`id` (it defaults to the grant `type` when omitted) so two profiles of the same
+grant flow can coexist:
+
+```js
+plugins: [
+  oauth2Plugin({
+    id: "session",
+    default: true,                       // used when none is selected/active
+    type: "oauth2_client_credentials",
+    client_id: "my-client",
+    client_secret,                       // enables headless auto-renew (see below)
+    token_url: "https://my-drupal.example.com/oauth/token",
+    scope: "some:scope",
+  }),
+  oauth2Plugin({
+    id: "pm",
+    type: "oauth2_client_credentials",
+    client_id: "my-client",
+    client_secret,
+    token_url: "https://my-drupal.example.com/oauth/token",
+    scope: "other:scope",
+  }),
+],
+```
+
+```bash
+dropsh auth login --provider session     # log in and store the "session" profile
+dropsh auth login --provider pm          # log in and store the "pm" profile too
+dropsh auth status                       # list all profiles; * marks the active one
+dropsh auth use pm                       # switch the persistent active profile
+dropsh --auth-profile session read …     # override the profile for one command
+dropsh auth logout --profile pm          # drop one profile
+dropsh auth logout --all                 # drop every profile for this host
+```
+
+Profile selection precedence (highest first):
+
+1. `--auth-profile <id>` (global flag)
+2. `$DROPSH_AUTH_PROFILE`
+3. the stored active profile (`auth use`)
+4. the provider marked `default: true`
+5. the sole configured profile, if there is only one
+
+With more than one profile and none active/default/selected, dropsh asks you to
+run `auth use <id>` or pass `--auth-profile <id>`.
+
+The on-disk format holds every profile in one file; legacy single-session files
+are upgraded automatically on first write.
+
+### Token renewal
+
+dropsh renews expiring tokens automatically — both **proactively** (before a token
+lapses) and **reactively** (if the server rejects a token with `401`, dropsh renews
+once and retries the request). Renewal uses the credentials already available:
+
+- **`oauth2_authcode`** — the stored `refresh_token`.
+- **`oauth2_client_credentials`** — re-mints from `client_secret`, so keep the
+  secret in config (e.g. `conductor.config.local.js`) for unattended runs. Without
+  it, an interactive login cannot be renewed and you must `auth login` again.
+
+Renewal is isolated per profile: refreshing one profile never touches another's
+session or the active pointer.
 
 ## Commands
 
