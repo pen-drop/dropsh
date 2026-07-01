@@ -86,8 +86,7 @@ describe("auth login", () => {
   it("falls back to the default:true provider without prompting", async () => {
     const stateDir = await tmp();
     const prompt = vi.fn(async () => "1");
-    const withDefault = provider("b");
-    withDefault.default = true;
+    const withDefault = { ...provider("b"), default: true };
     await runAuthLogin(
       {},
       { ...deps({ stateDir, prompt, providers: [provider("a"), withDefault] }) },
