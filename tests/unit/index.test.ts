@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { authStatus, buildProgram, type CommandContext, resolveAuth } from "../../src/index.js";
 import { basicAuthPlugin } from "../../src/core/auth/basic.js";
-import { writeSession } from "../../src/core/auth/session-store.js";
+import { readProfile, writeProfile, writeSession } from "../../src/core/auth/session-store.js";
+import type { DropSHPlugin as Plugin } from "../../src/core/plugin.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 import type { DropSHPlugin } from "../../src/core/plugin.js";
 
@@ -159,6 +160,74 @@ describe("buildProgram", () => {
         stateDir: dir,
       }),
     ).rejects.toThrow("Not authenticated");
+  });
+});
+
+describe("resolveAuth — named profiles", () => {
+  // A minimal echo provider that stamps its own id into the Authorization header
+  // and re-mints (bumps the token) on save, so we can observe per-profile isolation.
+  function echoPlugin(id: string, isDefault = false): Plugin {
+    return {
+      id,
+      requiredModules: [],
+      authProvider: {
+        id,
+        displayName: id,
+        ...(isDefault ? { default: true } : {}),
+        capabilities: { login: true, logout: true, status: true },
+        async login() { return { access_token: `${id}-tok` }; },
+        async logout() {},
+        async status(s: unknown) { return { loggedIn: s !== null, provider: id }; },
+        createAdapter(session: { access_token?: string } | undefined, rt: { save: (s: unknown) => Promise<void> }) {
+          return {
+            async apply(req: { headers?: Record<string, string> }) {
+              await rt.save({ access_token: `${id}-renewed` });
+              return { ...req, headers: { ...(req.headers ?? {}), Authorization: `Bearer ${session?.access_token}` } };
+            },
+          };
+        },
+      },
+      async extendSchema(_e: unknown, _b: unknown, s: unknown) { return s; },
+    } as unknown as Plugin;
+  }
+
+  const base = { baseUrl: "https://example.com", http: { async send() { throw new Error("unused"); } }, now: () => 0 };
+
+  it("explicit profile wins over the stored active pointer", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    await writeProfile("https://example.com", "session", "session", { access_token: "session-tok" }, dir);
+    await writeProfile("https://example.com", "pm", "pm", { access_token: "pm-tok" }, dir);
+    const { setActive } = await import("../../src/core/auth/session-store.js");
+    await setActive("https://example.com", "session", dir);
+    const adapter = await resolveAuth({ ...base, plugins: [echoPlugin("session"), echoPlugin("pm")], stateDir: dir, profile: "pm" });
+    const req = await adapter.apply({ method: "GET", url: "/x" });
+    expect(req.headers?.Authorization).toBe("Bearer pm-tok");
+  });
+
+  it("falls back to config default:true when nothing is active", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    await writeProfile("https://example.com", "session", "session", { access_token: "session-tok" }, dir);
+    await writeProfile("https://example.com", "pm", "pm", { access_token: "pm-tok" }, dir);
+    const adapter = await resolveAuth({ ...base, plugins: [echoPlugin("session", true), echoPlugin("pm")], stateDir: dir });
+    const req = await adapter.apply({ method: "GET", url: "/x" });
+    expect(req.headers?.Authorization).toBe("Bearer session-tok");
+  });
+
+  it("throws when multiple profiles exist but none is active/default/selected", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    await expect(
+      resolveAuth({ ...base, plugins: [echoPlugin("session"), echoPlugin("pm")], stateDir: dir }),
+    ).rejects.toThrow(/none active/);
+  });
+
+  it("renews only the resolved profile's slot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    await writeProfile("https://example.com", "session", "session", { access_token: "session-tok" }, dir);
+    await writeProfile("https://example.com", "pm", "pm", { access_token: "pm-tok" }, dir);
+    const adapter = await resolveAuth({ ...base, plugins: [echoPlugin("session"), echoPlugin("pm")], stateDir: dir, profile: "pm" });
+    await adapter.apply({ method: "GET", url: "/x" });
+    expect((await readProfile("https://example.com", "pm", dir))?.session.access_token).toBe("pm-renewed");
+    expect((await readProfile("https://example.com", "session", dir))?.session.access_token).toBe("session-tok");
   });
 });
 

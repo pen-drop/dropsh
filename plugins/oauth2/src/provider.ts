@@ -55,9 +55,13 @@ async function postToken(
 }
 
 export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
+  // Profile identity is `cfg.id` (falling back to `cfg.type`); `cfg.type` stays
+  // purely the grant-flow selector used by login/renew/status below.
+  const id = cfg.id ?? cfg.type;
   return {
-    id: cfg.type,
-    displayName: DISPLAY[cfg.type],
+    id,
+    displayName: cfg.id ? `${DISPLAY[cfg.type]} [${cfg.id}]` : DISPLAY[cfg.type],
+    default: cfg.default === true,
     capabilities: { login: true, logout: true, status: true },
 
     async login(ctx: AuthContext): Promise<AuthSession> {

@@ -179,3 +179,55 @@ describe("oauth2 provider — status", () => {
     expect(info.state).toBe("expired");
   });
 });
+
+describe("oauth2 provider — profile identity (id decoupled from type)", () => {
+  it("defaults id to type when no id is given (backward compatible)", () => {
+    const p = oauth2Plugin({
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    expect(p.id).toBe("oauth2_client_credentials");
+    expect(p.default).toBe(false);
+  });
+
+  it("uses an explicit id and annotates the display name", () => {
+    const p = oauth2Plugin({
+      id: "pm",
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    expect(p.id).toBe("pm");
+    expect(p.displayName).toContain("[pm]");
+  });
+
+  it("two client_credentials profiles get distinct ids", () => {
+    const a = oauth2Plugin({
+      id: "session",
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+      scope: "gaia:session",
+    }).authProvider!;
+    const b = oauth2Plugin({
+      id: "pm",
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+      scope: "gaia:project_manager",
+    }).authProvider!;
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("propagates default:true", () => {
+    const p = oauth2Plugin({
+      id: "session",
+      default: true,
+      type: "oauth2_client_credentials",
+      client_id: "cid",
+      token_url: "https://example.com/oauth/token",
+    }).authProvider!;
+    expect(p.default).toBe(true);
+  });
+});

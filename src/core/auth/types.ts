@@ -39,6 +39,8 @@ export interface AdapterRuntime {
 export interface AuthProvider {
   readonly id: string;
   readonly displayName: string;
+  /** When true, this provider is the fallback profile if none is active/selected. */
+  readonly default?: boolean;
   readonly capabilities: { login: boolean; logout: boolean; status: boolean };
   login(ctx: AuthContext): Promise<AuthSession>;
   logout(ctx: AuthContext): Promise<void>;
