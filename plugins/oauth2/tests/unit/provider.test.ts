@@ -116,9 +116,7 @@ describe("oauth2 provider — client_credentials headless", () => {
       token_url: "https://x/token",
       client_secret: "shh",
     }).authProvider!;
-    const session = await provider.login(
-      ctx({ http: { send }, prompt }),
-    );
+    const session = await provider.login(ctx({ http: { send }, prompt }));
     expect(prompt).not.toHaveBeenCalled();
     expect(session.access_token).toBe("tok");
     const body = send.mock.calls[0]?.[0]?.body ?? "";
@@ -141,7 +139,13 @@ describe("oauth2 provider — client_credentials headless", () => {
     }).authProvider!;
     const adapter = provider.createAdapter(
       { access_token: "stale", expires_at: 0 },
-      { http: { send }, now: () => 1_000_000, save: async (s) => { saved.push(s); } },
+      {
+        http: { send },
+        now: () => 1_000_000,
+        save: async (s) => {
+          saved.push(s);
+        },
+      },
     );
     const out = await adapter.apply({ method: "GET", url: "/x", headers: {} });
     expect(out.headers?.Authorization).toBe("Bearer fresh");
@@ -246,7 +250,9 @@ describe("oauth2 adapter — reactive renew()", () => {
       {
         http: tokenHttp({ access_token: "new", expires_in: 3600 }),
         now: () => 1_000_000,
-        async save(s) { saved.push(s); },
+        async save(s) {
+          saved.push(s);
+        },
       },
     );
     expect(await adapter.renew!()).toBe(true);
