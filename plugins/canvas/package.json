@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/plugin-canvas",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "main": "./dist/plugins/canvas/src/index.js",
   "exports": {
