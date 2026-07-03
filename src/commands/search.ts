@@ -7,6 +7,7 @@ export interface SearchArgs {
   bundle?: string;
   filters: string[];
   limit: number;
+  include?: string[];
 }
 
 export interface SearchDeps {
@@ -43,6 +44,7 @@ export async function runSearch(args: SearchArgs, deps: SearchDeps): Promise<voi
     else params.addFilter(f.key, f.value);
   }
   params.addPageLimit(args.limit);
+  if (args.include?.length) params.addInclude(args.include);
   const path = args.bundle ? `${args.entityType}/${args.bundle}` : args.entityType;
   const res = await deps.client.get(path, params);
   deps.emit(res);
