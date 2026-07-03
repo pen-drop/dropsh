@@ -29,8 +29,8 @@ site:
 All commands write JSON to stdout, structured errors to stderr, and use exit codes 0-5.
 
 ```bash
-dropsh read <entity_type>/<bundle>/<uuid>
-dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N]
+dropsh read <entity_type>/<bundle>/<uuid> [--include=<field>,…]
+dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N] [--include=<field>,…]
 dropsh create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
 dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
 dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
@@ -51,6 +51,22 @@ With a target (e.g. `node/article`), prints a JSON Schema document that validate
 If the site has `drupal/schemata` + `drupal/schemata_json_schema` installed, the schema is authoritative (required fields, constraints). Otherwise, a shallow schema is returned from sample records with a warning on stderr (field names only, no required fields, no constraints). The output carries `x-dropsh-source: "schemata" | "heuristic" | "heuristic-empty"` so consumers can tell how strict the schema is.
 
 Schemas are cached under `.dropsh/cache/` next to your `.dropsh.yml`. The `.dropsh/` directory is gitignored.
+
+### `--include` on `read` / `search`
+
+Pass `--include` to embed related resources in the response's JSON:API
+`included` array (the standard `?include=` query parameter). Accepts a
+comma-separated list or repeated/space-separated values, and nested paths with
+dots:
+
+```bash
+dropsh read node/article/<uuid> --include field_related,field_image
+dropsh search node --bundle=article --include field_related --filter status:1
+dropsh read node/article/<uuid> --include field_related.uid
+```
+
+`read` and `search` are the only commands that accept `--include`. Without it,
+the response contains only the primary resource(s).
 
 ### Client-side validation in `create` / `update`
 
