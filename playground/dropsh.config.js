@@ -18,7 +18,7 @@ export default {
       redirect_port: 7432,
     }),
     schemataPlugin(),
-    // Render plugins: enable `--format md`, `--format table`, and `dropsh browse`.
+    // Render plugins: enable `--format md`, `--format table`, and `--format tui`.
     markdownPlugin(),
     tablePlugin(),
     tuiPlugin({

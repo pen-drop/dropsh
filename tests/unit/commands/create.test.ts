@@ -16,7 +16,7 @@ describe("runCreate", () => {
     const emitted: unknown[] = [];
     await runCreate(
       { entityType: "node", bundle: "article", dataArg: '{"data":{"type":"node--article","attributes":{"title":"Hi"}}}' },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.post).toHaveBeenCalledWith("node/article", {
       data: { type: "node--article", attributes: { title: "Hi" } },
@@ -29,7 +29,7 @@ describe("runCreate", () => {
     const emitted: unknown[] = [];
     await runCreate(
       { entityType: "node", bundle: "article", dataArg: '{"data":{"type":"node--article"}}', dryRun: true },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.post).not.toHaveBeenCalled();
     expect(emitted).toEqual([{
@@ -46,7 +46,7 @@ describe("runCreate", () => {
     const emitted: unknown[] = [];
     await runCreate(
       { entityType: "node", bundle: "article", dataArg: JSON.stringify({ data: { type: "node--article", attributes: { title: "ok" } } }) },
-      { client: c, emit: (v) => emitted.push(v), validate },
+      { client: c, emit: (v) => { emitted.push(v); }, validate },
     );
     expect(validate).toHaveBeenCalledWith(expect.anything(), "node/article");
     expect(c.post).toHaveBeenCalled();

@@ -22,3 +22,15 @@ export interface Renderer {
   readonly id: string;
   render(doc: JsonApiDocument, ctx: RenderContext): string;
 }
+
+export interface InteractiveRenderer {
+  readonly id: string;
+  readonly interactive: true;
+  run(doc: JsonApiDocument, ctx: RenderContext): Promise<void>;
+}
+
+export type AnyRenderer = Renderer | InteractiveRenderer;
+
+export function isInteractive(r: AnyRenderer): r is InteractiveRenderer {
+  return "interactive" in r && r.interactive === true;
+}

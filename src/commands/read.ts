@@ -8,7 +8,7 @@ export interface ReadArgs {
 }
 export interface ReadDeps {
   client: JsonApiClient;
-  emit: (v: unknown) => void;
+  emit: (v: unknown) => void | Promise<void>;
 }
 
 // Allow short test UUIDs (e.g. "u1") and full Drupal UUIDs (36 chars)
@@ -26,5 +26,5 @@ export async function runRead(args: ReadArgs, deps: ReadDeps): Promise<void> {
   } else {
     res = await deps.client.get(args.target);
   }
-  deps.emit(res);
+  await deps.emit(res);
 }

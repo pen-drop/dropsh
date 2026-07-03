@@ -43,10 +43,13 @@ Two extension points, both on the existing `DrupalCliPlugin` interface:
    Renderer[]`. A renderer is `{ id, render(doc, ctx) → string }`. The global
    `--format <id>` flag selects one. `json` is a core built-in and the default.
 
-2. **`registerCommands` (already exists).** The TUI plugin hangs an
-   interactive `dropsh browse` command off this hook, because a full-screen
-   event loop does not fit the `render() → string` contract. The browse detail
-   pane reuses the Markdown renderer.
+2. **Interactive renderer (new, declarative).** A plugin exposes a renderer
+   with `interactive: true` and `run(doc, ctx) → Promise<void>` instead of
+   `render(doc, ctx) → string`, because a full-screen event loop does not fit
+   the `render() → string` contract. `--format tui` selects it exactly like
+   any other format — `read`/`search` stay the only entry commands, there is
+   no separate `browse` command. The TUI detail pane reuses the Markdown
+   renderer.
 
 The renderer receives the **whole document** — single (`data: {}`) or
 collection (`data: []`) — plus a `RenderContext`. It decides single-vs-list
@@ -102,15 +105,22 @@ export interface Renderer {
   readonly id: string;                              // "md", "table"
   render(doc: JsonApiDocument, ctx: RenderContext): string;
 }
+export interface InteractiveRenderer {
+  readonly id: string;                              // "tui"
+  readonly interactive: true;
+  run(doc: JsonApiDocument, ctx: RenderContext): Promise<void>;
+}
+export type AnyRenderer = Renderer | InteractiveRenderer;
+export function isInteractive(r: AnyRenderer): r is InteractiveRenderer;
 ```
 
 ### Plugin interface
 
-`src/core/plugin.ts` gains one optional line, importing `Renderer` from
+`src/core/plugin.ts` gains one optional line, importing `AnyRenderer` from
 `render.ts`:
 
 ```ts
-renderers?: Renderer[];
+renderers?: AnyRenderer[];
 ```
 
 ## Core changes
@@ -155,19 +165,24 @@ renderers?: Renderer[];
 - Single resource → 2-column key/value table.
 - No external dependency — its own column-width calculator (~50 lines).
 
-### `@dropsh/plugin-tui` — interactive browse
+### `@dropsh/plugin-tui` — interactive format
 
-- No renderer. Uses `registerCommands` to add `dropsh browse <entity_type>
-  [--bundle]`.
-- Flow: search → list (arrow/Enter navigation) → detail pane. The detail pane
+- Registers an `InteractiveRenderer` with `id: "tui"`, selected via
+  `--format tui` on `read`/`search` — no separate `browse` command. `read`
+  and `search` stay the only entry commands; presentation is chosen entirely
+  via `--format`.
+- Flow: `read --format tui` fetches the single entity and boots straight
+  into the detail pane. `search --format tui` fetches the collection and
+  shows a list (arrow/Enter navigation) → detail pane. The detail pane
   renders via the **md renderer** (the plugin depends on
-  `@dropsh/plugin-markdown` and reuses its `render`).
+  `@dropsh/plugin-markdown` and reuses its `render`), so `--include` embeds
+  related resources in the detail pane exactly as it does for `--format md`.
 - UI library `ink` (React-based, TS standard, testable via
   `ink-testing-library`), isolated in this package's `package.json`. Core stays
   dependency-free.
 - Read-only first phase (browse/view). Editing is future work.
-- Phase-1 `browse` renders the detail pane as Markdown only; `detailRenderer`
-  is reserved for a later phase and has no effect yet.
+- Phase-1 renders the detail pane as Markdown only; `detailRenderer` is
+  reserved for a later phase and has no effect yet.
 
 #### TUI configuration
 
@@ -189,11 +204,12 @@ interface TuiOptions {
 }
 ```
 
-Resolution: `dropsh browse node article` finds the matching `TuiViewConfig`
-(entityType [+ bundle]) and uses its columns/filters/renderer. No match →
-heuristic (id + title/name/status, md detail). Specialized displays and filters
-are thus data-driven per entity type without code. For true custom rendering,
-write a renderer plugin and reference its `id` as `detailRenderer`.
+Resolution: `dropsh search node --bundle article --format tui` finds the
+matching `TuiViewConfig` (entityType [+ bundle]) and uses its
+columns/filters/renderer. No match → heuristic (id + title/name/status, md
+detail). Specialized displays and filters are thus data-driven per entity
+type without code. For true custom rendering, write a renderer plugin and
+reference its `id` as `detailRenderer`.
 
 ### Example config
 
@@ -234,8 +250,9 @@ export default {
 - Empty collection (`data: []`): md → empty string / `_(no results)_`; table →
   header + `(0 rows)`. No crash.
 - md heuristic finds no body → frontmatter only, empty body. Legitimate.
-- TUI without a TTY (pipe/CI): `dropsh browse` detects `!process.stdout.isTTY`
-  and raises `ConfigError` `browse requires an interactive terminal`. No hang.
+- TUI without a TTY (pipe/CI): `--format tui` detects `!process.stdout.isTTY`
+  and raises `ConfigError` `--format tui requires an interactive terminal`.
+  No hang.
 - `included`: renderers may use it (relationship resolution) but must work
   without it.
 

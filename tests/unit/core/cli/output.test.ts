@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createOutput } from "../../../../src/core/cli/output.js";
+import type { InteractiveRenderer } from "../../../../src/core/cli/render.js";
 import { ConfigError, HttpError } from "../../../../src/errors.js";
 
 describe("createOutput", () => {
@@ -28,6 +29,21 @@ describe("createOutput", () => {
     const parsed = JSON.parse(err.join(""));
     expect(parsed.error.details.status).toBe(422);
     expect(parsed.error.details.body).toEqual({ errors: [{ title: "x" }] });
+  });
+
+  it("invokes an interactive renderer instead of writing to stdout", async () => {
+    const out: string[] = []; const err: string[] = [];
+    const run = vi.fn(async () => {});
+    const tuiRenderer: InteractiveRenderer = { id: "tui", interactive: true, run };
+    const o = createOutput({
+      stdout: (s) => out.push(s),
+      stderr: (s) => err.push(s),
+      renderers: [tuiRenderer],
+      getFormat: () => "tui",
+    });
+    await o.emit({ data: { type: "node--article", id: "u1" } });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(out).toHaveLength(0);
   });
 
   it("wraps non-CliError as E_UNKNOWN", () => {

@@ -1,15 +1,13 @@
 import { renderMarkdown } from "@dropsh/plugin-markdown/render";
-import type { JsonApiClient, JsonApiResource } from "dropsh/plugin";
-import { DrupalJsonApiParams } from "drupal-jsonapi-params";
+import type { JsonApiDocument, JsonApiResource, RenderContext } from "dropsh/plugin";
 import { Box, Text, useApp, useInput } from "ink";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ResolvedView } from "./views.js";
 
 export interface BrowseProps {
-  client: JsonApiClient;
-  entityType: string;
-  bundle?: string;
+  doc: JsonApiDocument;
+  ctx: RenderContext;
   view: ResolvedView;
 }
 
@@ -28,47 +26,51 @@ function rowText(res: JsonApiResource, columns: string[] | undefined): string {
   return columns.map((key) => (key === "id" ? res.id : String(attrs[key] ?? ""))).join("  ");
 }
 
-export function Browse({ client, entityType, bundle, view }: BrowseProps): React.ReactElement {
+// Renders an already-fetched JSON:API document. A single resource boots
+// straight into the detail pane; a collection shows a navigable list that
+// opens a detail pane on Enter. No fetching happens here — `read`/`search`
+// already did that before selecting `--format tui`.
+export function Browse({ doc, ctx, view }: BrowseProps): React.ReactElement {
   const { exit } = useApp();
-  const [rows, setRows] = useState<JsonApiResource[]>([]);
+  const isCollection = Array.isArray(doc.data);
+  const rows: JsonApiResource[] = isCollection
+    ? (doc.data as JsonApiResource[])
+    : [doc.data as JsonApiResource];
   const [selected, setSelected] = useState(0);
-  const [detail, setDetail] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const params = new DrupalJsonApiParams();
-    for (const [k, v] of Object.entries(view.filters)) params.addFilter(k, v);
-    params.addPageLimit(view.pageSize);
-    const path = bundle ? `${entityType}/${bundle}` : entityType;
-    client
-      .get(path, params)
-      .then((doc) => setRows(Array.isArray(doc.data) ? doc.data : [doc.data]))
-      .catch((e) => setError(String(e)));
-  }, [client, entityType, bundle, view]);
+  const [detail, setDetail] = useState<string | null>(
+    isCollection ? null : renderMarkdown(doc, ctx),
+  );
 
   useInput((input, key) => {
     if (input === "q" || key.escape) {
-      if (detail) setDetail(null);
-      else exit();
+      if (isCollection && detail) {
+        setDetail(null);
+        return;
+      }
+      exit();
       return;
     }
-    if (detail) return;
+    if (!isCollection || detail) return;
     if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
     if (key.downArrow) setSelected((s) => Math.min(rows.length - 1, s + 1));
     if (key.return && rows[selected]) {
-      setDetail(renderMarkdown({ data: rows[selected] }, { command: "read" }));
+      const selectedDoc: JsonApiDocument =
+        doc.included !== undefined
+          ? { data: rows[selected], included: doc.included }
+          : { data: rows[selected] };
+      setDetail(renderMarkdown(selectedDoc, ctx));
     }
   });
 
-  if (error) return <Text color="red">{error}</Text>;
-  if (detail) {
+  if (detail !== null) {
     return (
       <Box flexDirection="column">
         <Text>{detail}</Text>
-        <Text dimColor>(esc/q: back)</Text>
+        <Text dimColor>{isCollection ? "(esc/q: back)" : "(esc/q: quit)"}</Text>
       </Box>
     );
   }
+
   return (
     <Box flexDirection="column">
       {rows.map((res, i) => (
@@ -76,7 +78,7 @@ export function Browse({ client, entityType, bundle, view }: BrowseProps): React
           {rowText(res, view.columns)}
         </Text>
       ))}
-      {rows.length === 0 ? <Text dimColor>loading…</Text> : null}
+      {rows.length === 0 ? <Text dimColor>(no results)</Text> : null}
       <Text dimColor>(↑/↓: move, enter: open, q: quit)</Text>
     </Box>
   );

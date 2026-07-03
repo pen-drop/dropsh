@@ -15,7 +15,7 @@ describe("runRead", () => {
   it("reads entity by type/uuid and emits response", async () => {
     const emitted: unknown[] = [];
     const c = client();
-    await runRead({ target: "node/article/u1" }, { client: c, emit: (v) => emitted.push(v) });
+    await runRead({ target: "node/article/u1" }, { client: c, emit: (v) => { emitted.push(v); } });
     expect(c.get).toHaveBeenCalledWith("node/article/u1");
     expect(emitted).toEqual([{ data: { id: "u1", type: "node--article" } }]);
   });
@@ -30,7 +30,7 @@ describe("runRead", () => {
     const c = client();
     await runRead(
       { target: "node/article/u1", include: ["field_related", "field_image"] },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.get).toHaveBeenCalledTimes(1);
     const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;

@@ -1,8 +1,13 @@
 export type { BasicAuthConfig } from "./core/auth/basic.js";
 export { basicAuthPlugin } from "./core/auth/basic.js";
 export type { AuthAdapter } from "./core/auth/types.js";
-export type { RenderContext, Renderer } from "./core/cli/render.js";
-export { indexIncluded } from "./core/cli/render.js";
+export type {
+  AnyRenderer,
+  InteractiveRenderer,
+  RenderContext,
+  Renderer,
+} from "./core/cli/render.js";
+export { indexIncluded, isInteractive } from "./core/cli/render.js";
 export type { Config, SiteConfig } from "./core/config.js";
 export { loadConfig } from "./core/config.js";
 export type { CommandContext } from "./core/context.js";

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createOutput } from "../../../src/core/cli/output.js";
-import type { Renderer } from "../../../src/core/cli/render.js";
+import type { InteractiveRenderer, Renderer } from "../../../src/core/cli/render.js";
 import { ConfigError } from "../../../src/errors.js";
 
 const mdRenderer: Renderer = {
@@ -46,6 +46,22 @@ describe("createOutput", () => {
   it("throws ConfigError on duplicate renderer ids", () => {
     expect(() => createOutput({ ...collect().push, renderers: [mdRenderer, mdRenderer] }))
       .toThrow(ConfigError);
+  });
+
+  it("invokes an interactive renderer's run() and writes nothing to stdout", async () => {
+    const c = collect();
+    const run = vi.fn(async () => {});
+    const tuiRenderer: InteractiveRenderer = { id: "tui", interactive: true, run };
+    const o = createOutput({ ...c.push, renderers: [tuiRenderer], getFormat: () => "tui" });
+    const result = o.emit({ data: { type: "node--article", id: "u1" } }, { command: "read" });
+    expect(result).toBeInstanceOf(Promise);
+    await result;
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(
+      { data: { type: "node--article", id: "u1" } },
+      { command: "read" },
+    );
+    expect(c.out).toHaveLength(0);
   });
 
   it("fail() always emits JSON to stderr", () => {

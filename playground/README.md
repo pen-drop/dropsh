@@ -188,14 +188,18 @@ npx dropsh --config dropsh.config.js --format md schema
 # exit 2, error.code=E_CONFIG: format 'md' not applicable to command 'schema'
 ```
 
-## 9. Interaktiver Browser (`dropsh browse`)
+## 9. Interaktives TUI (`--format tui`)
 
-Das `tuiPlugin()` fügt ein interaktives Vollbild-`browse` hinzu (benötigt ein
-echtes Terminal — TTY). Liste durchblättern mit ↑/↓, Enter öffnet die
-Markdown-Detailansicht, `q`/Esc zurück bzw. beenden:
+Das `tuiPlugin()` fügt das interaktive Vollbild-Format `tui` hinzu (benötigt
+ein echtes Terminal — TTY), wählbar über `--format tui` auf `read`/`search`
+— es gibt keinen eigenen `browse`-Befehl. `read --format tui` öffnet direkt
+die Markdown-Detailansicht der einzelnen Entität. `search --format tui`
+zeigt eine Liste: durchblättern mit ↑/↓, Enter öffnet die Detailansicht,
+`q`/Esc zurück bzw. beenden:
 
 ```bash
-npx dropsh --config dropsh.config.js browse node --bundle=article_test
+npx dropsh --config dropsh.config.js --format tui read node/article_test/$UUID
+npx dropsh --config dropsh.config.js --format tui search node --bundle=article_test
 ```
 
 Die Listen-Spalten und Default-Filter kommen aus der `views`-Config des

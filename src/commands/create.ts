@@ -10,7 +10,7 @@ export interface CreateArgs {
 }
 export interface CreateDeps {
   client: JsonApiClient;
-  emit: (v: unknown) => void;
+  emit: (v: unknown) => void | Promise<void>;
   validate?: (payload: unknown, target: string) => void | Promise<void>;
 }
 
@@ -21,9 +21,9 @@ export async function runCreate(args: CreateArgs, deps: CreateDeps): Promise<voi
     await deps.validate(payload, target);
   }
   if (args.dryRun) {
-    deps.emit({ dry_run: true, method: "POST", path: target, payload });
+    await deps.emit({ dry_run: true, method: "POST", path: target, payload });
     return;
   }
   const res = await deps.client.post(target, payload);
-  deps.emit(res);
+  await deps.emit(res);
 }

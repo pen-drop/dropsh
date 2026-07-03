@@ -1,9 +1,9 @@
 import { CliError, ConfigError } from "../../errors.js";
 import type { JsonApiDocument } from "../jsonapi/types.js";
-import type { RenderContext, Renderer } from "./render.js";
+import { type AnyRenderer, isInteractive, type RenderContext } from "./render.js";
 
 export interface Output {
-  emit(value: unknown, ctx?: RenderContext): void;
+  emit(value: unknown, ctx?: RenderContext): void | Promise<void>;
   fail(err: unknown): void;
   hasFormat(id: string): boolean;
 }
@@ -11,7 +11,7 @@ export interface Output {
 export interface OutputOptions {
   stdout: (s: string) => void;
   stderr: (s: string) => void;
-  renderers?: Renderer[];
+  renderers?: AnyRenderer[];
   getFormat?: () => string;
 }
 
@@ -20,7 +20,7 @@ function isJsonApiDocument(v: unknown): v is JsonApiDocument {
 }
 
 export function createOutput(opts: OutputOptions): Output {
-  const registry = new Map<string, Renderer>();
+  const registry = new Map<string, AnyRenderer>();
   for (const r of opts.renderers ?? []) {
     if (registry.has(r.id)) throw new ConfigError(`Duplicate renderer id: ${r.id}`);
     registry.set(r.id, r);
@@ -39,6 +39,9 @@ export function createOutput(opts: OutputOptions): Output {
         throw new ConfigError(`Unknown format: ${fmt}`, {
           available: ["json", ...registry.keys()],
         });
+      }
+      if (isInteractive(renderer)) {
+        return renderer.run(value, ctx ?? { command: "read" });
       }
       const text = renderer.render(value, ctx ?? { command: "read" });
       opts.stdout(text.endsWith("\n") ? text : `${text}\n`);

@@ -52,11 +52,19 @@ dropsh --format table search node --bundle=article  # aligned table
 `--format` applies only to entity commands (`read`, `search`, `create`,
 `update`). Using it on `delete`, `upload-file`, or `schema` exits with code 2.
 
-The `@dropsh/plugin-tui` plugin adds an interactive browser:
+The `@dropsh/plugin-tui` plugin adds an interactive full-screen format,
+selected the same way via `--format tui` (requires a TTY — an interactive
+terminal):
 
 ```bash
-dropsh browse node --bundle=article   # requires an interactive terminal
+dropsh --format tui read node/article/<uuid>          # opens straight into the detail pane
+dropsh --format tui search node --bundle=article      # list → Enter → detail pane
 ```
+
+`read --format tui` boots directly into the detail pane for the single
+entity. `search --format tui` shows a navigable list (↑/↓, Enter opens the
+detail pane, Esc/q goes back or quits). `--include` flows through to the
+detail pane in both cases.
 
 ### `schema`
 

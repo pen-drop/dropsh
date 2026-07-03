@@ -40,6 +40,6 @@ export function resolveView(opts: TuiOptions, entityType: string, bundle?: strin
 
 export function assertTty(isTty: boolean): void {
   if (!isTty) {
-    throw new ConfigError("browse requires an interactive terminal");
+    throw new ConfigError("--format tui requires an interactive terminal");
   }
 }
