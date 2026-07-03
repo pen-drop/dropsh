@@ -35,6 +35,17 @@ function resolveConfigPath(override?: string): string {
   return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
 }
 
+// Normalizes a variadic --include option into a flat, trimmed list of field
+// names: splits any comma-containing entries (so both `--include a,b` and
+// `--include a b` work) and drops empty strings.
+export function normalizeInclude(raw: string[] | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .flatMap((entry) => entry.split(","))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
   program
@@ -131,13 +142,18 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
   program
     .command("read <target>")
     .description("Read entity_type/bundle/uuid")
-    .action((target: string) => {
+    .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .action((target: string, o: { include?: string[] }) => {
       const [entityType, bundle] = target.split("/") as [string?, string?];
       const rctx: RenderContext = { command: "read", target };
       if (entityType !== undefined) rctx.entityType = entityType;
       if (bundle !== undefined) rctx.bundle = bundle;
+      // biome-ignore lint/suspicious/noExplicitAny: optional include added conditionally
+      const args = { target } as any;
+      const include = normalizeInclude(o.include);
+      if (include.length > 0) args.include = include;
       return run(
-        (ctx) => runRead({ target }, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
+        (ctx) => runRead(args, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
         assertRenderable,
       );
     });
@@ -148,17 +164,25 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .option("--bundle <bundle>")
     .option("--filter <kv...>", "filter in key:value or key:op:value form", [])
     .option("--limit <n>", "max results", (v) => parseInt(v, 10), 50)
-    .action((entityType: string, o: { bundle?: string; filter: string[]; limit: number }) => {
-      // biome-ignore lint/suspicious/noExplicitAny: optional bundle added conditionally
-      const args = { entityType, filters: o.filter, limit: o.limit } as any;
-      if (o.bundle !== undefined) args.bundle = o.bundle;
-      const rctx: RenderContext = { command: "search", entityType };
-      if (o.bundle !== undefined) rctx.bundle = o.bundle;
-      return run(
-        (ctx) => runSearch(args, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
-        assertRenderable,
-      );
-    });
+    .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .action(
+      (
+        entityType: string,
+        o: { bundle?: string; filter: string[]; limit: number; include?: string[] },
+      ) => {
+        // biome-ignore lint/suspicious/noExplicitAny: optional bundle/include added conditionally
+        const args = { entityType, filters: o.filter, limit: o.limit } as any;
+        if (o.bundle !== undefined) args.bundle = o.bundle;
+        const include = normalizeInclude(o.include);
+        if (include.length > 0) args.include = include;
+        const rctx: RenderContext = { command: "search", entityType };
+        if (o.bundle !== undefined) rctx.bundle = o.bundle;
+        return run(
+          (ctx) => runSearch(args, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
+          assertRenderable,
+        );
+      },
+    );
 
   program
     .command("create <entity_type>")

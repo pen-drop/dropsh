@@ -1,8 +1,10 @@
+import { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import type { JsonApiClient } from "../core/jsonapi/client.js";
 import { ValidationError } from "../errors.js";
 
 export interface ReadArgs {
   target: string;
+  include?: string[];
 }
 export interface ReadDeps {
   client: JsonApiClient;
@@ -16,6 +18,13 @@ export async function runRead(args: ReadArgs, deps: ReadDeps): Promise<void> {
   if (!TARGET_RE.test(args.target)) {
     throw new ValidationError(`target must be <entity_type>/<bundle>/<uuid>, got "${args.target}"`);
   }
-  const res = await deps.client.get(args.target);
+  let res: unknown;
+  if (args.include?.length) {
+    const params = new DrupalJsonApiParams();
+    params.addInclude(args.include);
+    res = await deps.client.get(args.target, params);
+  } else {
+    res = await deps.client.get(args.target);
+  }
   deps.emit(res);
 }
