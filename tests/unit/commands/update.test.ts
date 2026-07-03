@@ -6,7 +6,7 @@ import { ValidationError } from "../../../src/errors.js";
 function client(): JsonApiClient {
   return {
     get: vi.fn(), post: vi.fn(), delete: vi.fn(), upload: vi.fn(),
-    patch: vi.fn(async () => ({ data: { id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } })),
+    patch: vi.fn(async () => ({ data: { type: "node--article", id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } })),
   };
 }
 

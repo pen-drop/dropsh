@@ -6,7 +6,7 @@ import { ValidationError } from "../../../src/errors.js";
 function client(): JsonApiClient {
   return {
     get: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn(),
-    post: vi.fn(async () => ({ data: { id: "new-uuid" } })),
+    post: vi.fn(async () => ({ data: { type: "node--article", id: "new-uuid" } })),
   };
 }
 
@@ -21,7 +21,7 @@ describe("runCreate", () => {
     expect(c.post).toHaveBeenCalledWith("node/article", {
       data: { type: "node--article", attributes: { title: "Hi" } },
     });
-    expect(emitted).toEqual([{ data: { id: "new-uuid" } }]);
+    expect(emitted).toEqual([{ data: { type: "node--article", id: "new-uuid" } }]);
   });
 
   it("dry-run returns payload without calling client", async () => {
