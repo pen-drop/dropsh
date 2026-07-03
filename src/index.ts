@@ -44,6 +44,17 @@ function resolveConfigPath(override?: string): string {
   return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
 }
 
+// Normalizes a variadic --include option into a flat, trimmed list of field
+// names: splits any comma-containing entries (so both `--include a,b` and
+// `--include a b` work) and drops empty strings.
+export function normalizeInclude(raw: string[] | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .flatMap((entry) => entry.split(","))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 async function defaultContext(configPath: string): Promise<CommandContext> {
   const cfg = await loadConfig(configPath);
   const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
@@ -138,9 +149,14 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
   program
     .command("read <target>")
     .description("Read entity_type/bundle/uuid")
-    .action((target: string) =>
-      run((ctx) => runRead({ target }, { client: ctx.client, emit: output.emit })),
-    );
+    .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .action((target: string, o: { include?: string[] }) => {
+      // biome-ignore lint/suspicious/noExplicitAny: optional include added conditionally
+      const args = { target } as any;
+      const include = normalizeInclude(o.include);
+      if (include.length > 0) args.include = include;
+      return run((ctx) => runRead(args, { client: ctx.client, emit: output.emit }));
+    });
 
   program
     .command("search <entity_type>")
@@ -148,12 +164,20 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .option("--bundle <bundle>")
     .option("--filter <kv...>", "filter in key:value or key:op:value form", [])
     .option("--limit <n>", "max results", (v) => parseInt(v, 10), 50)
-    .action((entityType: string, o: { bundle?: string; filter: string[]; limit: number }) => {
-      // biome-ignore lint/suspicious/noExplicitAny: optional bundle added conditionally
-      const args = { entityType, filters: o.filter, limit: o.limit } as any;
-      if (o.bundle !== undefined) args.bundle = o.bundle;
-      run((ctx) => runSearch(args, { client: ctx.client, emit: output.emit }));
-    });
+    .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .action(
+      (
+        entityType: string,
+        o: { bundle?: string; filter: string[]; limit: number; include?: string[] },
+      ) => {
+        // biome-ignore lint/suspicious/noExplicitAny: optional bundle/include added conditionally
+        const args = { entityType, filters: o.filter, limit: o.limit } as any;
+        if (o.bundle !== undefined) args.bundle = o.bundle;
+        const include = normalizeInclude(o.include);
+        if (include.length > 0) args.include = include;
+        return run((ctx) => runSearch(args, { client: ctx.client, emit: output.emit }));
+      },
+    );
 
   program
     .command("create <entity_type>")
