@@ -1,4 +1,4 @@
-import type { JsonApiDocument, JsonApiResource, RenderContext } from "dropsh/plugin";
+import { indexIncluded, type JsonApiDocument, type JsonApiResource, type RenderContext } from "dropsh/plugin";
 
 type Scalar = string | number | boolean;
 
@@ -62,9 +62,16 @@ function renderResource(res: JsonApiResource): string {
 
 export function renderMarkdown(doc: JsonApiDocument, _ctx: RenderContext): string {
   const data = doc.data;
-  if (Array.isArray(data)) {
-    if (data.length === 0) return "_(no results)_";
-    return data.map(renderResource).join("\n\n---\n\n");
-  }
-  return renderResource(data);
+  const primary = Array.isArray(data)
+    ? data.length === 0
+      ? "_(no results)_"
+      : data.map(renderResource).join("\n\n---\n\n")
+    : renderResource(data);
+
+  // Resources pulled in via `--include` are appended under an Included section
+  // so the related entities are visible, not just their reference ids.
+  const included = [...indexIncluded(doc).values()];
+  if (included.length === 0) return primary;
+  const inc = included.map(renderResource).join("\n\n---\n\n");
+  return `${primary}\n\n## Included\n\n${inc}`;
 }

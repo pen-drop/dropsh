@@ -4,6 +4,35 @@ import { renderMarkdown } from "../../src/render-md.js";
 const ctx = { command: "read" as const };
 
 describe("renderMarkdown", () => {
+  it("appends an Included section for --include'd resources", () => {
+    const out = renderMarkdown(
+      {
+        data: {
+          type: "node--article",
+          id: "u1",
+          attributes: { title: "Primary" },
+          relationships: { field_related: { data: { type: "node--article", id: "r1" } } },
+        },
+        included: [{ type: "node--article", id: "r1", attributes: { title: "Related One" } }],
+      },
+      ctx,
+    );
+    expect(out).toContain("title: Primary");
+    expect(out).toContain("## Included");
+    expect(out).toContain("id: r1");
+    expect(out).toContain("title: Related One");
+    // primary comes before the included section
+    expect(out.indexOf("title: Primary")).toBeLessThan(out.indexOf("## Included"));
+  });
+
+  it("omits the Included section when there is no included", () => {
+    const out = renderMarkdown(
+      { data: { type: "node--article", id: "u1", attributes: { title: "Solo" } } },
+      ctx,
+    );
+    expect(out).not.toContain("## Included");
+  });
+
   it("renders a single resource as frontmatter + body", () => {
     const out = renderMarkdown(
       { data: { type: "node--article", id: "u1", attributes: { title: "Hello", status: true, body: { value: "The text." } } } },
