@@ -39,6 +39,25 @@ dropsh schema [--refresh]
 dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
 ```
 
+### Output formats
+
+By default every command emits JSON. Load a renderer plugin and pass a global
+`--format <id>` (before the subcommand) to render entities differently:
+
+```bash
+dropsh --format md read node/article/<uuid>      # Markdown detail view
+dropsh --format table search node --bundle=article  # aligned table
+```
+
+`--format` applies only to entity commands (`read`, `search`, `create`,
+`update`). Using it on `delete`, `upload-file`, or `schema` exits with code 2.
+
+The `@dropsh/plugin-tui` plugin adds an interactive browser:
+
+```bash
+dropsh browse node --bundle=article   # requires an interactive terminal
+```
+
 ### `schema`
 
 Without a target, prints the list of available `<entity_type>/<bundle>` targets on the site.
