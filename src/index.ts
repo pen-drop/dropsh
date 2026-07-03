@@ -154,7 +154,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       if (o.bundle !== undefined) args.bundle = o.bundle;
       const rctx: RenderContext = { command: "search", entityType };
       if (o.bundle !== undefined) rctx.bundle = o.bundle;
-      run(
+      return run(
         (ctx) => runSearch(args, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
         assertRenderable,
       );
@@ -181,7 +181,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         } = { entityType, bundle: o.bundle, dataArg: o.data };
         if (o.dryRun !== undefined) args.dryRun = o.dryRun;
         if (o.validate === false) args.noValidate = true;
-        run(async (ctx) => {
+        return run(async (ctx) => {
           const rctx: RenderContext = { command: "create", entityType, bundle: o.bundle };
           const deps: {
             client: JsonApiClient;
@@ -214,7 +214,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       } = { target, dataArg: o.data };
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
       if (o.validate === false) args.noValidate = true;
-      run(async (ctx) => {
+      return run(async (ctx) => {
         const [entityType, bundle] = target.split("/") as [string?, string?];
         const rctx: RenderContext = { command: "update", target };
         if (entityType !== undefined) rctx.entityType = entityType;
@@ -242,7 +242,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run(
+      return run(
         (ctx) => runDelete(args, { client: ctx.client, emit: output.emit }),
         () => assertJsonOnly("delete"),
       );
@@ -258,7 +258,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target: o.target, file: o.file } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run(
+      return run(
         (ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }),
         () => assertJsonOnly("upload-file"),
       );
@@ -275,7 +275,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         target !== undefined
           ? { target, operation, refresh: Boolean(o.refresh) }
           : { operation, refresh: Boolean(o.refresh) };
-      run(
+      return run(
         (ctx) =>
           runSchema(schemaArgs, {
             http: ctx.http,

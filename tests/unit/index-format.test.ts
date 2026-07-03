@@ -20,18 +20,38 @@ const mdPlugin: DrupalCliPlugin = {
   renderers: [{ id: "md", render: (doc) => `# ${(Array.isArray(doc.data) ? doc.data[0] : doc.data)?.id ?? ""}` }],
 };
 
-function harness(plugins: DrupalCliPlugin[] = []) {
+function harness(plugins: DrupalCliPlugin[] = [], client: JsonApiClient = fakeClient()) {
   const out: string[] = [];
   const err: string[] = [];
   const codes: number[] = [];
   const program = buildProgram({
     plugins,
-    contextFactory: async () => ({ client: fakeClient(), plugins } as unknown as CommandContext),
+    contextFactory: async () => ({ client, plugins } as unknown as CommandContext),
     stdout: (s) => out.push(s),
     stderr: (s) => err.push(s),
     setExitCode: (c) => codes.push(c),
   });
   return { program, out, err, codes };
+}
+
+// A client whose `get` resolves on a macrotask (not just a microtask), so that
+// only a properly-`return`ed action promise (chained by commander's parseAsync)
+// will be awaited before assertions run. An unreturned `run(...)` call would
+// leave `get` still pending when `parseAsync` resolves, exposing the bug this
+// test guards against.
+function macrotaskDelayedClient(): JsonApiClient {
+  const inner = fakeClient();
+  return {
+    ...inner,
+    get: vi.fn(
+      (...args: Parameters<JsonApiClient["get"]>) =>
+        new Promise((resolve, reject) => {
+          setImmediate(() => {
+            inner.get(...args).then(resolve, reject);
+          });
+        }),
+    ) as unknown as JsonApiClient["get"],
+  };
 }
 
 describe("--format", () => {
@@ -60,5 +80,20 @@ describe("--format", () => {
     await h.program.parseAsync(["node", "dropsh", "--format", "md", "schema"]);
     expect(JSON.parse(h.err.join("")).error.code).toBe("E_CONFIG");
     expect(h.codes).toContain(2);
+  });
+
+  it("search with --format md uses the renderer (action promise is awaited)", async () => {
+    const h = harness([mdPlugin], macrotaskDelayedClient());
+    await h.program.parseAsync([
+      "node",
+      "dropsh",
+      "--format",
+      "md",
+      "search",
+      "node",
+      "--bundle",
+      "article",
+    ]);
+    expect(h.out.join("")).toBe("# u1\n");
   });
 });
