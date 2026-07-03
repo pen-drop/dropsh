@@ -166,6 +166,8 @@ renderers?: Renderer[];
   `ink-testing-library`), isolated in this package's `package.json`. Core stays
   dependency-free.
 - Read-only first phase (browse/view). Editing is future work.
+- Phase-1 `browse` renders the detail pane as Markdown only; `detailRenderer`
+  is reserved for a later phase and has no effect yet.
 
 #### TUI configuration
 

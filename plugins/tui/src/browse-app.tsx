@@ -22,6 +22,12 @@ function label(res: JsonApiResource): string {
   return res.id;
 }
 
+function rowText(res: JsonApiResource, columns: string[] | undefined): string {
+  if (!columns || columns.length === 0) return label(res);
+  const attrs = res.attributes ?? {};
+  return columns.map((key) => (key === "id" ? res.id : String(attrs[key] ?? ""))).join("  ");
+}
+
 export function Browse({ client, entityType, bundle, view }: BrowseProps): React.ReactElement {
   const { exit } = useApp();
   const [rows, setRows] = useState<JsonApiResource[]>([]);
@@ -67,7 +73,7 @@ export function Browse({ client, entityType, bundle, view }: BrowseProps): React
     <Box flexDirection="column">
       {rows.map((res, i) => (
         <Text key={res.id} inverse={i === selected}>
-          {label(res)}
+          {rowText(res, view.columns)}
         </Text>
       ))}
       {rows.length === 0 ? <Text dimColor>loading…</Text> : null}
