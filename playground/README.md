@@ -154,6 +154,56 @@ npx drupal-cli --config drupal-cli.config.js create node \
 # jetzt lehnt Drupal selbst serverseitig ab (exit 5, E_HTTP)
 ```
 
+## 8. Render-Formate (`--format`)
+
+Standardmäßig geben alle Kommandos JSON aus. Sind die Render-Plugins in der
+Config aktiv (`markdownPlugin()`, `tablePlugin()`), wählt ein globales
+`--format <id>` **vor** dem Subkommando ein anderes Format. Es gilt nur für
+Entity-Kommandos (`read`, `search`, `create`, `update`).
+
+Markdown-Detailansicht einer einzelnen Entity (YAML-Frontmatter + Body):
+
+```bash
+npx dropsh --config dropsh.config.js --format md read node/article_test/$UUID
+```
+
+Tabellenansicht einer Trefferliste (`search` liefert eine Collection):
+
+```bash
+npx dropsh --config dropsh.config.js --format table search node \
+  --bundle=article_test --limit=10
+```
+
+`json` bleibt der Default und ist voll rückwärtskompatibel:
+
+```bash
+npx dropsh --config dropsh.config.js read node/article_test/$UUID   # JSON
+```
+
+Auf Nicht-Entity-Kommandos (`delete`, `upload-file`, `schema`) ist `--format`
+nicht anwendbar und bricht mit Exit-Code 2 ab:
+
+```bash
+npx dropsh --config dropsh.config.js --format md schema
+# exit 2, error.code=E_CONFIG: format 'md' not applicable to command 'schema'
+```
+
+## 9. Interaktiver Browser (`dropsh browse`)
+
+Das `tuiPlugin()` fügt ein interaktives Vollbild-`browse` hinzu (benötigt ein
+echtes Terminal — TTY). Liste durchblättern mit ↑/↓, Enter öffnet die
+Markdown-Detailansicht, `q`/Esc zurück bzw. beenden:
+
+```bash
+npx dropsh --config dropsh.config.js browse node --bundle=article_test
+```
+
+Die Listen-Spalten und Default-Filter kommen aus der `views`-Config des
+`tuiPlugin()` in `dropsh.config.js` (hier: Spalten `title`/`status`, Filter
+`status: "1"`). Ohne passenden View-Eintrag fällt die Liste auf eine
+Heuristik zurück (Titel/Name → id). Die Detailansicht ist in dieser Phase
+immer Markdown.
+
 ## Kompletter Durchlauf als Skript
 
 ```bash
