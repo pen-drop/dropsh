@@ -31,7 +31,7 @@ function assertTty(isTty: boolean): void {
   if (!isTty) throw new ConfigError("--format tui requires an interactive terminal");
 }
 
-function initialTarget(
+export function initialTarget(
   doc: JsonApiDocument,
   ctx: RenderContext,
 ): {
