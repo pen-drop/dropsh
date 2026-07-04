@@ -1,9 +1,20 @@
 import { Text } from "ink";
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { LinkDescriptor } from "./types.js";
 
+interface Entry {
+  id: symbol;
+  target: LinkDescriptor;
+}
+
 interface FocusRegistry {
-  register(target: LinkDescriptor): number;
+  // register/unregister are called from TuiLink effects, never during render,
+  // so a TuiLink re-rendering without a Provider re-render cannot create
+  // duplicate entries. Registration order (via mount-effect order) is DOM order.
+  register(id: symbol, target: LinkDescriptor): void;
+  unregister(id: symbol): void;
+  indexOf(id: symbol): number;
   count(): number;
   focusedIndex: number;
   targetAt(i: number): LinkDescriptor | undefined;
@@ -24,22 +35,22 @@ export function FocusRegistryProvider({
   focusedIndex?: number;
   children: React.ReactNode;
 }): React.ReactElement {
-  const targets = useRef<LinkDescriptor[]>([]);
-  const [, force] = useState(0);
-  targets.current = [];
-  const reg: FocusRegistry = {
-    register(target) {
-      targets.current.push(target);
-      return targets.current.length - 1;
-    },
-    count: () => targets.current.length,
-    focusedIndex,
-    targetAt: (i) => targets.current[i],
-  };
-  // Expose the live target list for the host via context; re-render on mount settle.
-  useEffect(() => {
-    force((n) => n + 1);
-  }, []);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const reg = useMemo<FocusRegistry>(
+    () => ({
+      register(id, target) {
+        setEntries((prev) => (prev.some((e) => e.id === id) ? prev : [...prev, { id, target }]));
+      },
+      unregister(id) {
+        setEntries((prev) => prev.filter((e) => e.id !== id));
+      },
+      indexOf: (id) => entries.findIndex((e) => e.id === id),
+      count: () => entries.length,
+      focusedIndex,
+      targetAt: (i) => entries[i]?.target,
+    }),
+    [entries, focusedIndex],
+  );
   return <Ctx.Provider value={reg}>{children}</Ctx.Provider>;
 }
 
@@ -51,7 +62,17 @@ export function TuiLink({
   children: React.ReactNode;
 }): React.ReactElement {
   const reg = useFocusRegistry();
-  const index = reg.register(target);
+  const idRef = useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol("tuilink");
+  const id = idRef.current;
+  // Register once on mount, unregister on unmount. A link's target is fixed for
+  // its lifetime (derived from stable entity data), so no per-render update.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: register once on mount only
+  useEffect(() => {
+    reg.register(id, target);
+    return () => reg.unregister(id);
+  }, []);
+  const index = reg.indexOf(id);
   const isFocused = index === reg.focusedIndex;
   return <Text inverse={isFocused}>{children}</Text>;
 }
