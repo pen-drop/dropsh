@@ -1,5 +1,6 @@
 import type { JsonApiClient } from "dropsh/plugin";
 import { describe, expect, it, vi } from "vitest";
+import { TuiEntityView } from "../../src/entity-view.js";
 import { buildRegistry } from "../../src/registry.js";
 import { createRouter } from "../../src/router.js";
 
@@ -39,5 +40,34 @@ describe("createRouter", () => {
   it("throws on an unknown route name", async () => {
     const router = createRouter({ registry: buildRegistry([]), client: client(), viewMode: "default" });
     await expect(router.navigate("nope", {})).rejects.toThrow(/unknown route/i);
+  });
+
+  it("passes the view mode's include hints to client.get on a non-seeded canonical fetch", async () => {
+    class ArticleView extends TuiEntityView {
+      static override entityType = "node";
+      static override bundle = "article";
+      static override viewModes = { default: { include: ["uid"] } };
+      build() {
+        return null as never;
+      }
+    }
+    const get = vi.fn(async (_path: string, _params?: import("drupal-jsonapi-params").DrupalJsonApiParams) => ({
+      data: { type: "node--article", id: "x" },
+    }));
+    const c = { get, post: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn() } as unknown as JsonApiClient;
+    const router = createRouter({
+      registry: buildRegistry([{ id: "x", entities: [ArticleView] }]),
+      client: c,
+      viewMode: "default",
+    });
+    await router.navigate("entity.canonical", { type: "node", bundle: "article", id: "x" });
+    expect(get.mock.calls[0]?.[1]?.getQueryString()).toContain("include=uid");
+  });
+
+  it("fetches the bundle-scoped path for a collection when no seededDoc is given", async () => {
+    const c = client();
+    const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
+    await router.navigate("entity.collection", { type: "node", bundle: "article" });
+    expect(c.get).toHaveBeenCalledWith("node/article");
   });
 });

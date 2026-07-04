@@ -1,4 +1,5 @@
 import type { JsonApiResource } from "dropsh/plugin";
+import { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import React from "react";
 import { GenericEntityList, TuiEntityList } from "./entity-list.js";
 import { GenericEntityView, TuiEntityView } from "./entity-view.js";
@@ -40,13 +41,15 @@ function coreRoutes(): TuiRoute[] {
     path: "/{type}/{bundle}/{id}",
     controller: async (params, ctx) => {
       const ViewClass = ctx.resolveView(params.type as string, params.bundle);
+      const include = ViewClass?.viewModes?.[ctx.viewMode]?.include;
+      const path = params.bundle
+        ? `${params.type}/${params.bundle}/${params.id}`
+        : `${params.type}/${params.id}`;
       const doc =
         ctx.seededDoc ??
-        (await ctx.client.get(
-          params.bundle
-            ? `${params.type}/${params.bundle}/${params.id}`
-            : `${params.type}/${params.id}`,
-        ));
+        (include?.length
+          ? await ctx.client.get(path, new DrupalJsonApiParams().addInclude(include))
+          : await ctx.client.get(path));
       const entity = (Array.isArray(doc.data) ? doc.data[0] : doc.data) as JsonApiResource;
       const instance = new (
         ViewClass as unknown as { new (): { build: TuiEntityView["build"] } }
@@ -63,7 +66,9 @@ function coreRoutes(): TuiRoute[] {
     path: "/{type}",
     controller: async (params, ctx) => {
       const ListClass = ctx.resolveList(params.type as string, params.bundle);
-      const doc = ctx.seededDoc ?? (await ctx.client.get(params.type as string));
+      const doc =
+        ctx.seededDoc ??
+        (await ctx.client.get(params.bundle ? `${params.type}/${params.bundle}` : (params.type as string)));
       const rows = (Array.isArray(doc.data) ? doc.data : [doc.data]) as JsonApiResource[];
       const instance = new (
         ListClass as unknown as { new (): { build: TuiEntityList["build"] } }

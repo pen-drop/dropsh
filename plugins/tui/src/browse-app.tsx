@@ -18,6 +18,7 @@ function Keys({
   setFocusedIndex,
   bump,
   setError,
+  setNavSeq,
 }: {
   router: Router;
   onExit: () => void;
@@ -25,6 +26,7 @@ function Keys({
   setFocusedIndex: (fn: (i: number) => number) => void;
   bump: () => void;
   setError: (msg: string | null) => void;
+  setNavSeq: (fn: (n: number) => number) => void;
 }): null {
   const reg = useFocusRegistry();
   useInput((input, key) => {
@@ -33,6 +35,8 @@ function Keys({
       if (!hasMore) onExit();
       else {
         setFocusedIndex(() => 0);
+        setError(null);
+        setNavSeq((n) => n + 1);
         bump();
       }
       return;
@@ -47,6 +51,7 @@ function Keys({
           .then(() => {
             setFocusedIndex(() => 0);
             setError(null);
+            setNavSeq((n) => n + 1);
             bump();
           })
           .catch((err: unknown) => {
@@ -63,12 +68,15 @@ export function Browse({ router, onExit }: BrowseProps): React.ReactElement {
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [, setNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [navSeq, setNavSeq] = useState(0);
   const bump = () => setNonce((n) => n + 1);
   const element = router.current();
   return (
     <FocusRegistryProvider focusedIndex={focusedIndex}>
       <Box flexDirection="column">
-        {element}
+        <Box key={navSeq} flexDirection="column">
+          {element}
+        </Box>
         {error !== null ? <Text color="red">Error: {error}</Text> : null}
         <Text dimColor>(↑/↓: move, enter: open, q/esc: back)</Text>
       </Box>
@@ -79,6 +87,7 @@ export function Browse({ router, onExit }: BrowseProps): React.ReactElement {
         setFocusedIndex={setFocusedIndex}
         bump={bump}
         setError={setError}
+        setNavSeq={setNavSeq}
       />
     </FocusRegistryProvider>
   );

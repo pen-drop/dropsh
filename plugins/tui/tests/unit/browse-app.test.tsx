@@ -89,4 +89,41 @@ describe("Browse", () => {
     await tick();
     expect(lastFrame()).toContain("boom");
   });
+
+  it("navigates using the newly-rendered entity's links, not the previous entity's (regression)", async () => {
+    const rel = (id: string) => ({
+      field_ref: { data: { type: "node--article", id } },
+    });
+    const get = vi.fn(async (path: string) => {
+      // A already seeded; B links to C; C links to D.
+      if (path === "node/article/B") {
+        return {
+          data: {
+            type: "node--article",
+            id: "B",
+            attributes: { title: "Bee" },
+            relationships: rel("C"),
+          },
+        };
+      }
+      return { data: { type: "node--article", id: path.split("/").pop(), attributes: { title: "X" } } };
+    });
+    const c = { get, post: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn() } as unknown as JsonApiClient;
+    const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
+    // Seed A, which links to B.
+    await router.navigate(
+      "entity.canonical",
+      { type: "node", bundle: "article", id: "A" },
+      {
+        data: { type: "node--article", id: "A", attributes: { title: "Ay" }, relationships: rel("B") },
+      },
+    );
+    const { stdin } = render(<Browse router={router} onExit={() => {}} />);
+    await tick();
+    stdin.write("\r"); // Enter on A's field_ref → fetch B
+    await tick();
+    stdin.write("\r"); // Enter on the link now shown for B → must fetch C, NOT B again
+    await tick();
+    expect(get).toHaveBeenCalledWith("node/article/C");
+  });
 });
