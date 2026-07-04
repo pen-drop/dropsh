@@ -1,9 +1,14 @@
 import { CliError, ConfigError } from "../../errors.js";
 import type { JsonApiDocument } from "../jsonapi/types.js";
-import { type AnyRenderer, isInteractive, type RenderContext } from "./render.js";
+import {
+  type AnyRenderer,
+  isInteractive,
+  type RenderContext,
+  type RenderServices,
+} from "./render.js";
 
 export interface Output {
-  emit(value: unknown, ctx?: RenderContext): void | Promise<void>;
+  emit(value: unknown, ctx?: RenderContext, services?: RenderServices): void | Promise<void>;
   fail(err: unknown): void;
   hasFormat(id: string): boolean;
 }
@@ -28,7 +33,7 @@ export function createOutput(opts: OutputOptions): Output {
   const getFormat = opts.getFormat ?? (() => "json");
 
   return {
-    emit(value, ctx) {
+    emit(value, ctx, services) {
       const fmt = getFormat();
       if (fmt === "json" || !isJsonApiDocument(value)) {
         opts.stdout(`${JSON.stringify(value)}\n`);
@@ -41,7 +46,7 @@ export function createOutput(opts: OutputOptions): Output {
         });
       }
       if (isInteractive(renderer)) {
-        return renderer.run(value, ctx ?? { command: "read" });
+        return renderer.run(value, ctx ?? { command: "read" }, services);
       }
       const text = renderer.render(value, ctx ?? { command: "read" });
       opts.stdout(text.endsWith("\n") ? text : `${text}\n`);

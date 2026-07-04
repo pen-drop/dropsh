@@ -60,6 +60,7 @@ describe("createOutput", () => {
     expect(run).toHaveBeenCalledWith(
       { data: { type: "node--article", id: "u1" } },
       { command: "read" },
+      undefined,
     );
     expect(c.out).toHaveLength(0);
   });
@@ -70,5 +71,19 @@ describe("createOutput", () => {
     o.fail(new ConfigError("boom"));
     expect(JSON.parse(c.err.join("")).error.code).toBe("E_CONFIG");
     expect(c.out.join("")).toBe("");
+  });
+
+  it("passes services to an interactive renderer's run()", async () => {
+    const c = collect();
+    const run = vi.fn(async () => {});
+    const tuiRenderer: InteractiveRenderer = { id: "tui", interactive: true, run };
+    const o = createOutput({ ...c.push, renderers: [tuiRenderer], getFormat: () => "tui" });
+    const services = { client: {} as never, baseUrl: "https://x.test" };
+    await o.emit({ data: { type: "node--article", id: "u1" } }, { command: "read", viewMode: "teaser" }, services);
+    expect(run).toHaveBeenCalledWith(
+      { data: { type: "node--article", id: "u1" } },
+      { command: "read", viewMode: "teaser" },
+      services,
+    );
   });
 });

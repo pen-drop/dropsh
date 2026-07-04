@@ -1,3 +1,4 @@
+import type { JsonApiClient } from "../jsonapi/client.js";
 import type { JsonApiDocument, JsonApiResource } from "../jsonapi/types.js";
 
 // Indexes a document's `included` resources by `${type}/${id}` so renderers can
@@ -16,6 +17,12 @@ export interface RenderContext {
   target?: string;
   entityType?: string;
   bundle?: string;
+  viewMode?: string;
+}
+
+export interface RenderServices {
+  client: JsonApiClient;
+  baseUrl: string;
 }
 
 export interface Renderer {
@@ -26,7 +33,7 @@ export interface Renderer {
 export interface InteractiveRenderer {
   readonly id: string;
   readonly interactive: true;
-  run(doc: JsonApiDocument, ctx: RenderContext): Promise<void>;
+  run(doc: JsonApiDocument, ctx: RenderContext, services?: RenderServices): Promise<void>;
 }
 
 export type AnyRenderer = Renderer | InteractiveRenderer;

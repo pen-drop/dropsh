@@ -6,6 +6,7 @@ export type {
   InteractiveRenderer,
   RenderContext,
   Renderer,
+  RenderServices,
 } from "./core/cli/render.js";
 export { indexIncluded, isInteractive } from "./core/cli/render.js";
 export type { Config, SiteConfig } from "./core/config.js";
