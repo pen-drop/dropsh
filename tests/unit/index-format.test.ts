@@ -96,4 +96,32 @@ describe("--format", () => {
     ]);
     expect(h.out.join("")).toBe("# u1\n");
   });
+
+  it("passes viewMode and services to an interactive renderer via read", async () => {
+    const run = vi.fn(async () => {});
+    const tuiPluginStub: DrupalCliPlugin = {
+      id: "tui-test",
+      requiredModules: [],
+      async extendSchema(_e, _b, s) { return s; },
+      renderers: [{ id: "tui", interactive: true, run }],
+    };
+    const client = fakeClient();
+    const out: string[] = [];
+    const program = buildProgram({
+      plugins: [tuiPluginStub],
+      contextFactory: async () =>
+        ({ client, baseUrl: "https://x.test", plugins: [tuiPluginStub] } as unknown as CommandContext),
+      stdout: (s) => out.push(s),
+      stderr: () => {},
+      setExitCode: () => {},
+    });
+    await program.parseAsync(
+      ["node", "dropsh", "--format", "tui", "--view-mode", "teaser", "read", "node/article/u1"],
+    );
+    expect(run).toHaveBeenCalledTimes(1);
+    const call = run.mock.calls[0] as unknown as [unknown, unknown, unknown];
+    const [, ctx, services] = call;
+    expect(ctx).toMatchObject({ command: "read", entityType: "node", bundle: "article", viewMode: "teaser" });
+    expect(services).toMatchObject({ client, baseUrl: "https://x.test" });
+  });
 });

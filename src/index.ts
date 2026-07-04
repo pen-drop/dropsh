@@ -53,7 +53,8 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .description("Entity-agnostic CLI for Drupal 11 JSON:API")
     .version("0.0.0")
     .option("--config <path>", "path to config file (overrides DROPSH_CONFIG)")
-    .option("--format <id>", "output format: json (default) or a renderer id", "json");
+    .option("--format <id>", "output format: json (default) or a renderer id", "json")
+    .option("--view-mode <name>", "entity view mode for interactive formats", "default");
 
   const stdout = opts.stdout ?? ((s) => process.stdout.write(s));
   const stderr = opts.stderr ?? ((s) => process.stderr.write(s));
@@ -148,12 +149,17 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       const rctx: RenderContext = { command: "read", target };
       if (entityType !== undefined) rctx.entityType = entityType;
       if (bundle !== undefined) rctx.bundle = bundle;
+      rctx.viewMode = program.opts().viewMode as string;
       // biome-ignore lint/suspicious/noExplicitAny: optional include added conditionally
       const args = { target } as any;
       const include = normalizeInclude(o.include);
       if (include.length > 0) args.include = include;
       return run(
-        (ctx) => runRead(args, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
+        (ctx) =>
+          runRead(args, {
+            client: ctx.client,
+            emit: (v) => output.emit(v, rctx, { client: ctx.client, baseUrl: ctx.baseUrl }),
+          }),
         assertRenderable,
       );
     });
@@ -177,8 +183,13 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         if (include.length > 0) args.include = include;
         const rctx: RenderContext = { command: "search", entityType };
         if (o.bundle !== undefined) rctx.bundle = o.bundle;
+        rctx.viewMode = program.opts().viewMode as string;
         return run(
-          (ctx) => runSearch(args, { client: ctx.client, emit: (v) => output.emit(v, rctx) }),
+          (ctx) =>
+            runSearch(args, {
+              client: ctx.client,
+              emit: (v) => output.emit(v, rctx, { client: ctx.client, baseUrl: ctx.baseUrl }),
+            }),
           assertRenderable,
         );
       },
