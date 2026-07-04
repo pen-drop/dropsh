@@ -59,4 +59,34 @@ describe("Browse", () => {
     await tick();
     expect(onExit).toHaveBeenCalled();
   });
+
+  it("surfaces a navigation error instead of crashing", async () => {
+    const c = {
+      get: vi.fn(async () => {
+        throw new Error("boom");
+      }),
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      upload: vi.fn(),
+    } as unknown as JsonApiClient;
+    const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
+    await router.navigate(
+      "entity.canonical",
+      { type: "node", bundle: "article", id: "u1" },
+      {
+        data: {
+          type: "node--article",
+          id: "u1",
+          attributes: { title: "Alpha" },
+          relationships: { uid: { data: { type: "user--user", id: "a1" } } },
+        },
+      },
+    );
+    const { lastFrame, stdin } = render(<Browse router={router} onExit={() => {}} />);
+    await tick();
+    stdin.write("\r"); // Enter → navigate to user/a1 → client.get rejects
+    await tick();
+    expect(lastFrame()).toContain("boom");
+  });
 });

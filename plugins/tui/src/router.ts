@@ -33,7 +33,9 @@ export function createRouter(opts: {
       viewMode: opts.viewMode,
       ...(seededDoc !== undefined ? { seededDoc } : {}),
       navigate: (r, p) => {
-        void navigate(r, p);
+        // Host-level navigation surfaces errors in the UI; a controller-initiated
+        // navigation failure must not become an unhandled rejection / crash.
+        void navigate(r, p).catch(() => {});
       },
       resolveView: opts.registry.resolveView,
       resolveList: opts.registry.resolveList,
