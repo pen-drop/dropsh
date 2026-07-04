@@ -1,85 +1,73 @@
-import { renderMarkdown } from "@dropsh/plugin-markdown/render";
-import type { JsonApiDocument, JsonApiResource, RenderContext } from "dropsh/plugin";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useState } from "react";
-import type { ResolvedView } from "./views.js";
+import { FocusRegistryProvider, useFocusRegistry } from "./link.js";
+import type { Router } from "./router.js";
 
 export interface BrowseProps {
-  doc: JsonApiDocument;
-  ctx: RenderContext;
-  view: ResolvedView;
+  router: Router;
+  onExit: () => void;
 }
 
-function label(res: JsonApiResource): string {
-  const attrs = res.attributes ?? {};
-  for (const key of ["title", "name", "label"]) {
-    const v = attrs[key];
-    if (typeof v === "string") return v;
-  }
-  return res.id;
-}
-
-function rowText(res: JsonApiResource, columns: string[] | undefined): string {
-  if (!columns || columns.length === 0) return label(res);
-  const attrs = res.attributes ?? {};
-  return columns.map((key) => (key === "id" ? res.id : String(attrs[key] ?? ""))).join("  ");
-}
-
-// Renders an already-fetched JSON:API document. A single resource boots
-// straight into the detail pane; a collection shows a navigable list that
-// opens a detail pane on Enter. No fetching happens here — `read`/`search`
-// already did that before selecting `--format tui`.
-export function Browse({ doc, ctx, view }: BrowseProps): React.ReactElement {
-  const { exit } = useApp();
-  const isCollection = Array.isArray(doc.data);
-  const rows: JsonApiResource[] = isCollection
-    ? (doc.data as JsonApiResource[])
-    : [doc.data as JsonApiResource];
-  const [selected, setSelected] = useState(0);
-  const [detail, setDetail] = useState<string | null>(
-    isCollection ? null : renderMarkdown(doc, ctx),
-  );
-
+// Inner component: has access to the focus registry so Enter can read the
+// focused link target and ask the router to navigate to it.
+function Keys({
+  router,
+  onExit,
+  focusedIndex,
+  setFocusedIndex,
+  bump,
+}: {
+  router: Router;
+  onExit: () => void;
+  focusedIndex: number;
+  setFocusedIndex: (fn: (i: number) => number) => void;
+  bump: () => void;
+}): null {
+  const reg = useFocusRegistry();
   useInput((input, key) => {
     if (input === "q" || key.escape) {
-      if (isCollection && detail) {
-        setDetail(null);
-        return;
+      const hasMore = router.back();
+      if (!hasMore) onExit();
+      else {
+        setFocusedIndex(() => 0);
+        bump();
       }
-      exit();
       return;
     }
-    if (!isCollection || detail) return;
-    if (key.upArrow) setSelected((s) => Math.max(0, s - 1));
-    if (key.downArrow) setSelected((s) => Math.min(rows.length - 1, s + 1));
-    if (key.return && rows[selected]) {
-      const selectedDoc: JsonApiDocument =
-        doc.included !== undefined
-          ? { data: rows[selected], included: doc.included }
-          : { data: rows[selected] };
-      setDetail(renderMarkdown(selectedDoc, ctx));
+    if (key.upArrow) setFocusedIndex((i) => Math.max(0, i - 1));
+    if (key.downArrow) setFocusedIndex((i) => Math.min(Math.max(0, reg.count() - 1), i + 1));
+    if (key.return) {
+      const target = reg.targetAt(focusedIndex);
+      if (target) {
+        void router.navigate(target.route, target.params).then(() => {
+          setFocusedIndex(() => 0);
+          bump();
+        });
+      }
     }
   });
+  return null;
+}
 
-  if (detail !== null) {
-    return (
-      <Box flexDirection="column">
-        <Text>{detail}</Text>
-        <Text dimColor>{isCollection ? "(esc/q: back)" : "(esc/q: quit)"}</Text>
-      </Box>
-    );
-  }
-
+export function Browse({ router, onExit }: BrowseProps): React.ReactElement {
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [, setNonce] = useState(0);
+  const bump = () => setNonce((n) => n + 1);
+  const element = router.current();
   return (
-    <Box flexDirection="column">
-      {rows.map((res, i) => (
-        <Text key={res.id} inverse={i === selected}>
-          {rowText(res, view.columns)}
-        </Text>
-      ))}
-      {rows.length === 0 ? <Text dimColor>(no results)</Text> : null}
-      <Text dimColor>(↑/↓: move, enter: open, q: quit)</Text>
-    </Box>
+    <FocusRegistryProvider focusedIndex={focusedIndex}>
+      <Box flexDirection="column">
+        {element}
+        <Text dimColor>(↑/↓: move, enter: open, q/esc: back)</Text>
+      </Box>
+      <Keys
+        router={router}
+        onExit={onExit}
+        focusedIndex={focusedIndex}
+        setFocusedIndex={setFocusedIndex}
+        bump={bump}
+      />
+    </FocusRegistryProvider>
   );
 }

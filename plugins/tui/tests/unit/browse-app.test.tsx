@@ -1,98 +1,62 @@
-import type { JsonApiDocument, RenderContext } from "dropsh/plugin";
+import type { JsonApiClient } from "dropsh/plugin";
 import { render } from "ink-testing-library";
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Browse } from "../../src/browse-app.js";
+import { buildRegistry } from "../../src/registry.js";
+import { createRouter } from "../../src/router.js";
 
-const readCtx: RenderContext = { command: "read" };
-
-function collectionDoc(): JsonApiDocument {
+function client(): JsonApiClient {
   return {
-    data: [
-      { type: "node--article", id: "u1", attributes: { title: "Alpha" } },
-      { type: "node--article", id: "u2", attributes: { title: "Beta" } },
-    ],
-  };
+    get: vi.fn(async () => ({
+      data: { type: "node--article", id: "u9", attributes: { title: "Fetched" } },
+    })),
+    post: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    upload: vi.fn(),
+  } as unknown as JsonApiClient;
 }
 
-function collectionDocWithColumns(): JsonApiDocument {
-  return {
-    data: [
-      { type: "node--article", id: "u1", attributes: { title: "Alpha", status: "published" } },
-      { type: "node--article", id: "u2", attributes: { title: "Beta", status: "draft" } },
-    ],
-  };
-}
-
-function singleDoc(): JsonApiDocument {
-  return {
-    data: { type: "node--article", id: "u1", attributes: { title: "Alpha" } },
-  };
-}
-
-const tick = () => new Promise((r) => setTimeout(r, 10));
+const tick = () => new Promise((r) => setTimeout(r, 20));
 
 describe("Browse", () => {
-  it("boots straight into the detail pane for a single-resource doc", () => {
-    const { lastFrame } = render(
-      <Browse
-        doc={singleDoc()}
-        ctx={readCtx}
-        view={{ filters: {}, detailRenderer: "md", pageSize: 25 }}
-      />,
+  it("renders the seeded entity via the generic view", async () => {
+    const c = client();
+    const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
+    await router.navigate(
+      "entity.canonical",
+      { type: "node", bundle: "article", id: "u1" },
+      {
+        data: {
+          type: "node--article",
+          id: "u1",
+          attributes: { title: "Alpha" },
+          relationships: { uid: { data: { type: "user--user", id: "a1" } } },
+        },
+      },
     );
-    const frame = lastFrame();
-    expect(frame).toContain("type: node--article");
-    expect(frame).toContain("title: Alpha");
-    expect(frame).toContain("(esc/q: quit)");
-  });
-
-  it("lists rows for a collection doc", () => {
-    const { lastFrame } = render(
-      <Browse
-        doc={collectionDoc()}
-        ctx={readCtx}
-        view={{ filters: {}, detailRenderer: "md", pageSize: 25 }}
-      />,
-    );
-    const frame = lastFrame();
-    expect(frame).toContain("Alpha");
-    expect(frame).toContain("Beta");
-  });
-
-  it("renders configured columns instead of the title heuristic", () => {
-    const { lastFrame } = render(
-      <Browse
-        doc={collectionDocWithColumns()}
-        ctx={readCtx}
-        view={{ columns: ["id", "status"], filters: {}, detailRenderer: "md", pageSize: 25 }}
-      />,
-    );
-    const frame = lastFrame();
-    expect(frame).toContain("u1");
-    expect(frame).toContain("published");
-    expect(frame).toContain("u2");
-    expect(frame).toContain("draft");
-    expect(frame).not.toContain("Alpha");
-    expect(frame).not.toContain("Beta");
-  });
-
-  it("opens the detail pane for the selected row on Enter", async () => {
-    const { lastFrame, stdin } = render(
-      <Browse
-        doc={collectionDoc()}
-        ctx={readCtx}
-        view={{ filters: {}, detailRenderer: "md", pageSize: 25 }}
-      />,
-    );
-    // Let the mount effect that enables raw mode (and attaches the input
-    // listener) commit before writing to stdin.
+    const { lastFrame } = render(<Browse router={router} onExit={() => {}} />);
     await tick();
-    stdin.write("\r");
+    expect(lastFrame()).toContain("Alpha");
+    expect(lastFrame()).toContain("uid");
+  });
+
+  it("exits when back() empties the stack", async () => {
+    const c = client();
+    const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
+    await router.navigate(
+      "entity.canonical",
+      { type: "node", bundle: "article", id: "u1" },
+      {
+        data: { type: "node--article", id: "u1", attributes: { title: "Alpha" } },
+      },
+    );
+    const onExit = vi.fn();
+    const { stdin } = render(<Browse router={router} onExit={onExit} />);
     await tick();
-    const frame = lastFrame();
-    expect(frame).toContain("type: node--article");
-    expect(frame).toContain("title: Alpha");
-    expect(frame).toContain("(esc/q: back)");
+    stdin.write("q");
+    await tick();
+    expect(onExit).toHaveBeenCalled();
   });
 });
