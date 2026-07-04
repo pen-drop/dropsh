@@ -68,7 +68,9 @@ function coreRoutes(): TuiRoute[] {
       const ListClass = ctx.resolveList(params.type as string, params.bundle);
       const doc =
         ctx.seededDoc ??
-        (await ctx.client.get(params.bundle ? `${params.type}/${params.bundle}` : (params.type as string)));
+        (await ctx.client.get(
+          params.bundle ? `${params.type}/${params.bundle}` : (params.type as string),
+        ));
       const rows = (Array.isArray(doc.data) ? doc.data : [doc.data]) as JsonApiResource[];
       const instance = new (
         ListClass as unknown as { new (): { build: TuiEntityList["build"] } }
