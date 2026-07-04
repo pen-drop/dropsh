@@ -1,7 +1,14 @@
-import { Text } from "ink";
-import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import { FocusRegistryProvider, TuiLink, useFocusRegistry } from "../../src/link.js";
+
+// Force chalk (used internally by ink to render styles such as `inverse`) to
+// emit real ANSI escapes even though tests run outside a TTY. This must be
+// set before ink — and anything that imports it — is loaded, so those
+// modules are imported dynamically below, after this line runs.
+process.env.FORCE_COLOR = "1";
+
+const { Text } = await import("ink");
+const { render } = await import("ink-testing-library");
+const { FocusRegistryProvider, TuiLink, useFocusRegistry } = await import("../../src/link.js");
 
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
@@ -39,17 +46,19 @@ describe("TuiLink + FocusRegistry", () => {
     expect(lastFrame()).toContain("focus=u2");
   });
 
-  it("moves the inverse styling with focusedIndex", async () => {
+  it("wraps only the focused link in inverse styling", async () => {
     const a = render(tree(0));
     await tick();
-    const frame0 = a.lastFrame();
+    const f0 = a.lastFrame() ?? "";
     const b = render(tree(1));
     await tick();
-    const frame1 = b.lastFrame();
-    // Changing the focused index changes which link is highlighted, so the
-    // rendered frames must differ — proving isFocused drives the inverse style.
-    expect(frame1).not.toEqual(frame0);
-    expect(frame0).toContain("focus=u1");
-    expect(frame1).toContain("focus=u2");
+    const f1 = b.lastFrame() ?? "";
+    const INV = "[7m"; // ANSI SGR: inverse on
+    // focusedIndex 0 → only "Alpha" is highlighted.
+    expect(f0).toContain(`${INV}Alpha`);
+    expect(f0).not.toContain(`${INV}Beta`);
+    // focusedIndex 1 → only "Beta" is highlighted.
+    expect(f1).toContain(`${INV}Beta`);
+    expect(f1).not.toContain(`${INV}Alpha`);
   });
 });
