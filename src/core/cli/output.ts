@@ -1,19 +1,55 @@
-import { CliError } from "../../errors.js";
+import { CliError, ConfigError } from "../../errors.js";
+import type { JsonApiDocument } from "../jsonapi/types.js";
+import {
+  type AnyRenderer,
+  isInteractive,
+  type RenderContext,
+  type RenderServices,
+} from "./render.js";
 
 export interface Output {
-  emit(value: unknown): void;
+  emit(value: unknown, ctx?: RenderContext, services?: RenderServices): void | Promise<void>;
   fail(err: unknown): void;
+  hasFormat(id: string): boolean;
 }
 
 export interface OutputOptions {
   stdout: (s: string) => void;
   stderr: (s: string) => void;
+  renderers?: AnyRenderer[];
+  getFormat?: () => string;
+}
+
+function isJsonApiDocument(v: unknown): v is JsonApiDocument {
+  return !!v && typeof v === "object" && "data" in (v as Record<string, unknown>);
 }
 
 export function createOutput(opts: OutputOptions): Output {
+  const registry = new Map<string, AnyRenderer>();
+  for (const r of opts.renderers ?? []) {
+    if (registry.has(r.id)) throw new ConfigError(`Duplicate renderer id: ${r.id}`);
+    registry.set(r.id, r);
+  }
+  const getFormat = opts.getFormat ?? (() => "json");
+
   return {
-    emit(value) {
-      opts.stdout(`${JSON.stringify(value)}\n`);
+    emit(value, ctx, services) {
+      const fmt = getFormat();
+      if (fmt === "json" || !isJsonApiDocument(value)) {
+        opts.stdout(`${JSON.stringify(value)}\n`);
+        return;
+      }
+      const renderer = registry.get(fmt);
+      if (!renderer) {
+        throw new ConfigError(`Unknown format: ${fmt}`, {
+          available: ["json", ...registry.keys()],
+        });
+      }
+      if (isInteractive(renderer)) {
+        return renderer.run(value, ctx ?? { command: "read" }, services);
+      }
+      const text = renderer.render(value, ctx ?? { command: "read" });
+      opts.stdout(text.endsWith("\n") ? text : `${text}\n`);
     },
     fail(err) {
       const payload =
@@ -27,6 +63,9 @@ export function createOutput(opts: OutputOptions): Output {
               },
             };
       opts.stderr(`${JSON.stringify(payload)}\n`);
+    },
+    hasFormat(id) {
+      return id === "json" || registry.has(id);
     },
   };
 }

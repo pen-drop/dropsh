@@ -10,7 +10,7 @@ export interface UpdateArgs {
 }
 export interface UpdateDeps {
   client: JsonApiClient;
-  emit: (v: unknown) => void;
+  emit: (v: unknown) => void | Promise<void>;
   validate?: (payload: unknown, target: string) => void | Promise<void>;
 }
 
@@ -27,9 +27,9 @@ export async function runUpdate(args: UpdateArgs, deps: UpdateDeps): Promise<voi
     await deps.validate(payload, schemaTarget);
   }
   if (args.dryRun) {
-    deps.emit({ dry_run: true, method: "PATCH", path: args.target, payload });
+    await deps.emit({ dry_run: true, method: "PATCH", path: args.target, payload });
     return;
   }
   const res = await deps.client.patch(args.target, payload);
-  deps.emit(res);
+  await deps.emit(res);
 }

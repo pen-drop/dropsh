@@ -30,7 +30,7 @@ describe("runSearch", () => {
     const emitted: unknown[] = [];
     await runSearch(
       { entityType: "node", bundle: "article", filters: ["title:Hello"], limit: 10 },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.get).toHaveBeenCalledTimes(1);
     const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;

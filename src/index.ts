@@ -8,13 +8,12 @@ import { runSchema } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
-import type { AuthAdapter } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
+import type { RenderContext } from "./core/cli/render.js";
 import { loadConfig } from "./core/config.js";
-import type { HttpClient } from "./core/http.js";
-import { createHttpClient } from "./core/http.js";
-import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
+import { type CommandContext, createCommandContext } from "./core/context.js";
+import type { JsonApiClient } from "./core/jsonapi/client.js";
 import type { DrupalCliPlugin } from "./core/plugin.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
@@ -22,15 +21,7 @@ import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
 import { ConfigError, exitCodeFor } from "./errors.js";
 
-export interface CommandContext {
-  client: JsonApiClient;
-  http: HttpClient;
-  auth: AuthAdapter;
-  baseUrl: string;
-  jsonapiPrefix: string;
-  cwd: string;
-  plugins: DrupalCliPlugin[];
-}
+export type { CommandContext } from "./core/context.js";
 
 export interface ProgramOptions {
   contextFactory?: () => Promise<CommandContext>;
@@ -55,40 +46,15 @@ export function normalizeInclude(raw: string[] | undefined): string[] {
     .filter((s) => s.length > 0);
 }
 
-async function defaultContext(configPath: string): Promise<CommandContext> {
-  const cfg = await loadConfig(configPath);
-  const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
-  const authPlugin = cfg.plugins.find((p) => p.createAuthAdapter);
-  if (!authPlugin?.createAuthAdapter) {
-    throw new ConfigError(
-      "No auth plugin configured. Add basicAuthPlugin() or oauth2Plugin() to config.plugins.",
-    );
-  }
-  const auth = authPlugin.createAuthAdapter();
-  const client = createJsonApiClient({
-    baseUrl: cfg.site.base_url,
-    prefix: cfg.site.jsonapi_prefix,
-    http,
-    auth,
-  });
-  return {
-    client,
-    http,
-    auth,
-    baseUrl: cfg.site.base_url,
-    jsonapiPrefix: cfg.site.jsonapi_prefix,
-    cwd: process.cwd(),
-    plugins: cfg.plugins,
-  };
-}
-
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
   program
     .name("dropsh")
     .description("Entity-agnostic CLI for Drupal 11 JSON:API")
     .version("0.0.0")
-    .option("--config <path>", "path to config file (overrides DROPSH_CONFIG)");
+    .option("--config <path>", "path to config file (overrides DROPSH_CONFIG)")
+    .option("--format <id>", "output format: json (default) or a renderer id", "json")
+    .option("--view-mode <name>", "entity view mode for interactive formats", "default");
 
   const stdout = opts.stdout ?? ((s) => process.stdout.write(s));
   const stderr = opts.stderr ?? ((s) => process.stderr.write(s));
@@ -99,16 +65,44 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     });
   const contextFactory =
     opts.contextFactory ??
-    (() => defaultContext(resolveConfigPath(program.opts().config as string | undefined)));
-  const output = createOutput({ stdout, stderr });
+    (() => createCommandContext(resolveConfigPath(program.opts().config as string | undefined)));
+  const renderers = (opts.plugins ?? []).flatMap((p) => p.renderers ?? []);
+  const output = createOutput({
+    stdout,
+    stderr,
+    renderers,
+    getFormat: () => (program.opts().format as string | undefined) ?? "json",
+  });
 
-  async function run(fn: (ctx: CommandContext) => Promise<void>): Promise<void> {
+  async function run(
+    fn: (ctx: CommandContext) => Promise<void>,
+    precheck?: () => void,
+  ): Promise<void> {
     try {
+      precheck?.();
       const ctx = await contextFactory();
       await fn(ctx);
     } catch (err) {
       output.fail(err);
       setExitCode(exitCodeFor(err));
+    }
+  }
+
+  function currentFormat(): string {
+    return (program.opts().format as string | undefined) ?? "json";
+  }
+  function assertRenderable(): void {
+    const f = currentFormat();
+    if (!output.hasFormat(f)) {
+      throw new ConfigError(
+        `Unknown format '${f}'. Available: ${["json", ...renderers.map((r) => r.id)].join(", ")}`,
+      );
+    }
+  }
+  function assertJsonOnly(command: string): void {
+    const f = currentFormat();
+    if (f !== "json") {
+      throw new ConfigError(`format '${f}' not applicable to command '${command}'`);
     }
   }
 
@@ -151,11 +145,23 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .description("Read entity_type/bundle/uuid")
     .option("--include <fields...>", "related fields to include (JSON:API include)")
     .action((target: string, o: { include?: string[] }) => {
+      const [entityType, bundle] = target.split("/") as [string?, string?];
+      const rctx: RenderContext = { command: "read", target };
+      if (entityType !== undefined) rctx.entityType = entityType;
+      if (bundle !== undefined) rctx.bundle = bundle;
+      rctx.viewMode = program.opts().viewMode as string;
       // biome-ignore lint/suspicious/noExplicitAny: optional include added conditionally
       const args = { target } as any;
       const include = normalizeInclude(o.include);
       if (include.length > 0) args.include = include;
-      return run((ctx) => runRead(args, { client: ctx.client, emit: output.emit }));
+      return run(
+        (ctx) =>
+          runRead(args, {
+            client: ctx.client,
+            emit: (v) => output.emit(v, rctx, { client: ctx.client, baseUrl: ctx.baseUrl }),
+          }),
+        assertRenderable,
+      );
     });
 
   program
@@ -175,7 +181,17 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         if (o.bundle !== undefined) args.bundle = o.bundle;
         const include = normalizeInclude(o.include);
         if (include.length > 0) args.include = include;
-        return run((ctx) => runSearch(args, { client: ctx.client, emit: output.emit }));
+        const rctx: RenderContext = { command: "search", entityType };
+        if (o.bundle !== undefined) rctx.bundle = o.bundle;
+        rctx.viewMode = program.opts().viewMode as string;
+        return run(
+          (ctx) =>
+            runSearch(args, {
+              client: ctx.client,
+              emit: (v) => output.emit(v, rctx, { client: ctx.client, baseUrl: ctx.baseUrl }),
+            }),
+          assertRenderable,
+        );
       },
     );
 
@@ -200,12 +216,13 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         } = { entityType, bundle: o.bundle, dataArg: o.data };
         if (o.dryRun !== undefined) args.dryRun = o.dryRun;
         if (o.validate === false) args.noValidate = true;
-        run(async (ctx) => {
+        return run(async (ctx) => {
+          const rctx: RenderContext = { command: "create", entityType, bundle: o.bundle };
           const deps: {
             client: JsonApiClient;
             emit: (v: unknown) => void;
             validate?: (payload: unknown, target: string) => void | Promise<void>;
-          } = { client: ctx.client, emit: output.emit };
+          } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
           if (!args.noValidate) {
             deps.validate = async (payload: unknown, target: string) => {
               const schema = await loadOrFetchSchema(ctx, target, "create");
@@ -213,7 +230,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
             };
           }
           await runCreate(args, deps);
-        });
+        }, assertRenderable);
       },
     );
 
@@ -232,12 +249,16 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       } = { target, dataArg: o.data };
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
       if (o.validate === false) args.noValidate = true;
-      run(async (ctx) => {
+      return run(async (ctx) => {
+        const [entityType, bundle] = target.split("/") as [string?, string?];
+        const rctx: RenderContext = { command: "update", target };
+        if (entityType !== undefined) rctx.entityType = entityType;
+        if (bundle !== undefined) rctx.bundle = bundle;
         const deps: {
           client: JsonApiClient;
           emit: (v: unknown) => void;
           validate?: (payload: unknown, target: string) => void | Promise<void>;
-        } = { client: ctx.client, emit: output.emit };
+        } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
         if (!args.noValidate) {
           deps.validate = async (payload: unknown, t: string) => {
             const schema = await loadOrFetchSchema(ctx, t, "update");
@@ -245,7 +266,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
           };
         }
         await runUpdate(args, deps);
-      });
+      }, assertRenderable);
     });
 
   program
@@ -256,7 +277,10 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run((ctx) => runDelete(args, { client: ctx.client, emit: output.emit }));
+      return run(
+        (ctx) => runDelete(args, { client: ctx.client, emit: output.emit }),
+        () => assertJsonOnly("delete"),
+      );
     });
 
   program
@@ -269,7 +293,10 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target: o.target, file: o.file } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run((ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }));
+      return run(
+        (ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }),
+        () => assertJsonOnly("upload-file"),
+      );
     });
 
   program
@@ -283,17 +310,19 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         target !== undefined
           ? { target, operation, refresh: Boolean(o.refresh) }
           : { operation, refresh: Boolean(o.refresh) };
-      run((ctx) =>
-        runSchema(schemaArgs, {
-          http: ctx.http,
-          auth: ctx.auth,
-          baseUrl: ctx.baseUrl,
-          jsonapiPrefix: ctx.jsonapiPrefix,
-          cwd: ctx.cwd,
-          emit: output.emit,
-          warn: (m) => stderr(`${m}\n`),
-          plugins: ctx.plugins,
-        }),
+      return run(
+        (ctx) =>
+          runSchema(schemaArgs, {
+            http: ctx.http,
+            auth: ctx.auth,
+            baseUrl: ctx.baseUrl,
+            jsonapiPrefix: ctx.jsonapiPrefix,
+            cwd: ctx.cwd,
+            emit: output.emit,
+            warn: (m) => stderr(`${m}\n`),
+            plugins: ctx.plugins,
+          }),
+        () => assertJsonOnly("schema"),
       );
     });
 

@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import type { AuthAdapter } from "./auth/types.js";
+import type { AnyRenderer } from "./cli/render.js";
 import type { HttpClient } from "./http.js";
 
 export interface PluginContext {
@@ -19,4 +20,5 @@ export interface DrupalCliPlugin {
     ctx: PluginContext,
   ): Promise<unknown>;
   registerCommands?(program: Command): void;
+  renderers?: AnyRenderer[];
 }

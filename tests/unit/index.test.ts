@@ -5,11 +5,11 @@ import type { DrupalCliPlugin } from "../../src/core/plugin.js";
 
 function fakeClient(): JsonApiClient {
   return {
-    get: vi.fn(async () => ({ data: { id: "u1" } })),
-    post: vi.fn(async () => ({ data: { id: "u2" } })),
-    patch: vi.fn(async () => ({ data: { id: "u1" } })),
-    delete: vi.fn(async () => ({ ok: true })),
-    upload: vi.fn(async () => ({ data: { id: "file" } })),
+    get: vi.fn(async () => ({ data: { type: "node--article", id: "u1" } })),
+    post: vi.fn(async () => ({ data: { type: "node--article", id: "u2" } })),
+    patch: vi.fn(async () => ({ data: { type: "node--article", id: "u1" } })),
+    delete: vi.fn(async () => ({ ok: true as const })),
+    upload: vi.fn(async () => ({ data: { type: "file--file", id: "file" } })),
   };
 }
 
@@ -56,7 +56,7 @@ describe("buildProgram", () => {
     });
     await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
     expect(c.get).toHaveBeenCalledWith("node/article/abcdef01-abcd-abcd-abcd-abcdef012345");
-    expect(JSON.parse(out.join(""))).toEqual({ data: { id: "u1" } });
+    expect(JSON.parse(out.join(""))).toEqual({ data: { type: "node--article", id: "u1" } });
   });
 
   it("read subcommand forwards --include as JSON:API params", async () => {
