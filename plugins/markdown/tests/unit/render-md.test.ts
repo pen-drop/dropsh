@@ -35,7 +35,13 @@ describe("renderMarkdown", () => {
 
   it("renders a single resource as frontmatter + body", () => {
     const out = renderMarkdown(
-      { data: { type: "node--article", id: "u1", attributes: { title: "Hello", status: true, body: { value: "The text." } } } },
+      {
+        data: {
+          type: "node--article",
+          id: "u1",
+          attributes: { title: "Hello", status: true, body: { value: "The text." } },
+        },
+      },
       ctx,
     );
     expect(out).toContain("type: node--article");
@@ -48,7 +54,13 @@ describe("renderMarkdown", () => {
 
   it("uses the longest string field as body when there is no body field", () => {
     const out = renderMarkdown(
-      { data: { type: "node--page", id: "p1", attributes: { title: "T", summary: "short", teaser: "a much longer piece of text here" } } },
+      {
+        data: {
+          type: "node--page",
+          id: "p1",
+          attributes: { title: "T", summary: "short", teaser: "a much longer piece of text here" },
+        },
+      },
       ctx,
     );
     expect(out.trimEnd().endsWith("a much longer piece of text here")).toBe(true);
@@ -56,7 +68,14 @@ describe("renderMarkdown", () => {
 
   it("lists relationships as type/id arrays", () => {
     const out = renderMarkdown(
-      { data: { type: "node--article", id: "u1", attributes: {}, relationships: { uid: { data: { type: "user--user", id: "a1" } } } } },
+      {
+        data: {
+          type: "node--article",
+          id: "u1",
+          attributes: {},
+          relationships: { uid: { data: { type: "user--user", id: "a1" } } },
+        },
+      },
       ctx,
     );
     expect(out).toContain("uid: [user--user/a1]");
@@ -64,7 +83,12 @@ describe("renderMarkdown", () => {
 
   it("joins a collection with a separator", () => {
     const out = renderMarkdown(
-      { data: [{ type: "node--article", id: "u1", attributes: { title: "A" } }, { type: "node--article", id: "u2", attributes: { title: "B" } }] },
+      {
+        data: [
+          { type: "node--article", id: "u1", attributes: { title: "A" } },
+          { type: "node--article", id: "u2", attributes: { title: "B" } },
+        ],
+      },
       { command: "search" },
     );
     expect(out).toContain("id: u1");

@@ -1,7 +1,7 @@
 import type { JsonApiDocument, RenderContext } from "dropsh/plugin";
 import { cell, formatTable, pickColumns } from "./columns.js";
 
-export { pickColumns, formatTable };
+export { formatTable, pickColumns };
 
 function isScalar(v: unknown): boolean {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean";

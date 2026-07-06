@@ -106,16 +106,29 @@ describe("Browse", () => {
           },
         };
       }
-      return { data: { type: "node--article", id: path.split("/").pop(), attributes: { title: "X" } } };
+      return {
+        data: { type: "node--article", id: path.split("/").pop(), attributes: { title: "X" } },
+      };
     });
-    const c = { get, post: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn() } as unknown as JsonApiClient;
+    const c = {
+      get,
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      upload: vi.fn(),
+    } as unknown as JsonApiClient;
     const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
     // Seed A, which links to B.
     await router.navigate(
       "entity.canonical",
       { type: "node", bundle: "article", id: "A" },
       {
-        data: { type: "node--article", id: "A", attributes: { title: "Ay" }, relationships: rel("B") },
+        data: {
+          type: "node--article",
+          id: "A",
+          attributes: { title: "Ay" },
+          relationships: rel("B"),
+        },
       },
     );
     const { stdin } = render(<Browse router={router} onExit={() => {}} />);

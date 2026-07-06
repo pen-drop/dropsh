@@ -6,7 +6,9 @@ import { createRouter } from "../../src/router.js";
 
 function client(): JsonApiClient {
   return {
-    get: vi.fn(async (path: string) => ({ data: { type: "node--article", id: path.split("/").pop() ?? "x" } })),
+    get: vi.fn(async (path: string) => ({
+      data: { type: "node--article", id: path.split("/").pop() ?? "x" },
+    })),
     post: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
@@ -18,9 +20,13 @@ describe("createRouter", () => {
   it("uses the seeded doc without fetching on the first navigate", async () => {
     const c = client();
     const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
-    await router.navigate("entity.canonical", { type: "node", bundle: "article", id: "u1" }, {
-      data: { type: "node--article", id: "u1", attributes: { title: "Seed" } },
-    });
+    await router.navigate(
+      "entity.canonical",
+      { type: "node", bundle: "article", id: "u1" },
+      {
+        data: { type: "node--article", id: "u1", attributes: { title: "Seed" } },
+      },
+    );
     expect(router.stackDepth()).toBe(1);
     expect(c.get).not.toHaveBeenCalled();
   });
@@ -38,7 +44,11 @@ describe("createRouter", () => {
   });
 
   it("throws on an unknown route name", async () => {
-    const router = createRouter({ registry: buildRegistry([]), client: client(), viewMode: "default" });
+    const router = createRouter({
+      registry: buildRegistry([]),
+      client: client(),
+      viewMode: "default",
+    });
     await expect(router.navigate("nope", {})).rejects.toThrow(/unknown route/i);
   });
 
@@ -51,10 +61,18 @@ describe("createRouter", () => {
         return null as never;
       }
     }
-    const get = vi.fn(async (_path: string, _params?: import("drupal-jsonapi-params").DrupalJsonApiParams) => ({
-      data: { type: "node--article", id: "x" },
-    }));
-    const c = { get, post: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn() } as unknown as JsonApiClient;
+    const get = vi.fn(
+      async (_path: string, _params?: import("drupal-jsonapi-params").DrupalJsonApiParams) => ({
+        data: { type: "node--article", id: "x" },
+      }),
+    );
+    const c = {
+      get,
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      upload: vi.fn(),
+    } as unknown as JsonApiClient;
     const router = createRouter({
       registry: buildRegistry([{ id: "x", entities: [ArticleView] }]),
       client: c,

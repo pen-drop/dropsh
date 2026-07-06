@@ -1,7 +1,7 @@
 import { HttpError, ValidationError } from "../../errors.js";
 import type { AuthAdapter } from "../auth/types.js";
 import type { HttpClient } from "../http.js";
-import type { DrupalCliPlugin, PluginContext } from "../plugin.js";
+import type { DropSHPlugin, PluginContext } from "../plugin.js";
 import { fetchHeuristic } from "./sources/heuristic.js";
 
 export type SchemaSource = "heuristic" | "heuristic-empty" | (string & {});
@@ -20,7 +20,7 @@ export interface JsonSchemaDeps {
   entity: string;
   bundle: string;
   warn: (message: string) => void;
-  plugins?: DrupalCliPlugin[];
+  plugins?: DropSHPlugin[];
 }
 
 export async function fetchJsonSchema(deps: JsonSchemaDeps): Promise<JsonSchemaResult> {
@@ -55,6 +55,7 @@ export async function fetchJsonSchema(deps: JsonSchemaDeps): Promise<JsonSchemaR
 
   // Run each plugin's extendSchema — a plugin may replace the schema entirely (e.g. schemata)
   for (const plugin of plugins) {
+    if (!plugin.extendSchema) continue;
     const extended = await plugin.extendSchema(entity, bundle, schema, ctx);
     if (extended !== schema) {
       schema = extended;

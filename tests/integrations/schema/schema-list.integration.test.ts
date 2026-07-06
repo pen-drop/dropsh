@@ -3,7 +3,7 @@ import { parseJson, runCli } from "../helpers/run.js";
 
 describe("integration: schema (catalog)", () => {
   it("lists available targets with article_test and tags", async () => {
-    const result = await runCli({ args: ["schema"] });
+    const result = await runCli({ site: "schemata", args: ["schema"] });
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
     const list = parseJson<Array<{ entity_type: string; bundle: string; label: string }>>(

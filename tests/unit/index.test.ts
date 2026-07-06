@@ -1,7 +1,12 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildProgram, normalizeInclude, type CommandContext } from "../../src/index.js";
+import { basicAuthPlugin } from "../../src/core/auth/basic.js";
+import { writeSession } from "../../src/core/auth/session-store.js";
+import { buildProgram, type CommandContext, normalizeInclude, resolveAuth } from "../../src/index.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
-import type { DrupalCliPlugin } from "../../src/core/plugin.js";
+import type { DropSHPlugin } from "../../src/core/plugin.js";
 
 function fakeClient(): JsonApiClient {
   return {
@@ -42,7 +47,7 @@ describe("buildProgram", () => {
   it("registers all subcommands", () => {
     const p = buildProgram({ contextFactory: async () => ({ client: fakeClient(), plugins: [] } as unknown as CommandContext) });
     const names = p.commands.map((c) => c.name()).sort();
-    expect(names).toEqual(["create", "delete", "read", "schema", "search", "update", "upload-file"]);
+    expect(names).toEqual(["auth", "create", "delete", "read", "schema", "search", "update", "upload-file"]);
   });
 
   it("read subcommand runs via parseAsync and writes JSON to stdout", async () => {
@@ -106,30 +111,6 @@ describe("buildProgram", () => {
     );
   });
 
-  it("uses createAuthAdapter from plugin when present", async () => {
-    const mockAdapter = { apply: async (req: any) => req };
-    const plugin: DrupalCliPlugin = {
-      id: "test-auth",
-      requiredModules: [],
-      createAuthAdapter: () => mockAdapter,
-      async extendSchema(_e, _b, s) { return s; },
-    };
-    let capturedAuth: any;
-    const p = buildProgram({
-      contextFactory: async () => {
-        const { ConfigError } = await import("../../src/errors.js");
-        const authPlugin = [plugin].find(p => p.createAuthAdapter);
-        if (!authPlugin) throw new ConfigError("No auth plugin configured.");
-        capturedAuth = authPlugin.createAuthAdapter!();
-        return { client: fakeClient(), http: {} as any, auth: capturedAuth, baseUrl: "https://x", jsonapiPrefix: "/jsonapi", cwd: ".", plugins: [plugin] };
-      },
-      stdout: () => {},
-      stderr: () => {},
-    });
-    await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
-    expect(capturedAuth).toBe(mockAdapter);
-  });
-
   it("propagates ValidationError to stderr with exit-code signal", async () => {
     const err: string[] = [];
     const exitCodes: number[] = [];
@@ -147,7 +128,7 @@ describe("buildProgram", () => {
 
   it("calls registerCommands on plugins passed to buildProgram", () => {
     const registeredCommands: string[] = [];
-    const plugin: DrupalCliPlugin = {
+    const plugin: DropSHPlugin = {
       id: "test-cmd",
       requiredModules: [],
       registerCommands(program) {
@@ -160,5 +141,33 @@ describe("buildProgram", () => {
     const names = p.commands.map((c) => c.name());
     expect(names).toContain("test-plugin-cmd");
     expect(registeredCommands).toEqual(["test-plugin-cmd"]);
+  });
+
+  it("resolveAuth builds an adapter from the stored session", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    const b64 = Buffer.from("u:p").toString("base64");
+    await writeSession("https://example.com", "basic", { basic_b64: b64 }, dir);
+    const adapter = await resolveAuth({
+      baseUrl: "https://example.com",
+      plugins: [basicAuthPlugin()],
+      http: { async send() { throw new Error("unused"); } },
+      now: () => 0,
+      stateDir: dir,
+    });
+    const req = await adapter.apply({ method: "GET", url: "https://x" });
+    expect(req.headers?.Authorization).toBe(`Basic ${b64}`);
+  });
+
+  it("resolveAuth throws AuthError when there is no session", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
+    await expect(
+      resolveAuth({
+        baseUrl: "https://example.com",
+        plugins: [basicAuthPlugin()],
+        http: { async send() { throw new Error("unused"); } },
+        now: () => 0,
+        stateDir: dir,
+      }),
+    ).rejects.toThrow(/auth login/);
   });
 });

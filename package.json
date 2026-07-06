@@ -1,6 +1,6 @@
 {
   "name": "dropsh",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the dropsh Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
@@ -8,7 +8,8 @@
   },
   "exports": {
     ".": "./dist/src/index.js",
-    "./plugin": "./dist/src/plugin-api.js"
+    "./plugin": "./dist/src/plugin-api.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",
@@ -18,17 +19,19 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:plugins": "npm --prefix plugins/schemata run build && npm --prefix plugins/oauth2 run build && npm --prefix plugins/markdown run build && npm --prefix plugins/table run build && npm --prefix plugins/tui run build",
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
+    "build:plugins": "pnpm --filter \"./plugins/*\" run build",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:integration": "npm run build && vitest run -c vitest.config.integration.ts",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
-    "lint:fix": "biome check --write src/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
+    "test:integration": "pnpm run build && pnpm run build:packages && vitest run -c vitest.config.integration.ts",
+    "typecheck": "pnpm run build:packages && tsc --noEmit && pnpm -r run typecheck",
+    "lint": "biome check src/ packages/ plugins/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
+    "lint:fix": "biome check --write src/ packages/ plugins/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
-    "prepublishOnly": "npm run typecheck && npm run build"
+    "prepublishOnly": "pnpm run typecheck && pnpm run build",
+    "release": "pnpm -r --include-workspace-root publish --no-git-checks"
   },
   "keywords": [
     "drupal",
@@ -56,9 +59,20 @@
     "@types/node": "^20.14.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"],
+    "overrides": {
+      "fast-uri": "^3.1.2",
+      "qs": "^6.15.2",
+      "vite": "^6.4.2",
+      "esbuild": "^0.25.0"
+    }
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "packageManager": "pnpm@10.29.1"
 }

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ConfigError } from "../errors.js";
-import type { DrupalCliPlugin } from "./plugin.js";
+import type { DropSHPlugin } from "./plugin.js";
 
 export interface SiteConfig {
   base_url: string;
@@ -11,7 +11,7 @@ export interface SiteConfig {
 export interface Config {
   site: SiteConfig;
   defaults: { dry_run: boolean; timeout_ms: number };
-  plugins: DrupalCliPlugin[];
+  plugins: DropSHPlugin[];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -35,7 +35,7 @@ export async function loadConfig(filePath: string): Promise<Config> {
     throw new ConfigError("site.base_url required");
 
   const defaults = isRecord(raw.defaults) ? raw.defaults : {};
-  const plugins = Array.isArray(raw.plugins) ? (raw.plugins as DrupalCliPlugin[]) : [];
+  const plugins = Array.isArray(raw.plugins) ? (raw.plugins as DropSHPlugin[]) : [];
 
   return {
     site: {

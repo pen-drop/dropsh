@@ -1,4 +1,9 @@
-import { indexIncluded, type JsonApiDocument, type JsonApiResource, type RenderContext } from "dropsh/plugin";
+import {
+  indexIncluded,
+  type JsonApiDocument,
+  type JsonApiResource,
+  type RenderContext,
+} from "dropsh/plugin";
 
 type Scalar = string | number | boolean;
 

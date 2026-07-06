@@ -1,0 +1,52 @@
+name: integration
+
+# DDEV-backed integration tests.
+#
+# Provisions the full multisite fixture (4 Drupal sites + mariadb) via DDEV on
+# the GitHub-hosted runner, then runs `pnpm run test:integration` against it.
+# ubuntu-latest ships Docker, and DDEV binds its router to 127.0.0.1 and writes
+# the fixture hostnames (*.dropsh-test.ddev.site) to /etc/hosts, so the vitest
+# runner reaches the sites over plain HTTP with no extra networking setup.
+#
+# Heavier and slower than `validate` (composer install + 4 drush site:installs),
+# so it only runs on pull requests and pushes to the release branches.
+
+on:
+  pull_request:
+  push:
+    branches: ["1.x", "1.0.x"]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      # Install DDEV + Docker prerequisites without auto-starting a project;
+      # our `drupal:up` script drives `ddev start` and provisioning itself.
+      - uses: ddev/github-action-setup-ddev@v1
+        with:
+          autostart: false
+
+      - name: Provision DDEV multisite fixture
+        run: pnpm run drupal:up
+
+      - name: Run integration tests
+        run: pnpm run test:integration
+
+      - name: Tear down DDEV
+        if: always()
+        working-directory: tests/integrations/drupal
+        run: ddev delete -Oy || true

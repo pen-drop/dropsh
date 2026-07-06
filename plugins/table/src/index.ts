@@ -1,9 +1,9 @@
-import type { DrupalCliPlugin } from "dropsh/plugin";
+import type { DropSHPlugin } from "dropsh/plugin";
 import { renderTable } from "./render-table.js";
 
 export { renderTable };
 
-export function tablePlugin(): DrupalCliPlugin {
+export function tablePlugin(): DropSHPlugin {
   return {
     id: "table",
     requiredModules: [],

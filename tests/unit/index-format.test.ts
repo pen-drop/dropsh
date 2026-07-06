@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildProgram, type CommandContext } from "../../src/index.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
-import type { DrupalCliPlugin } from "../../src/core/plugin.js";
+import type { DropSHPlugin } from "../../src/core/plugin.js";
 
 function fakeClient(): JsonApiClient {
   return {
@@ -13,14 +13,14 @@ function fakeClient(): JsonApiClient {
   };
 }
 
-const mdPlugin: DrupalCliPlugin = {
+const mdPlugin: DropSHPlugin = {
   id: "md-test",
   requiredModules: [],
   async extendSchema(_e, _b, s) { return s; },
   renderers: [{ id: "md", render: (doc) => `# ${(Array.isArray(doc.data) ? doc.data[0] : doc.data)?.id ?? ""}` }],
 };
 
-function harness(plugins: DrupalCliPlugin[] = [], client: JsonApiClient = fakeClient()) {
+function harness(plugins: DropSHPlugin[] = [], client: JsonApiClient = fakeClient()) {
   const out: string[] = [];
   const err: string[] = [];
   const codes: number[] = [];
@@ -99,7 +99,7 @@ describe("--format", () => {
 
   it("passes viewMode and services to an interactive renderer via read", async () => {
     const run = vi.fn(async () => {});
-    const tuiPluginStub: DrupalCliPlugin = {
+    const tuiPluginStub: DropSHPlugin = {
       id: "tui-test",
       requiredModules: [],
       async extendSchema(_e, _b, s) { return s; },

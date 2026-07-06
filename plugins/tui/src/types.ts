@@ -39,12 +39,16 @@ export interface EntityViewClass {
   entityType: string;
   bundle?: string;
   viewModes: ViewModeMap;
-  new (): { build(entity: import("dropsh/plugin").JsonApiResource, ctx: BuildContext): ReactElement };
+  new (): {
+    build(entity: import("dropsh/plugin").JsonApiResource, ctx: BuildContext): ReactElement;
+  };
 }
 export interface EntityListClass {
   entityType: string;
   bundle?: string;
-  new (): { build(resources: import("dropsh/plugin").JsonApiResource[], ctx: BuildContext): ReactElement };
+  new (): {
+    build(resources: import("dropsh/plugin").JsonApiResource[], ctx: BuildContext): ReactElement;
+  };
 }
 export type EntityHandlerClass = EntityViewClass | EntityListClass;
 

@@ -1,9 +1,9 @@
-import type { DrupalCliPlugin } from "dropsh/plugin";
+import type { DropSHPlugin } from "dropsh/plugin";
 import { renderMarkdown } from "./render-md.js";
 
 export { renderMarkdown };
 
-export function markdownPlugin(): DrupalCliPlugin {
+export function markdownPlugin(): DropSHPlugin {
   return {
     id: "markdown",
     requiredModules: [],

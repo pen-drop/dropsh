@@ -10,7 +10,9 @@ function isScalar(v: unknown): boolean {
 
 export function pickColumns(res: JsonApiResource): string[] {
   const attrs = res.attributes ?? {};
-  const scalars = Object.entries(attrs).filter(([, v]) => isScalar(v)).map(([k]) => k);
+  const scalars = Object.entries(attrs)
+    .filter(([, v]) => isScalar(v))
+    .map(([k]) => k);
   const preferred = PREFERRED.filter((k) => scalars.includes(k));
   const rest = scalars.filter((k) => !preferred.includes(k));
   return ["id", ...preferred, ...rest].slice(0, MAX_COLS);

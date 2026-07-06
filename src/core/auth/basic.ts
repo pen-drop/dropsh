@@ -1,34 +1,51 @@
 import { ConfigError } from "../../errors.js";
 import type { HttpRequest } from "../http.js";
-import type { DrupalCliPlugin } from "../plugin.js";
-import type { AuthAdapter } from "./types.js";
+import type { DropSHPlugin } from "../plugin.js";
+import type { AuthAdapter, AuthProvider, AuthSession } from "./types.js";
 
 export interface BasicAuthConfig {
-  username: string;
-  password: string;
+  /** Optional pre-seeded username; password is always prompted at login. */
+  username?: string;
 }
 
-export function createBasicAuth(cfg: BasicAuthConfig): AuthAdapter {
-  if (typeof cfg.username !== "string" || cfg.username.length === 0)
-    throw new ConfigError("basicAuthPlugin: username required");
-  if (typeof cfg.password !== "string" || cfg.password.length === 0)
-    throw new ConfigError("basicAuthPlugin: password required");
-  const token = Buffer.from(`${cfg.username}:${cfg.password}`).toString("base64");
+function adapterFromB64(b64: string): AuthAdapter {
   return {
     async apply(req: HttpRequest): Promise<HttpRequest> {
-      return { ...req, headers: { ...(req.headers ?? {}), Authorization: `Basic ${token}` } };
+      return { ...req, headers: { ...(req.headers ?? {}), Authorization: `Basic ${b64}` } };
     },
   };
 }
 
-export function basicAuthPlugin(config: BasicAuthConfig): DrupalCliPlugin {
-  const adapter = createBasicAuth(config);
+export function basicAuthProvider(config: BasicAuthConfig = {}): AuthProvider {
+  return {
+    id: "basic",
+    displayName: "Basic auth (username / password)",
+    capabilities: { login: true, logout: true, status: true },
+    async login(ctx): Promise<AuthSession> {
+      const username = config.username ?? (await ctx.prompt({ label: "Username" }));
+      if (!username) throw new ConfigError("basic auth: username required");
+      const password = await ctx.prompt({ label: "Password", secret: true });
+      if (!password) throw new ConfigError("basic auth: password required");
+      return { basic_b64: Buffer.from(`${username}:${password}`).toString("base64") };
+    },
+    async logout() {
+      // No server-side revoke for basic auth; the core clears the session.
+    },
+    async status(session) {
+      return { loggedIn: session !== null, provider: "basic" };
+    },
+    createAdapter(session): AuthAdapter {
+      const b64 = session.basic_b64;
+      if (typeof b64 !== "string") throw new ConfigError("basic auth: corrupt session");
+      return adapterFromB64(b64);
+    },
+  };
+}
+
+export function basicAuthPlugin(config: BasicAuthConfig = {}): DropSHPlugin {
   return {
     id: "basic",
     requiredModules: [],
-    createAuthAdapter: () => adapter,
-    async extendSchema(_entityType, _bundle, schema, _ctx) {
-      return schema;
-    },
+    authProvider: basicAuthProvider(config),
   };
 }

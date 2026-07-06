@@ -5,7 +5,11 @@ const ctx = { command: "search" as const };
 
 describe("pickColumns", () => {
   it("puts id first and prefers title/status", () => {
-    const cols = pickColumns({ type: "node--article", id: "u1", attributes: { body: "x", status: true, title: "T" } });
+    const cols = pickColumns({
+      type: "node--article",
+      id: "u1",
+      attributes: { body: "x", status: true, title: "T" },
+    });
     expect(cols[0]).toBe("id");
     expect(cols).toContain("title");
     expect(cols).toContain("status");
@@ -15,10 +19,12 @@ describe("pickColumns", () => {
 describe("renderTable", () => {
   it("renders a collection as an aligned box table", () => {
     const out = renderTable(
-      { data: [
-        { type: "node--article", id: "u1", attributes: { title: "Alpha", status: true } },
-        { type: "node--article", id: "u2", attributes: { title: "Beta", status: false } },
-      ] },
+      {
+        data: [
+          { type: "node--article", id: "u1", attributes: { title: "Alpha", status: true } },
+          { type: "node--article", id: "u2", attributes: { title: "Beta", status: false } },
+        ],
+      },
       ctx,
     );
     const lines = out.split("\n");
@@ -35,7 +41,10 @@ describe("renderTable", () => {
   });
 
   it("renders a single resource as a key/value table", () => {
-    const out = renderTable({ data: { type: "node--article", id: "u1", attributes: { title: "Solo" } } }, { command: "read" });
+    const out = renderTable(
+      { data: { type: "node--article", id: "u1", attributes: { title: "Solo" } } },
+      { command: "read" },
+    );
     expect(out).toContain("field");
     expect(out).toContain("value");
     expect(out).toContain("title");

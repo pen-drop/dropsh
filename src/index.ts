@@ -1,34 +1,46 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { Command } from "commander";
+import { runAuthLogin, runAuthLogout, runAuthStatus } from "./commands/auth.js";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
-import { runSchema } from "./commands/schema.js";
+import {
+  applyOperationSchemaPlugins,
+  operationHookPluginIds,
+  runSchema,
+  SCHEMA_PIPELINE_VERSION,
+  schemaCacheMetadataMatches,
+  siteCacheRoot,
+} from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
+import { collectProviders } from "./core/auth/registry.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
+import { createPrompt } from "./core/cli/prompt.js";
 import type { RenderContext } from "./core/cli/render.js";
 import { loadConfig } from "./core/config.js";
 import { type CommandContext, createCommandContext } from "./core/context.js";
+import { createHttpClient } from "./core/http.js";
 import type { JsonApiClient } from "./core/jsonapi/client.js";
-import type { DrupalCliPlugin } from "./core/plugin.js";
+import type { DropSHPlugin } from "./core/plugin.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
 import { ConfigError, exitCodeFor } from "./errors.js";
 
-export type { CommandContext } from "./core/context.js";
+export type { CommandContext, ResolveAuthDeps } from "./core/context.js";
+export { resolveAuth } from "./core/context.js";
 
 export interface ProgramOptions {
   contextFactory?: () => Promise<CommandContext>;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
   setExitCode?: (code: number) => void;
-  plugins?: DrupalCliPlugin[];
+  plugins?: DropSHPlugin[];
 }
 
 function resolveConfigPath(override?: string): string {
@@ -88,6 +100,33 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     }
   }
 
+  async function run2(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      output.fail(err);
+      setExitCode(exitCodeFor(err));
+    }
+  }
+
+  async function authDeps(): Promise<import("./commands/auth.js").AuthDeps> {
+    const cfg = await loadConfig(resolveConfigPath(program.opts().config as string | undefined));
+    return {
+      baseUrl: cfg.site.base_url,
+      providers: collectProviders(cfg.plugins),
+      stdout,
+      stderr,
+      prompt: createPrompt(),
+      openBrowser: async (url: string) => {
+        const { default: open } = await import("open");
+        await open(url);
+      },
+      http: createHttpClient({ timeoutMs: cfg.defaults.timeout_ms }),
+      now: Date.now,
+      isTTY: Boolean(process.stdin.isTTY),
+    };
+  }
+
   function currentFormat(): string {
     return (program.opts().format as string | undefined) ?? "json";
   }
@@ -112,13 +151,14 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     op: "create" | "update",
   ): Promise<unknown> {
     const store = createFileStore({
-      rootDir: `${ctx.cwd}/.dropsh/cache`,
+      rootDir: siteCacheRoot(ctx.cwd, ctx.baseUrl),
       warn: (m) => stderr(`${m}\n`),
     });
     const [entity, bundle] = target.split("/", 2) as [string, string];
     const key = `schema/${entity}--${bundle}.${op}.json`;
+    const hookPluginIds = operationHookPluginIds(ctx.plugins);
     const hit = await store.read<unknown>(key);
-    if (hit !== undefined) return hit;
+    if (hit !== undefined && schemaCacheMetadataMatches(hit, hookPluginIds)) return hit;
     const { schema: raw, source } = await fetchJsonSchema({
       http: ctx.http,
       auth: ctx.auth,
@@ -130,11 +170,24 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       plugins: ctx.plugins,
     });
     const transformed = toOperationVariant(raw, op);
+    const operationExtended = await applyOperationSchemaPlugins(
+      transformed,
+      { entity, bundle, operation: op },
+      {
+        http: ctx.http,
+        auth: ctx.auth,
+        baseUrl: ctx.baseUrl,
+        plugins: ctx.plugins,
+      },
+    );
     const tagged = {
-      ...(transformed as Record<string, unknown>),
+      ...(operationExtended.schema as Record<string, unknown>),
       "x-dropsh-source": source,
       "x-dropsh-target": { entity_type: entity, bundle },
       "x-dropsh-operation": op,
+      "x-dropsh-schema-extensions": operationExtended.extensions,
+      "x-dropsh-schema-pipeline-version": SCHEMA_PIPELINE_VERSION,
+      "x-dropsh-operation-hook-plugins": hookPluginIds,
     };
     await store.write(key, tagged);
     return tagged;
@@ -325,6 +378,24 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         () => assertJsonOnly("schema"),
       );
     });
+
+  const auth = program.command("auth").description("Manage authentication");
+  auth
+    .command("login")
+    .description("Log in via an auth provider")
+    .option("--provider <id>", "skip the picker and use this provider id")
+    .action((o: { provider?: string }) =>
+      run2(async () => runAuthLogin(o.provider ? { provider: o.provider } : {}, await authDeps())),
+    );
+  auth
+    .command("logout")
+    .description("Clear the active session")
+    .action(() => run2(async () => runAuthLogout({}, await authDeps())));
+  auth
+    .command("status")
+    .description("Show the active session")
+    .option("--json", "machine-readable output")
+    .action((o: { json?: boolean }) => run2(async () => runAuthStatus(o, await authDeps())));
 
   if (opts.plugins) {
     for (const plugin of opts.plugins) {

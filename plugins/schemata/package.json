@@ -1,21 +1,30 @@
 {
   "name": "@dropsh/plugin-schemata",
-  "version": "0.0.1-alpha.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/plugins/schemata/src/index.js",
   "exports": {
     ".": "./dist/plugins/schemata/src/index.js"
   },
+  "files": [
+    "dist/plugins/schemata/src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "dropsh": "*"
   },
   "devDependencies": {
+    "dropsh": "workspace:*",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vitest": "^4.1.8"
   }
 }

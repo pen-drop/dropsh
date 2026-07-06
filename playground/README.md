@@ -1,244 +1,78 @@
 # Playground
 
-Ein Ordner, alle Beispiele. Arbeitet gegen die lokale DDEV-Testinstanz
-aus `npm run drupal:up` und zeigt die typischen Flows einmal durch.
+Vier Unterordner, vier Drupal-Sites, ein DDEV. Jeder Ordner hat seine
+eigene `dropsh.config.js` für ein konkretes Integrations-Szenario.
+
+| Ordner      | DDEV-URL                                    | Plugin-Stack                              |
+|-------------|---------------------------------------------|-------------------------------------------|
+| `plain/`    | `http://dropsh-test.ddev.site`              | `oauth2Plugin` (OAuth 2.0 Authcode + PKCE)|
+| `schemata/` | `http://schemata.dropsh-test.ddev.site`     | `basicAuthPlugin` + `schemataPlugin`      |
+| `canvas/`   | `http://canvas.dropsh-test.ddev.site`       | `oauth2Plugin` + `canvasPlugin`           |
+| `db/`       | `http://db.dropsh-test.ddev.site`           | `oauth2Plugin` + `displayBuilderPlugin`   |
 
 ## Setup
 
 ```bash
-npm run drupal:up
-npm run build           # Haupt-Package compilieren
-npm run build:plugins   # Plugins compilieren
+pnpm run drupal:up         # provisioniert alle 4 Sites
+pnpm run build             # Haupt-Package
+pnpm run build:plugins     # Plugins
 cd playground
-npm install
+pnpm install
 ```
 
-`drupal:up` schreibt die echte DDEV-URL nach
-`tests/integrations/drupal/.test-config.json`. Falls dein lokaler Hostname
-von `drupal-cli-test-schemata-5fdcffda.ddev.site` abweicht, passe die
-`base_url` in `drupal-cli.config.js` und `drupal-cli.oauth.config.js` einmalig an:
-
-```bash
-cat ../tests/integrations/drupal/.test-config.json | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])"
-```
-
-Zugangsdaten (alle aus der Fixture):
+Zugangsdaten (alle vier Sites teilen dieselben Werte aus der Fixture):
 
 - Admin: `admin / admin`
 - Tester: `tester / tester-pw`
-- OAuth Consumer für `login`: `tests-authcode`
+- OAuth Consumer (plain, canvas, db): `tests-authcode`
 
-Alle Kommandos unten werden aus dem `playground/`-Ordner ausgeführt.
+## plain/ — Basic CRUD + OAuth
 
-## 1. Login (OAuth 2.0 Authorization Code + PKCE)
-
-Startet den Browser-Flow, speichert das Token für spätere Aufrufe mit
-derselben Config ab. Interaktiv.
+OAuth-Login (interaktiv, öffnet Browser):
 
 ```bash
-npx drupal-cli --config drupal-cli.oauth.config.js login
+cd plain
+npx dropsh --config dropsh.config.js login
 ```
 
-Die Fixture ist auf den Callback `http://localhost:7432/callback` ausgelegt
-(`redirect_port: 7432` in `drupal-cli.oauth.config.js`).
-
-Danach laufen beliebige andere Befehle mit derselben Config gegen das
-Token:
+Danach beliebige Operationen mit demselben Token:
 
 ```bash
-npx drupal-cli --config drupal-cli.oauth.config.js search node --bundle=article_test --limit=3
+npx dropsh --config dropsh.config.js search node --bundle=article_test --limit=3
+npx dropsh --config dropsh.config.js create node --bundle=article_test --data=@create-article.json
 ```
 
-Alle weiteren Beispiele nutzen `drupal-cli.config.js` (Basic Auth), weil das ohne
-Browser-Interaktion auskommt.
-
-## 2. Schema: Catalog
-
-Alle Targets auflisten, die über JSON:API erreichbar sind:
+## schemata/ — Schema-Discovery + Client-Validierung
 
 ```bash
-npx drupal-cli --config drupal-cli.config.js schema
+cd schemata
+# Catalog
+npx dropsh --config dropsh.config.js schema
+# Schema für ein Bundle (cached in .dropsh/cache/schema/)
+npx dropsh --config dropsh.config.js schema node/article_test
+npx dropsh --config dropsh.config.js schema node/article_test --for=create
+npx dropsh --config dropsh.config.js schema node/article_test --for=update
 ```
 
-## 3. Schema: Per Target
+Das Feld `x-dropsh-source` im Output zeigt die Schema-Quelle (`schemata`
+für echtes JSON-Schema aus dem Drupal-Modul).
 
-Das JSON-Schema für ein konkretes `entity/bundle` holen. Das Ergebnis wird
-unter `.drupal-cli/cache/schema/` gecacht — `--refresh` umgeht den Cache:
+## canvas/ — Canvas Components
 
 ```bash
-npx drupal-cli --config drupal-cli.config.js schema node/article_test
-npx drupal-cli --config drupal-cli.config.js schema node/article_test --refresh
+cd canvas
+# Schema mit Canvas-Component-Metadaten
+npx dropsh --config dropsh.config.js schema canvas_page/canvas_page --for=create
 ```
 
-Das Feld `x-drupal-cli-source` im Output zeigt, woher das Schema kommt:
+## db/ — Display Builder
 
-- `schemata` — echtes JSON-Schema aus dem Drupal-Modul `schemata`
-- `heuristic` — aus drei Beispiel-Instanzen abgeleitet (kein `required`)
-- `heuristic-empty` — Bundle existiert, aber keine Instanzen vorhanden
-
-Die Fixture aus `drupal:up` installiert das `schemata`-Modul — die Quelle
-wird also `schemata` sein (bereitgestellt durch das `schemataPlugin()`
-in der Config).
-
-`--for` steuert die Operation-Variante:
+Display-Builder-Schema mit Metadaten aus der Drupal Entity-View-Display-
+Konfiguration:
 
 ```bash
-npx drupal-cli --config drupal-cli.config.js schema node/article_test --for=create
-npx drupal-cli --config drupal-cli.config.js schema node/article_test --for=update
+cd db
+# einmalig: OAuth-Login (öffnet Browser)
+npx dropsh --config dropsh.config.js login
+npx dropsh --config dropsh.config.js schema node/article --for=create
 ```
-
-## 4. Create
-
-Legt einen Artikel an. Die UUID steht in der Antwort unter `data.id`:
-
-```bash
-npx drupal-cli --config drupal-cli.config.js create node \
-  --bundle=article_test \
-  --data=@create-article.json
-```
-
-Die Payload (`create-article.json`) enthält `data.type` und Attribute —
-die Client-Validierung prüft sie vor dem HTTP-Call gegen das gecachte Schema.
-
-UUID in eine Shell-Variable übernehmen für die nächsten Schritte:
-
-```bash
-UUID=$(npx drupal-cli --config drupal-cli.config.js create node \
-  --bundle=article_test --data=@create-article.json \
-  | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['id'])")
-echo "$UUID"
-```
-
-## 5. Update
-
-Update benötigt `data.id` in der Payload und das Target in der URL:
-
-```bash
-npx drupal-cli --config drupal-cli.config.js update node/article_test/$UUID \
-  --data='{"data":{"type":"node--article_test","id":"'$UUID'","attributes":{"title":"Aktualisierter Artikel"}}}'
-```
-
-Auch hier läuft vorher die Client-Validierung — mit `--for=update`-Variante
-des Schemas, die `required`-Felder lockert.
-
-## 6. Delete
-
-```bash
-npx drupal-cli --config drupal-cli.config.js delete node/article_test/$UUID
-```
-
-Antwort: `{"ok":true}`.
-
-## 7. Validierung die fehlschlägt
-
-`invalid-article.json` setzt `data.type: "node--falscher_bundle"`. Das Schema
-erzwingt `data.type === "node--article_test"` als Konstante — die CLI bricht
-mit Exit-Code 4 (`E_VALIDATION`) ab, bevor überhaupt ein HTTP-Call an Drupal
-geht:
-
-```bash
-npx drupal-cli --config drupal-cli.config.js create node \
-  --bundle=article_test \
-  --data=@invalid-article.json
-# exit 4, error.code=E_VALIDATION
-```
-
-Wenn man die Client-Prüfung bewusst überspringen will (z.B. weil das
-heuristische Schema bekannt zu streng ist), gibt es `--no-validate`:
-
-```bash
-npx drupal-cli --config drupal-cli.config.js create node \
-  --bundle=article_test \
-  --data=@invalid-article.json \
-  --no-validate
-# jetzt lehnt Drupal selbst serverseitig ab (exit 5, E_HTTP)
-```
-
-## 8. Render-Formate (`--format`)
-
-Standardmäßig geben alle Kommandos JSON aus. Sind die Render-Plugins in der
-Config aktiv (`markdownPlugin()`, `tablePlugin()`), wählt ein globales
-`--format <id>` **vor** dem Subkommando ein anderes Format. Es gilt nur für
-Entity-Kommandos (`read`, `search`, `create`, `update`).
-
-Markdown-Detailansicht einer einzelnen Entity (YAML-Frontmatter + Body):
-
-```bash
-npx dropsh --config dropsh.config.js --format md read node/article_test/$UUID
-```
-
-Tabellenansicht einer Trefferliste (`search` liefert eine Collection):
-
-```bash
-npx dropsh --config dropsh.config.js --format table search node \
-  --bundle=article_test --limit=10
-```
-
-`json` bleibt der Default und ist voll rückwärtskompatibel:
-
-```bash
-npx dropsh --config dropsh.config.js read node/article_test/$UUID   # JSON
-```
-
-Auf Nicht-Entity-Kommandos (`delete`, `upload-file`, `schema`) ist `--format`
-nicht anwendbar und bricht mit Exit-Code 2 ab:
-
-```bash
-npx dropsh --config dropsh.config.js --format md schema
-# exit 2, error.code=E_CONFIG: format 'md' not applicable to command 'schema'
-```
-
-## 9. Interaktives TUI (`--format tui`)
-
-Das `tuiPlugin()` fügt das interaktive Vollbild-Format `tui` hinzu (benötigt
-ein echtes Terminal — TTY), wählbar über `--format tui` auf `read`/`search`
-— es gibt keinen eigenen `browse`-Befehl. `read --format tui` öffnet direkt
-die Markdown-Detailansicht der einzelnen Entität. `search --format tui`
-zeigt eine Liste: durchblättern mit ↑/↓, Enter öffnet die Detailansicht,
-`q`/Esc zurück bzw. beenden:
-
-```bash
-npx dropsh --config dropsh.config.js --format tui read node/article_test/$UUID
-npx dropsh --config dropsh.config.js --format tui search node --bundle=article_test
-```
-
-Die Listen-Spalten und Default-Filter kommen aus der `views`-Config des
-`tuiPlugin()` in `dropsh.config.js` (hier: Spalten `title`/`status`, Filter
-`status: "1"`). Ohne passenden View-Eintrag fällt die Liste auf eine
-Heuristik zurück (Titel/Name → id). Die Detailansicht ist in dieser Phase
-immer Markdown.
-
-## Kompletter Durchlauf als Skript
-
-```bash
-set -e
-cd playground
-
-echo "catalog:"
-npx drupal-cli --config drupal-cli.config.js schema > /dev/null
-
-echo "create:"
-UUID=$(npx drupal-cli --config drupal-cli.config.js create node \
-  --bundle=article_test --data=@create-article.json \
-  | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['id'])")
-echo "  $UUID"
-
-echo "update:"
-npx drupal-cli --config drupal-cli.config.js update node/article_test/$UUID \
-  --data='{"data":{"type":"node--article_test","id":"'$UUID'","attributes":{"title":"Aktualisiert"}}}' \
-  > /dev/null
-
-echo "delete:"
-npx drupal-cli --config drupal-cli.config.js delete node/article_test/$UUID
-
-echo "validation fail (erwartet exit 4):"
-npx drupal-cli --config drupal-cli.config.js create node \
-  --bundle=article_test --data=@invalid-article.json || echo "  exit=$?"
-```
-
-## Dateien in diesem Ordner
-
-- `drupal-cli.config.js` — Basic-Auth-Config mit `schemataPlugin` für die Beispiele 2–7
-- `drupal-cli.oauth.config.js` — OAuth-Authcode-Config mit `schemataPlugin` + `oauth2Plugin` für Beispiel 1
-- `create-article.json` — gültige Payload für `create`
-- `invalid-article.json` — bewusst ungültige Payload (falscher `data.type`)

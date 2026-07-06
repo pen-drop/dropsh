@@ -1,6 +1,13 @@
 export type { BasicAuthConfig } from "./core/auth/basic.js";
-export { basicAuthPlugin } from "./core/auth/basic.js";
-export type { AuthAdapter } from "./core/auth/types.js";
+export { basicAuthPlugin, basicAuthProvider } from "./core/auth/basic.js";
+export type {
+  AdapterRuntime,
+  AuthAdapter,
+  AuthContext,
+  AuthProvider,
+  AuthSession,
+  AuthStatusInfo,
+} from "./core/auth/types.js";
 export type {
   AnyRenderer,
   InteractiveRenderer,
@@ -15,8 +22,8 @@ export type { CommandContext } from "./core/context.js";
 export { createCommandContext } from "./core/context.js";
 export type { HttpClient, HttpRequest } from "./core/http.js";
 export { createHttpClient } from "./core/http.js";
-export type { JsonApiClient } from "./core/jsonapi/client.js";
+export type { JsonApiClient, JsonApiOptions } from "./core/jsonapi/client.js";
 export { createJsonApiClient } from "./core/jsonapi/client.js";
 export type { JsonApiDocument, JsonApiResource } from "./core/jsonapi/types.js";
-export type { DrupalCliPlugin, PluginContext } from "./core/plugin.js";
+export type { DropSHPlugin, PluginContext, SchemaOperation } from "./core/plugin.js";
 export { AuthError, ConfigError, HttpError } from "./errors.js";

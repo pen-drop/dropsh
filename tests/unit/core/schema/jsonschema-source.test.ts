@@ -3,7 +3,7 @@ import { fetchJsonSchema } from "../../../../src/core/schema/jsonschema-source.j
 import type { HttpClient } from "../../../../src/core/http.js";
 import type { AuthAdapter } from "../../../../src/core/auth/types.js";
 import { HttpError, ValidationError } from "../../../../src/errors.js";
-import type { DrupalCliPlugin } from "../../../../src/core/plugin.js";
+import type { DropSHPlugin } from "../../../../src/core/plugin.js";
 
 const auth: AuthAdapter = { apply: async (req) => req };
 
@@ -65,7 +65,7 @@ describe("fetchJsonSchema", () => {
       { status: 200, body: JSON.stringify({ data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }] }) },
     ]);
     const pluginSchema = { type: "object", properties: { data: { type: "object" } } };
-    const mockPlugin: DrupalCliPlugin = {
+    const mockPlugin: DropSHPlugin = {
       id: "mock",
       requiredModules: [],
       async extendSchema(_e, _b, _base, _ctx) { return pluginSchema; },
@@ -83,7 +83,7 @@ describe("fetchJsonSchema", () => {
     const http = scriptedHttp([
       { status: 200, body: JSON.stringify({ data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }] }) },
     ]);
-    const mockPlugin: DrupalCliPlugin = {
+    const mockPlugin: DropSHPlugin = {
       id: "passthrough",
       requiredModules: [],
       async extendSchema(_e, _b, base, _ctx) { return base; },

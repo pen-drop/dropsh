@@ -20,5 +20,12 @@
     "isolatedModules": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["node_modules", "dist", "tests/integrations/drupal"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests/integrations/drupal/web/**",
+    "tests/integrations/drupal/vendor/**",
+    "tests/integrations/drupal-schemata/web/**",
+    "tests/integrations/drupal-schemata/vendor/**"
+  ]
 }

@@ -6,9 +6,8 @@
     "dropsh": "file:..",
     "@dropsh/plugin-oauth2": "file:../plugins/oauth2",
     "@dropsh/plugin-schemata": "file:../plugins/schemata",
-    "@dropsh/plugin-markdown": "file:../plugins/markdown",
-    "@dropsh/plugin-table": "file:../plugins/table",
-    "@dropsh/plugin-tui": "file:../plugins/tui"
+    "@dropsh/plugin-canvas": "file:../plugins/canvas",
+    "@dropsh/plugin-display-builder": "file:../plugins/display-builder"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

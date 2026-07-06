@@ -1,5 +1,5 @@
 import type {
-  DrupalCliPlugin,
+  DropSHPlugin,
   JsonApiDocument,
   JsonApiResource,
   RenderContext,
@@ -76,7 +76,7 @@ async function runTui(
   await app.waitUntilExit();
 }
 
-export function tuiPlugin(tuiOpts: TuiOptions = {}): DrupalCliPlugin {
+export function tuiPlugin(tuiOpts: TuiOptions = {}): DropSHPlugin {
   return {
     id: "tui",
     requiredModules: [],

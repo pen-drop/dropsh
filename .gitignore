@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build output
 dist/
@@ -8,7 +9,6 @@ build/
 
 # Runtime caches and local CLI state
 .dropsh/
-.drupal-cli/
 
 # Local agent/tool working dirs and worktrees
 .claude/
@@ -58,3 +58,5 @@ npm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+.codex
+.claude/worktrees
