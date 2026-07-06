@@ -6,7 +6,7 @@ import { ValidationError } from "../../../src/errors.js";
 function client(): JsonApiClient {
   return {
     get: vi.fn(), post: vi.fn(), delete: vi.fn(), upload: vi.fn(),
-    patch: vi.fn(async () => ({ data: { id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } })),
+    patch: vi.fn(async () => ({ data: { type: "node--article", id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } })),
   };
 }
 
@@ -16,7 +16,7 @@ describe("runUpdate", () => {
     const emitted: unknown[] = [];
     await runUpdate(
       { target: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", dataArg: '{"data":{"type":"node--article","id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","attributes":{"title":"X"}}}' },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.patch).toHaveBeenCalledWith("node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", {
       data: { type: "node--article", id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", attributes: { title: "X" } },
@@ -33,7 +33,7 @@ describe("runUpdate", () => {
     const emitted: unknown[] = [];
     await runUpdate(
       { target: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", dataArg: '{"data":{}}', dryRun: true },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.patch).not.toHaveBeenCalled();
     expect(emitted[0]).toMatchObject({ dry_run: true, method: "PATCH", path: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });

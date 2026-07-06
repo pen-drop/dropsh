@@ -1,13 +1,18 @@
 import type { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import type { AuthAdapter } from "../auth/types.js";
 import type { HttpClient } from "../http.js";
+import type { JsonApiDocument } from "./types.js";
 
 export interface JsonApiClient {
-  get(path: string, params?: DrupalJsonApiParams): Promise<unknown>;
-  post(path: string, body: unknown): Promise<unknown>;
-  patch(path: string, body: unknown): Promise<unknown>;
-  delete(path: string): Promise<unknown>;
-  upload(path: string, filename: string, data: Uint8Array | Buffer): Promise<unknown>;
+  get(path: string, params?: DrupalJsonApiParams): Promise<JsonApiDocument>;
+  post(path: string, body: unknown): Promise<JsonApiDocument>;
+  patch(path: string, body: unknown): Promise<JsonApiDocument>;
+  delete(path: string): Promise<{ ok: true }>;
+  upload(
+    path: string,
+    filename: string,
+    data: Uint8Array | Buffer,
+  ): Promise<{ ok: true } | JsonApiDocument>;
 }
 
 export interface JsonApiOptions {
@@ -51,22 +56,30 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
   return {
     async get(path, params) {
       const qs = params ? `?${params.getQueryString()}` : "";
-      return send("GET", joinUrl(opts.baseUrl, opts.prefix, path) + qs);
+      return send("GET", joinUrl(opts.baseUrl, opts.prefix, path) + qs) as Promise<JsonApiDocument>;
     },
     async post(path, body) {
-      return send("POST", joinUrl(opts.baseUrl, opts.prefix, path), JSON.stringify(body));
+      return send(
+        "POST",
+        joinUrl(opts.baseUrl, opts.prefix, path),
+        JSON.stringify(body),
+      ) as Promise<JsonApiDocument>;
     },
     async patch(path, body) {
-      return send("PATCH", joinUrl(opts.baseUrl, opts.prefix, path), JSON.stringify(body));
+      return send(
+        "PATCH",
+        joinUrl(opts.baseUrl, opts.prefix, path),
+        JSON.stringify(body),
+      ) as Promise<JsonApiDocument>;
     },
     async delete(path) {
-      return send("DELETE", joinUrl(opts.baseUrl, opts.prefix, path));
+      return send("DELETE", joinUrl(opts.baseUrl, opts.prefix, path)) as Promise<{ ok: true }>;
     },
     async upload(path, filename, data) {
       return send("POST", joinUrl(opts.baseUrl, opts.prefix, path), data, {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `file; filename="${filename}"`,
-      });
+      }) as Promise<{ ok: true } | JsonApiDocument>;
     },
   };
 }

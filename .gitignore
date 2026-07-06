@@ -10,6 +10,11 @@ build/
 # Runtime caches and local CLI state
 .dropsh/
 
+# Local agent/tool working dirs and worktrees
+.claude/
+.codex
+playground/canvas/
+
 # Secrets and environment
 .env
 .env.*

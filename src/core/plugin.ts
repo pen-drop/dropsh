@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import type { AuthAdapter, AuthProvider } from "./auth/types.js";
+import type { AnyRenderer } from "./cli/render.js";
 import type { HttpClient } from "./http.js";
 import type { Operation } from "./schema/to-jsonschema.js";
 
@@ -34,4 +35,5 @@ export interface DropSHPlugin {
     ctx: PluginContext,
   ): Promise<unknown>;
   registerCommands?(program: Command): void;
+  renderers?: AnyRenderer[];
 }

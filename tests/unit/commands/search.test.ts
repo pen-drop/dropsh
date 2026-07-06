@@ -30,7 +30,7 @@ describe("runSearch", () => {
     const emitted: unknown[] = [];
     await runSearch(
       { entityType: "node", bundle: "article", filters: ["title:Hello"], limit: 10 },
-      { client: c, emit: (v) => emitted.push(v) },
+      { client: c, emit: (v) => { emitted.push(v); } },
     );
     expect(c.get).toHaveBeenCalledTimes(1);
     const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
@@ -51,5 +51,24 @@ describe("runSearch", () => {
     expect(path).toBe("node");
     expect((params as DrupalJsonApiParams).getQueryString({ encode: false }))
       .toBe("filter[status][value]=1&filter[status][operator]=!=&page[limit]=50");
+  });
+
+  it("adds include alongside filters and page limit", async () => {
+    const c = client();
+    await runSearch(
+      {
+        entityType: "node",
+        bundle: "article",
+        filters: ["title:Hello"],
+        limit: 10,
+        include: ["field_related", "field_image"],
+      },
+      { client: c, emit: () => {} },
+    );
+    const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(path).toBe("node/article");
+    expect((params as DrupalJsonApiParams).getQueryString({ encode: false })).toBe(
+      "filter[title]=Hello&include=field_related,field_image&page[limit]=10",
+    );
   });
 });

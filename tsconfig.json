@@ -21,6 +21,8 @@
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": [
+    "node_modules",
+    "dist",
     "tests/integrations/drupal/web/**",
     "tests/integrations/drupal/vendor/**",
     "tests/integrations/drupal-schemata/web/**",
