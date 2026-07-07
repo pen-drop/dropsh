@@ -2,7 +2,6 @@ import { markdownPlugin } from "@dropsh/plugin-markdown";
 import { oauth2Plugin } from "@dropsh/plugin-oauth2";
 import { schemataPlugin } from "@dropsh/plugin-schemata";
 import { tablePlugin } from "@dropsh/plugin-table";
-import { tuiPlugin } from "@dropsh/plugin-tui";
 
 export default {
   site: {
@@ -18,19 +17,8 @@ export default {
       redirect_port: 7432,
     }),
     schemataPlugin(),
-    // Render plugins: enable `--format md`, `--format table`, and `--format tui`.
+    // Render plugins: enable `--format md` and `--format table`.
     markdownPlugin(),
     tablePlugin(),
-    tuiPlugin({
-      defaultPageSize: 25,
-      views: [
-        {
-          entityType: "node",
-          bundle: "article_test",
-          columns: ["title", "status"],
-          filters: { status: "1" },
-        },
-      ],
-    }),
   ],
 };

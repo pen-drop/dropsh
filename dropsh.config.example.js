@@ -8,7 +8,6 @@ import { basicAuthPlugin } from 'dropsh';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';
 // import { markdownPlugin } from '@dropsh/plugin-markdown';
 // import { tablePlugin } from '@dropsh/plugin-table';
-// import { tuiPlugin } from '@dropsh/plugin-tui';
 
 export default {
   site: {
@@ -54,14 +53,8 @@ export default {
 
     // schemataPlugin(),
 
-    // Render plugins (interactive/alternative output formats):
+    // Render plugins (alternative output formats via --format):
     // markdownPlugin(),
     // tablePlugin(),
-    // tuiPlugin({
-    //   defaultPageSize: 25,
-    //   views: [
-    //     { entityType: 'node', bundle: 'article', columns: ['title', 'status', 'changed'], filters: { status: '1' } },
-    //   ],
-    // }),
   ],
 };
