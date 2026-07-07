@@ -1,8 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../../../src/core/config.js";
 import { ConfigError } from "../../../src/errors.js";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => path.join(here, "..", "fixtures", "config", name);
@@ -32,5 +32,27 @@ describe("loadConfig", () => {
 
   it("throws ConfigError on syntax error in config file", async () => {
     await expect(loadConfig(fixture("syntax-error.js"))).rejects.toBeInstanceOf(ConfigError);
+  });
+
+  describe("plugin descriptors (import-free config)", () => {
+    it("passes a pre-constructed plugin through unchanged", async () => {
+      const cfg = await loadConfig(fixture("plugin-passthrough.js"));
+      expect(cfg.plugins).toHaveLength(1);
+      expect(cfg.plugins[0]?.id).toBe("prebuilt");
+      expect(cfg.plugins[0]?.authProvider?.id).toBe("prebuilt");
+    });
+
+    it("resolves a named plugin (ESLint style) relative to the config file", async () => {
+      const cfg = await loadConfig(fixture("descriptor-named-plugin.js"));
+      expect(cfg.plugins).toHaveLength(1);
+      expect(cfg.plugins[0]?.id).toBe("from-name");
+      expect(cfg.plugins[0]?.authProvider?.id).toBe("from-name");
+    });
+
+    it("throws ConfigError when a named plugin cannot be resolved", async () => {
+      await expect(loadConfig(fixture("descriptor-unknown.js"))).rejects.toBeInstanceOf(
+        ConfigError,
+      );
+    });
   });
 });
