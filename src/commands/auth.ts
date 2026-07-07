@@ -49,8 +49,7 @@ async function pickProvider(deps: AuthDeps, requestedId?: string): Promise<AuthP
   // No explicit --provider: fall back to the configured default profile
   // (default: true), or the sole provider. Only then, if still ambiguous and
   // interactive, prompt; non-interactive with no default stays an error.
-  const fallback =
-    defaultProvider(capable) ?? (capable.length === 1 ? capable[0] : undefined);
+  const fallback = defaultProvider(capable) ?? (capable.length === 1 ? capable[0] : undefined);
   if (fallback) return fallback;
   if (!deps.isTTY) throw new ConfigError("non-interactive: pass --provider <id>");
   deps.stdout("Select an auth provider:\n");
