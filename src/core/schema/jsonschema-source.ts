@@ -27,7 +27,13 @@ export async function fetchJsonSchema(deps: JsonSchemaDeps): Promise<JsonSchemaR
   const { entity, bundle } = deps;
   const target = { entity_type: entity, bundle };
   const plugins = deps.plugins ?? [];
-  const ctx: PluginContext = { http: deps.http, auth: deps.auth, baseUrl: deps.baseUrl };
+  const ctx: PluginContext = {
+    http: deps.http,
+    auth: deps.auth,
+    baseUrl: deps.baseUrl,
+    jsonapiPrefix: deps.jsonapiPrefix,
+    warn: deps.warn,
+  };
 
   // Build heuristic base schema
   let heuristicResult: Awaited<ReturnType<typeof fetchHeuristic>>;

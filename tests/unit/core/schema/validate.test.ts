@@ -55,6 +55,43 @@ describe("validatePayload", () => {
     expect(errs.some((x) => x.instancePath === "/data/attributes" && /required/i.test(x.message))).toBe(true);
   });
 
+  it("rejects a value that violates a declared string format (uri)", () => {
+    const uriSchema = {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "object",
+      properties: {
+        data: {
+          type: "object",
+          properties: {
+            repos: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: { url: { type: "string", format: "uri" } },
+              },
+            },
+          },
+        },
+      },
+    };
+    // SCP-style git remote — not a valid URI
+    const payload = { data: { repos: [{ url: "git@github.com:pen-drop/dropsh.git" }] } };
+    let caught: unknown;
+    try {
+      validatePayload(uriSchema, payload, "gaia_project/gaia_project");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    const errs = (caught as ValidationError).details.errors as Array<{
+      instancePath: string;
+      message: string;
+    }>;
+    expect(errs.some((x) => x.instancePath.includes("url") && /uri|format/i.test(x.message))).toBe(
+      true,
+    );
+  });
+
   it("throws ValidationError when schema itself cannot be compiled", () => {
     const bad = { type: "not-a-type" };
     let caught: unknown;

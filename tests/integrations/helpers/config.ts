@@ -10,7 +10,7 @@
 // `seedSession`), which then persists the resulting session to the state dir —
 // matching the real `dropsh auth login` flow.
 
-export type SiteName = "plain" | "schemata" | "canvas" | "db";
+export type SiteName = "plain" | "schemata" | "jsonapischema" | "canvas" | "db";
 
 export interface OAuth2Config {
   scope: string;
@@ -60,6 +60,16 @@ const SITES: Record<SiteName, TestConfig> = {
     oauth2: OAUTH2,
     // /schemata/* does not opt into basic_auth, so default to OAuth Bearer
     // (which is global). Schemata-targeted tests therefore "just work".
+    defaultAuth: "oauth2_password",
+  },
+  jsonapischema: {
+    url: "http://jsonapischema.dropsh-test.ddev.site",
+    basic: TESTER,
+    oauth2: OAUTH2,
+    // jsonapi_schema's schema routes do NOT declare `_auth`, so Drupal core
+    // basic_auth (global: false) cannot authenticate them — an authenticated
+    // basic request is rejected 403. Default to OAuth Bearer (global: true),
+    // like the schemata site, which authenticates those routes.
     defaultAuth: "oauth2_password",
   },
   canvas: {
