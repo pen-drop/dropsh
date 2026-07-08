@@ -63,8 +63,13 @@ composer require drupal/jsonapi_schema
 drush en jsonapi_schema
 ```
 
-Because the schema routes live under `/jsonapi/*`, the role/consumer used by
-dropsh needs no extra permission beyond JSON:API access.
+**Authentication note:** the schema routes (`…/resource/schema`) do not declare
+`_auth`, so Drupal core `basic_auth` (which is `global: false`) cannot
+authenticate them — an authenticated basic request is rejected with 403 (the
+same limitation the `schemata` module has). Use an auth provider that is
+registered globally, such as OAuth2 Bearer via `simple_oauth` (see
+`@dropsh/plugin-oauth2`), or grant the anonymous role access to the routes if
+your schemas are non-sensitive.
 
 ## How it works
 

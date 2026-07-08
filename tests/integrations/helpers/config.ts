@@ -65,9 +65,12 @@ const SITES: Record<SiteName, TestConfig> = {
   jsonapischema: {
     url: "http://jsonapischema.dropsh-test.ddev.site",
     basic: TESTER,
-    // jsonapi_schema routes live under /jsonapi/*, which opts into basic_auth,
-    // so basic auth is sufficient and avoids the OAuth token roundtrip.
-    defaultAuth: "basic",
+    oauth2: OAUTH2,
+    // jsonapi_schema's schema routes do NOT declare `_auth`, so Drupal core
+    // basic_auth (global: false) cannot authenticate them — an authenticated
+    // basic request is rejected 403. Default to OAuth Bearer (global: true),
+    // like the schemata site, which authenticates those routes.
+    defaultAuth: "oauth2_password",
   },
   canvas: {
     url: "http://canvas.dropsh-test.ddev.site",
