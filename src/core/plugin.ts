@@ -7,6 +7,18 @@ export interface PluginContext {
   http: HttpClient;
   auth: AuthAdapter;
   baseUrl: string;
+  /**
+   * JSON:API path prefix (e.g. "/jsonapi"). Present when the schema pipeline
+   * builds the context; plugins that target routes under the JSON:API prefix
+   * should fall back to "/jsonapi" when it is absent.
+   */
+  jsonapiPrefix?: string;
+  /**
+   * Emit a user-visible warning (goes to stderr). Plugins use this to surface
+   * a broken/unreachable authoritative-schema endpoint instead of silently
+   * falling back to the heuristic schema.
+   */
+  warn?: (message: string) => void;
 }
 
 export type SchemaOperation = Operation;

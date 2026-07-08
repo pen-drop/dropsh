@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "commander": "^12.1.0",
     "drupal-jsonapi-params": "^3.0.1",
     "open": "^11.0.0"

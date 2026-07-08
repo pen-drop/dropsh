@@ -55,14 +55,18 @@ Optional modules unlock stricter schemas or builder-specific support:
 | Feature | Drupal modules |
 | --- | --- |
 | OAuth2 login | `simple_oauth` |
-| Authoritative schemas | `schemata`, `schemata_json_schema` |
+| Authoritative schemas (Drupal 10.1+/11) | `jsonapi_schema` |
+| Authoritative schemas (legacy; 500s on D11/PHP 8.4) | `schemata`, `schemata_json_schema` |
 | Canvas schemas | `canvas`, `jsonapi_sdc` |
 | Display Builder schemas | `display_builder`, `display_builder_entity_view`, `jsonapi_sdc` |
 
-dropsh works without the Schemata modules. In that case, `dropsh schema` falls
-back to a shallow schema inferred from JSON:API sample records. Installing
-`schemata` and `schemata_json_schema` lets `@dropsh/plugin-schemata` return a
-more precise schema with Drupal's required fields and constraints.
+dropsh works without an authoritative-schema module. In that case, `dropsh
+schema` falls back to a shallow schema inferred from JSON:API sample records.
+Installing `jsonapi_schema` lets `@dropsh/plugin-jsonapi-schema` return a more
+precise schema with Drupal's required fields, formats, and constraints — so
+`create`/`update` reject malformed payloads client-side. On **Drupal 11 / PHP
+8.4** prefer `jsonapi_schema`: the older `schemata_json_schema` endpoint returns
+HTTP 500 there.
 
 ### Installing the Drupal modules
 
@@ -77,16 +81,21 @@ drush en jsonapi
 composer require drupal/simple_oauth
 drush en simple_oauth
 
-# Optional: authoritative schemas (schemata_json_schema is a submodule
-# of the schemata project)
-composer require drupal/schemata
-drush en schemata schemata_json_schema
-drush role:perm:add "content_editor" "access schemata data models"
+# Optional: authoritative schemas (Drupal 10.1+/11, PHP 8.4) — recommended
+composer require drupal/jsonapi_schema
+drush en jsonapi_schema
+
+# Legacy alternative — the schemata endpoint returns HTTP 500 on
+# Drupal 11 / PHP 8.4; prefer jsonapi_schema there.
+# composer require drupal/schemata
+# drush en schemata schemata_json_schema
+# drush role:perm:add "content_editor" "access schemata data models"
 ```
 
-Grant `access schemata data models` to the role used by dropsh. For OAuth2, that
-means the user role or client credential access context that reads the Schemata
-endpoint.
+`jsonapi_schema` serves its routes under the JSON:API prefix (`/jsonapi/*`), so
+the role/consumer used by dropsh needs no extra permission beyond JSON:API
+access. (The legacy `schemata` endpoint instead needs `access schemata data
+models` on that role.)
 
 By default JSON:API only accepts read operations. To create, update, or delete
 entities through dropsh, set **Accept all JSON:API create, read, update, and
@@ -103,7 +112,7 @@ store.
 ```js
 import { basicAuthPlugin } from "dropsh";
 import { oauth2Plugin } from "@dropsh/plugin-oauth2";
-import { schemataPlugin } from "@dropsh/plugin-schemata";
+import { jsonapiSchemaPlugin } from "@dropsh/plugin-jsonapi-schema";
 
 export default {
   site: {
@@ -121,7 +130,7 @@ export default {
       client_id: "my-client",
       token_url: "https://my-drupal.example.com/oauth/token",
     }),
-    schemataPlugin(),
+    jsonapiSchemaPlugin(),
   ],
 };
 ```
