@@ -8,5 +8,6 @@ database:
   version: "10.11"
 additional_hostnames:
   - schemata.dropsh-test
+  - jsonapischema.dropsh-test
   - canvas.dropsh-test
   - db.dropsh-test
