@@ -59,7 +59,7 @@ jobs:
     strategy:
       matrix:
         node-version: ["20", "22"]
-        plugin: ["schemata", "oauth2", "canvas"]
+        plugin: ["schemata", "jsonapi-schema", "oauth2", "canvas"]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

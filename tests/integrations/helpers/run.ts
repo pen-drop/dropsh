@@ -57,6 +57,7 @@ export interface RunOptions {
 const PLUGIN_BY_SITE: Record<SiteName, string | null> = {
   plain: null,
   schemata: "schemata",
+  jsonapischema: "jsonapi-schema",
   canvas: "canvas",
   db: "display-builder",
 };
@@ -67,6 +68,12 @@ function pluginImport(plugin: string): { importLine: string; instantiation: stri
     return {
       importLine: `import { schemataPlugin } from ${JSON.stringify(sourcePath)};`,
       instantiation: "schemataPlugin()",
+    };
+  }
+  if (plugin === "jsonapi-schema") {
+    return {
+      importLine: `import { jsonapiSchemaPlugin } from ${JSON.stringify(sourcePath)};`,
+      instantiation: "jsonapiSchemaPlugin()",
     };
   }
   if (plugin === "canvas") {

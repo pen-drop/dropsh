@@ -5,6 +5,7 @@
 // `dropsh auth login` and persisted to ~/.config/dropsh/<host>.json (mode 0600).
 import { basicAuthPlugin } from 'dropsh';
 // import { oauth2Plugin } from '@dropsh/plugin-oauth2';
+// import { jsonapiSchemaPlugin } from '@dropsh/plugin-jsonapi-schema';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';
 
 export default {
@@ -49,6 +50,14 @@ export default {
     //   // scope: 'content',
     // }),
 
+    // Authoritative, constraint-bearing write schema (recommended). Backed by
+    // the jsonapi_schema Drupal module — works on Drupal 10.1+/11 + PHP 8.4.
+    // Requires @dropsh/plugin-jsonapi-schema and `drush en jsonapi_schema`.
+    // jsonapiSchemaPlugin(),
+
+    // Legacy alternative backed by the schemata module. NOTE: its endpoint
+    // returns HTTP 500 on Drupal 11 / PHP 8.4 — prefer jsonapiSchemaPlugin()
+    // there. Requires @dropsh/plugin-schemata.
     // schemataPlugin(),
   ],
 };

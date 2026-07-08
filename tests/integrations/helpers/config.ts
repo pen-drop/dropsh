@@ -10,7 +10,7 @@
 // `seedSession`), which then persists the resulting session to the state dir —
 // matching the real `dropsh auth login` flow.
 
-export type SiteName = "plain" | "schemata" | "canvas" | "db";
+export type SiteName = "plain" | "schemata" | "jsonapischema" | "canvas" | "db";
 
 export interface OAuth2Config {
   scope: string;
@@ -61,6 +61,13 @@ const SITES: Record<SiteName, TestConfig> = {
     // /schemata/* does not opt into basic_auth, so default to OAuth Bearer
     // (which is global). Schemata-targeted tests therefore "just work".
     defaultAuth: "oauth2_password",
+  },
+  jsonapischema: {
+    url: "http://jsonapischema.dropsh-test.ddev.site",
+    basic: TESTER,
+    // jsonapi_schema routes live under /jsonapi/*, which opts into basic_auth,
+    // so basic auth is sufficient and avoids the OAuth token roundtrip.
+    defaultAuth: "basic",
   },
   canvas: {
     url: "http://canvas.dropsh-test.ddev.site",
