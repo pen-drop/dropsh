@@ -3,7 +3,30 @@
 // This file holds only NON-SECRET connection parameters. Secrets (passwords,
 // client secrets, tokens) are never stored here — they are prompted by
 // `dropsh auth login` and persisted to ~/.config/dropsh/<host>.json (mode 0600).
-import { basicAuthPlugin } from 'dropsh';
+//
+// Two ways to register a plugin:
+//
+//   1. Descriptor `{ plugin, with?, export? }` — names a package by string;
+//      dropsh resolves + constructs it. No `import`, no local node_modules, so
+//      this is the form a GLOBAL install uses. `export` is REQUIRED for every
+//      @dropsh/plugin-* package (named factory, no default). Example, fully
+//      import-free:
+//
+//        export default {
+//          site: { base_url: 'https://my-drupal.example.com', jsonapi_prefix: '/jsonapi' },
+//          plugins: [
+//            { plugin: 'dropsh/plugin', export: 'basicAuthPlugin' },
+//            { plugin: '@dropsh/plugin-oauth2', export: 'oauth2Plugin',
+//              with: { type: 'oauth2_client_credentials', client_id: 'my-client',
+//                      token_url: 'https://my-drupal.example.com/oauth/token' } },
+//            { plugin: '@dropsh/plugin-jsonapi-schema', export: 'jsonapiSchemaPlugin' },
+//          ],
+//        };
+//
+//   2. Import the factory and call it (below). Works inside a workspace / when
+//      the packages are in the local node_modules. Note basicAuthPlugin lives on
+//      the 'dropsh/plugin' entry, not the package root.
+import { basicAuthPlugin } from 'dropsh/plugin';
 // import { oauth2Plugin } from '@dropsh/plugin-oauth2';
 // import { jsonapiSchemaPlugin } from '@dropsh/plugin-jsonapi-schema';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';
