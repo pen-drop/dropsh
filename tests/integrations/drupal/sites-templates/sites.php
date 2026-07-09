@@ -11,5 +11,6 @@
  */
 
 $sites['schemata.dropsh-test.ddev.site'] = 'schemata';
+$sites['jsonapischema.dropsh-test.ddev.site'] = 'jsonapischema';
 $sites['canvas.dropsh-test.ddev.site'] = 'canvas';
 $sites['db.dropsh-test.ddev.site'] = 'db';

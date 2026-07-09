@@ -28,8 +28,27 @@ content without hard-coding every content model.
 
 ## Install
 
+Install dropsh globally to put the `dropsh` binary on `PATH`. No local project,
+`package.json`, or `node_modules` is required — dropsh runs from anywhere:
+
+```bash
+npm i -g dropsh          # or: pnpm add -g dropsh
+dropsh --help            # binary now on PATH, no project needed
+```
+
+dropsh needs Node.js 20 or newer.
+
+Plugins are **separate published packages** and are **not** bundled in the
+`dropsh` tarball. To use one, install it next to dropsh — either globally
+(`npm i -g dropsh @dropsh/plugin-oauth2`) or for a single command via
+`npx -p dropsh -p @dropsh/plugin-oauth2 dropsh …`. See [Plugins](#plugins) for
+how names resolve.
+
+<details>
+<summary>From source (contributors)</summary>
+
 This repository is a pnpm workspace containing the root CLI, packages, and
-plugins.
+plugins. Build it from source when developing dropsh itself:
 
 ```bash
 corepack enable
@@ -38,6 +57,11 @@ pnpm run build
 ```
 
 The required Node.js and pinned pnpm versions are declared in `package.json`.
+Inside the workspace, plugins resolve from the local `node_modules`, so config
+may import the plugin factories directly (see the workspace variant under
+[Configuration](#configuration)).
+
+</details>
 
 ## Drupal Prerequisites
 
@@ -55,14 +79,18 @@ Optional modules unlock stricter schemas or builder-specific support:
 | Feature | Drupal modules |
 | --- | --- |
 | OAuth2 login | `simple_oauth` |
-| Authoritative schemas | `schemata`, `schemata_json_schema` |
+| Authoritative schemas (Drupal 10.1+/11) | `jsonapi_schema` |
+| Authoritative schemas (legacy; 500s on D11/PHP 8.4) | `schemata`, `schemata_json_schema` |
 | Canvas schemas | `canvas`, `jsonapi_sdc` |
 | Display Builder schemas | `display_builder`, `display_builder_entity_view`, `jsonapi_sdc` |
 
-dropsh works without the Schemata modules. In that case, `dropsh schema` falls
-back to a shallow schema inferred from JSON:API sample records. Installing
-`schemata` and `schemata_json_schema` lets `@dropsh/plugin-schemata` return a
-more precise schema with Drupal's required fields and constraints.
+dropsh works without an authoritative-schema module. In that case, `dropsh
+schema` falls back to a shallow schema inferred from JSON:API sample records.
+Installing `jsonapi_schema` lets `@dropsh/plugin-jsonapi-schema` return a more
+precise schema with Drupal's required fields, formats, and constraints — so
+`create`/`update` reject malformed payloads client-side. On **Drupal 11 / PHP
+8.4** prefer `jsonapi_schema`: the older `schemata_json_schema` endpoint returns
+HTTP 500 there.
 
 ### Installing the Drupal modules
 
@@ -77,16 +105,21 @@ drush en jsonapi
 composer require drupal/simple_oauth
 drush en simple_oauth
 
-# Optional: authoritative schemas (schemata_json_schema is a submodule
-# of the schemata project)
-composer require drupal/schemata
-drush en schemata schemata_json_schema
-drush role:perm:add "content_editor" "access schemata data models"
+# Optional: authoritative schemas (Drupal 10.1+/11, PHP 8.4) — recommended
+composer require drupal/jsonapi_schema
+drush en jsonapi_schema
+
+# Legacy alternative — the schemata endpoint returns HTTP 500 on
+# Drupal 11 / PHP 8.4; prefer jsonapi_schema there.
+# composer require drupal/schemata
+# drush en schemata schemata_json_schema
+# drush role:perm:add "content_editor" "access schemata data models"
 ```
 
-Grant `access schemata data models` to the role used by dropsh. For OAuth2, that
-means the user role or client credential access context that reads the Schemata
-endpoint.
+`jsonapi_schema` serves its routes under the JSON:API prefix (`/jsonapi/*`), so
+the role/consumer used by dropsh needs no extra permission beyond JSON:API
+access. (The legacy `schemata` endpoint instead needs `access schemata data
+models` on that role.)
 
 By default JSON:API only accepts read operations. To create, update, or delete
 entities through dropsh, set **Accept all JSON:API create, read, update, and
@@ -95,16 +128,17 @@ delete operations** at `/admin/config/services/jsonapi` (or via
 
 ## Configuration
 
-Create a `dropsh.config.js` in the project where you run dropsh. The config holds
-only non-secret connection settings. Passwords, client secrets, and tokens are
-prompted during login and stored outside the project in the per-host session
+Create a `dropsh.config.js` in the directory where you run dropsh. The config
+holds only non-secret connection settings. Passwords, client secrets, and tokens
+are prompted during login and stored outside the project in the per-host session
 store.
 
-```js
-import { basicAuthPlugin } from "dropsh";
-import { oauth2Plugin } from "@dropsh/plugin-oauth2";
-import { schemataPlugin } from "@dropsh/plugin-schemata";
+Register plugins as **descriptor objects** — `{ plugin, with?, export? }` — that
+name a package by string. dropsh resolves and constructs each plugin itself, so
+the config needs **no `import` statements** and **no local `node_modules`**. This
+is the path a global install uses:
 
+```js
 export default {
   site: {
     base_url: "https://my-drupal.example.com",
@@ -115,19 +149,60 @@ export default {
     timeout_ms: 30000,
   },
   plugins: [
+    { plugin: "dropsh/plugin", export: "basicAuthPlugin" },
+    {
+      plugin: "@dropsh/plugin-oauth2",
+      export: "oauth2Plugin",
+      with: {
+        type: "oauth2_authcode",
+        client_id: "my-client",
+        token_url: "https://my-drupal.example.com/oauth/token",
+      },
+    },
+    { plugin: "@dropsh/plugin-jsonapi-schema", export: "jsonapiSchemaPlugin" },
+  ],
+};
+```
+
+Each descriptor's `with` is passed to the plugin factory (legacy alias:
+`options`). `export` names the factory to call and is **required** for every
+`@dropsh/plugin-*` package — they export named factories with no default export
+(see [Plugins](#plugins)). Basic auth lives on the `dropsh/plugin` entry, so its
+descriptor names `dropsh/plugin` with `export: "basicAuthPlugin"`.
+
+Use `dropsh.config.example.js` as a fuller starting point. Override the config
+path with `--config <path>` or `DROPSH_CONFIG`.
+
+<details>
+<summary>Workspace variant — importing factories directly</summary>
+
+Inside the pnpm workspace or any project that has the plugin packages in its
+local `node_modules`, you may skip descriptors and import the factories instead.
+The `plugins[]` array then holds constructed plugins:
+
+```js
+import { basicAuthPlugin } from "dropsh/plugin";
+import { oauth2Plugin } from "@dropsh/plugin-oauth2";
+import { jsonapiSchemaPlugin } from "@dropsh/plugin-jsonapi-schema";
+
+export default {
+  site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
+  plugins: [
     basicAuthPlugin(),
     oauth2Plugin({
       type: "oauth2_authcode",
       client_id: "my-client",
       token_url: "https://my-drupal.example.com/oauth/token",
     }),
-    schemataPlugin(),
+    jsonapiSchemaPlugin(),
   ],
 };
 ```
 
-Use `dropsh.config.example.js` as a fuller starting point. Override the config
-path with `--config <path>` or `DROPSH_CONFIG`.
+The two forms may be mixed in one `plugins[]` array. `import` resolves relative
+to the config file, so it only works when the packages are installed there.
+
+</details>
 
 ## Authentication
 
@@ -141,8 +216,76 @@ dropsh auth status
 dropsh auth logout
 ```
 
-Secrets and tokens are never written to `dropsh.config.js`. The active session is
-stored per host under `~/.config/dropsh/<host>.json` with file mode `0600`.
+Secrets and tokens are never written to `dropsh.config.js`. Sessions are stored
+per host under `~/.config/dropsh/<host>.json` with file mode `0600`.
+
+### Named profiles — many identities per host
+
+A host can hold several **named auth profiles** at once (e.g. two OAuth2 scopes)
+and you switch between them without logging in again. Each auth provider is one
+profile, identified by its `id`. For OAuth2, give each `oauth2Plugin` an explicit
+`id` (it defaults to the grant `type` when omitted) so two profiles of the same
+grant flow can coexist:
+
+```js
+plugins: [
+  oauth2Plugin({
+    id: "session",
+    default: true,                       // used when none is selected/active
+    type: "oauth2_client_credentials",
+    client_id: "my-client",
+    client_secret,                       // enables headless auto-renew (see below)
+    token_url: "https://my-drupal.example.com/oauth/token",
+    scope: "some:scope",
+  }),
+  oauth2Plugin({
+    id: "pm",
+    type: "oauth2_client_credentials",
+    client_id: "my-client",
+    client_secret,
+    token_url: "https://my-drupal.example.com/oauth/token",
+    scope: "other:scope",
+  }),
+],
+```
+
+```bash
+dropsh auth login --provider session     # log in and store the "session" profile
+dropsh auth login --provider pm          # log in and store the "pm" profile too
+dropsh auth status                       # list all profiles; * marks the active one
+dropsh auth use pm                       # switch the persistent active profile
+dropsh --auth-profile session read …     # override the profile for one command
+dropsh auth logout --profile pm          # drop one profile
+dropsh auth logout --all                 # drop every profile for this host
+```
+
+Profile selection precedence (highest first):
+
+1. `--auth-profile <id>` (global flag)
+2. `$DROPSH_AUTH_PROFILE`
+3. the stored active profile (`auth use`)
+4. the provider marked `default: true`
+5. the sole configured profile, if there is only one
+
+With more than one profile and none active/default/selected, dropsh asks you to
+run `auth use <id>` or pass `--auth-profile <id>`.
+
+The on-disk format holds every profile in one file; legacy single-session files
+are upgraded automatically on first write.
+
+### Token renewal
+
+dropsh renews expiring tokens automatically — both **proactively** (before a token
+lapses) and **reactively** (if the server rejects a token with `401`, dropsh renews
+once and retries the request). Renewal uses the credentials already available:
+
+- **`oauth2_authcode`** — the stored `refresh_token`.
+- **`oauth2_client_credentials`** — re-mints from `client_secret`, so keep the
+  secret in config (e.g. `conductor.config.local.js`) for unattended runs. Without
+  it, an interactive login cannot be renewed and you must `auth login` again.
+
+Renewal is isolated per profile: refreshing one profile never touches another's
+session or the active pointer.
 
 ## Commands
 
@@ -209,14 +352,47 @@ structures, allowed values, and other metadata that helps the agent produce a
 valid payload. Auth plugins keep the same command interface while supporting
 common Drupal authentication systems such as basic auth or OAuth2.
 
-Bundled plugins:
+Plugins developed in this repository (**"bundled"** = part of this repo, **not**
+shipped inside the `dropsh` npm tarball — each is a separately published package):
 
-| Package | Purpose |
-| --- | --- |
-| [`@dropsh/plugin-oauth2`](plugins/oauth2/README.md) | OAuth2 auth provider for Drupal `simple_oauth` |
-| [`@dropsh/plugin-schemata`](plugins/schemata/README.md) | authoritative JSON Schema source from Drupal `schemata` |
-| [`@dropsh/plugin-canvas`](plugins/canvas/README.md) | Canvas component schemas from `jsonapi_sdc` |
-| [`@dropsh/plugin-display-builder`](plugins/display-builder/README.md) | Display Builder operation schemas and metadata |
+| Package | Factory export | Purpose |
+| --- | --- | --- |
+| [`@dropsh/plugin-oauth2`](plugins/oauth2/README.md) | `oauth2Plugin` | OAuth2 auth provider for Drupal `simple_oauth` |
+| [`@dropsh/plugin-jsonapi-schema`](plugins/jsonapi-schema/README.md) | `jsonapiSchemaPlugin` | authoritative JSON Schema from Drupal `jsonapi_schema` |
+| [`@dropsh/plugin-schemata`](plugins/schemata/README.md) | `schemataPlugin` | authoritative JSON Schema from Drupal `schemata` (legacy) |
+| [`@dropsh/plugin-canvas`](plugins/canvas/README.md) | `canvasPlugin` | Canvas component schemas from `jsonapi_sdc` |
+| [`@dropsh/plugin-display-builder`](plugins/display-builder/README.md) | `displayBuilderPlugin` | Display Builder operation schemas and metadata |
+
+Basic auth is not a separate package — its `basicAuthPlugin` factory ships in the
+core CLI's `dropsh/plugin` entry.
+
+### Installing and resolving plugins
+
+`@dropsh/plugin-*` packages are **not** dependencies of `dropsh` and are **not**
+part of its tarball, so a global dropsh does not carry them. Install the ones you
+use next to dropsh:
+
+```bash
+npm i -g dropsh @dropsh/plugin-oauth2        # globally, alongside a global dropsh
+npx -p dropsh -p @dropsh/plugin-oauth2 dropsh …   # or one-off, no global install
+```
+
+A descriptor's `plugin` name is resolved like ESLint resolves its plugins, by
+string name against these locations **in order**:
+
+1. the directory of the `dropsh.config.js` file
+2. the current working directory
+3. dropsh's own install location
+
+Location 3 is what lets a plugin installed globally next to a global `dropsh` be
+found with no local project. If the name cannot be resolved from any of them,
+dropsh reports which package to install.
+
+`export` selects the factory to call and defaults to `"default"`. Every
+`@dropsh/plugin-*` factory is a **named** export with **no default**, so a
+descriptor for one of these packages **must** set `export` (e.g.
+`export: "oauth2Plugin"` — see the table above). Basic auth uses
+`{ plugin: "dropsh/plugin", export: "basicAuthPlugin" }`.
 
 Plugin APIs are exported from `dropsh/plugin`:
 
@@ -234,15 +410,18 @@ export function examplePlugin(): dropshPlugin {
 }
 ```
 
-Register local or package plugins in `dropsh.config.js`:
+Register a package plugin with a descriptor (no import needed), and a local
+plugin either by descriptor (path name) or by importing it:
 
 ```js
-import { basicAuthPlugin } from "dropsh";
 import { examplePlugin } from "./plugins/example.js";
 
 export default {
   site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
-  plugins: [basicAuthPlugin(), examplePlugin()],
+  plugins: [
+    { plugin: "dropsh/plugin", export: "basicAuthPlugin" }, // packaged, resolved by name
+    examplePlugin(), // local module, imported directly
+  ],
 };
 ```
 

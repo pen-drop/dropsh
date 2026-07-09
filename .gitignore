@@ -60,3 +60,7 @@ npm-debug.log*
 .vscode/
 .codex
 .claude/worktrees
+
+# GAIA conductor: worktree dir + machine-local config overrides (never committed)
+.gaia-worktrees/
+.gaia/conductor.config.local.js

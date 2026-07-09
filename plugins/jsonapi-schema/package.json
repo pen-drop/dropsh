@@ -1,0 +1,30 @@
+{
+  "name": "@dropsh/plugin-jsonapi-schema",
+  "version": "0.5.1",
+  "type": "module",
+  "main": "./dist/plugins/jsonapi-schema/src/index.js",
+  "exports": {
+    ".": "./dist/plugins/jsonapi-schema/src/index.js"
+  },
+  "files": [
+    "dist/plugins/jsonapi-schema/src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "dropsh": "*"
+  },
+  "devDependencies": {
+    "dropsh": "workspace:*",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8"
+  }
+}

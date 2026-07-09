@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { Command } from "commander";
-import { runAuthLogin, runAuthLogout, runAuthStatus } from "./commands/auth.js";
+import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "./commands/auth.js";
 import { runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
@@ -16,24 +16,38 @@ import {
 import { runSearch } from "./commands/search.js";
 import { runUpdate } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
-import { collectProviders } from "./core/auth/registry.js";
+import {
+  collectProviders,
+  defaultProvider,
+  providerById,
+  sessionlessProvider,
+} from "./core/auth/registry.js";
+import { type ProfilesFile, readProfiles, writeProfile } from "./core/auth/session-store.js";
+import type { AuthAdapter, AuthProvider, AuthStatusInfo } from "./core/auth/types.js";
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
 import { createPrompt } from "./core/cli/prompt.js";
 import type { RenderContext } from "./core/cli/render.js";
 import { loadConfig } from "./core/config.js";
-import { type CommandContext, createCommandContext } from "./core/context.js";
+import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
-import type { JsonApiClient } from "./core/jsonapi/client.js";
+import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
 import type { DropSHPlugin } from "./core/plugin.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
-import { ConfigError, exitCodeFor } from "./errors.js";
+import { AuthError, ConfigError, exitCodeFor } from "./errors.js";
 
-export type { CommandContext, ResolveAuthDeps } from "./core/context.js";
-export { resolveAuth } from "./core/context.js";
+export interface CommandContext {
+  client: JsonApiClient;
+  http: HttpClient;
+  auth: AuthAdapter;
+  baseUrl: string;
+  jsonapiPrefix: string;
+  cwd: string;
+  plugins: DropSHPlugin[];
+}
 
 export interface ProgramOptions {
   contextFactory?: () => Promise<CommandContext>;
@@ -58,6 +72,130 @@ export function normalizeInclude(raw: string[] | undefined): string[] {
     .filter((s) => s.length > 0);
 }
 
+export interface ResolveAuthDeps {
+  baseUrl: string;
+  plugins: DropSHPlugin[];
+  http: HttpClient;
+  now: () => number;
+  stateDir?: string;
+  /** Explicit profile from --auth-profile / $DROPSH_AUTH_PROFILE (highest precedence). */
+  profile?: string;
+}
+
+/**
+ * Choose the profile name to authenticate as. Precedence:
+ *   explicit → stored `active` → config `default:true` → the sole provider.
+ * Returns undefined when nothing selects a profile (caller then tries sessionless).
+ */
+function chooseProfile(
+  providers: AuthProvider[],
+  file: ProfilesFile | null,
+  explicit?: string,
+): string | undefined {
+  if (explicit) return explicit;
+  if (file?.active) return file.active;
+  const def = defaultProvider(providers);
+  if (def) return def.id;
+  return providers.length === 1 ? providers[0]?.id : undefined;
+}
+
+export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
+  const providers = collectProviders(deps.plugins);
+  const file = await readProfiles(deps.baseUrl, deps.stateDir);
+  const name = chooseProfile(providers, file, deps.profile);
+  if (name) {
+    const provider = providerById(providers, name);
+    if (!provider) throw new ConfigError(`auth profile '${name}' has no configured provider`);
+    const rec = file?.profiles[name];
+    if (rec) {
+      return provider.createAdapter(rec.session, {
+        http: deps.http,
+        now: deps.now,
+        save: (session) => writeProfile(deps.baseUrl, name, provider.id, session, deps.stateDir),
+      });
+    }
+    // No stored session for the chosen profile: a login-less provider carries its
+    // credentials inline; anything else needs an explicit login.
+    if (provider.capabilities.login === false) {
+      return provider.createAdapter(undefined, {
+        http: deps.http,
+        now: deps.now,
+        save: async () => {},
+      });
+    }
+    throw new AuthError(
+      `Not authenticated for profile '${name}'. Run 'dropsh auth login --provider ${name}'.`,
+    );
+  }
+  const sessionless = sessionlessProvider(providers);
+  if (sessionless) {
+    return sessionless.createAdapter(undefined, {
+      http: deps.http,
+      now: deps.now,
+      save: async () => {},
+    });
+  }
+  const ids = providers.map((p) => p.id).join(", ");
+  throw new AuthError(
+    `Multiple auth profiles configured (${ids}); none active. Run 'dropsh auth use <id>' or pass --auth-profile <id>.`,
+  );
+}
+
+export interface AuthStatusDeps {
+  baseUrl: string;
+  plugins: DropSHPlugin[];
+  stateDir?: string;
+  profile?: string;
+}
+
+export async function authStatus(deps: AuthStatusDeps): Promise<AuthStatusInfo> {
+  const providers = collectProviders(deps.plugins);
+  const file = await readProfiles(deps.baseUrl, deps.stateDir);
+  const name = chooseProfile(providers, file, deps.profile);
+  if (!name) {
+    const sessionless = sessionlessProvider(providers);
+    return sessionless
+      ? { loggedIn: true, provider: sessionless.id, sessionless: true }
+      : { loggedIn: false };
+  }
+  const provider = providerById(providers, name);
+  if (!provider) return { loggedIn: false };
+  const rec = file?.profiles[name];
+  if (!rec) {
+    return provider.capabilities.login === false
+      ? { loggedIn: true, provider: provider.id, sessionless: true }
+      : { loggedIn: false, provider: provider.id };
+  }
+  return provider.status(rec.session);
+}
+
+async function defaultContext(configPath: string, profile?: string): Promise<CommandContext> {
+  const cfg = await loadConfig(configPath);
+  const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
+  const auth = await resolveAuth({
+    baseUrl: cfg.site.base_url,
+    plugins: cfg.plugins,
+    http,
+    now: Date.now,
+    ...(profile !== undefined ? { profile } : {}),
+  });
+  const client = createJsonApiClient({
+    baseUrl: cfg.site.base_url,
+    prefix: cfg.site.jsonapi_prefix,
+    http,
+    auth,
+  });
+  return {
+    client,
+    http,
+    auth,
+    baseUrl: cfg.site.base_url,
+    jsonapiPrefix: cfg.site.jsonapi_prefix,
+    cwd: process.cwd(),
+    plugins: cfg.plugins,
+  };
+}
+
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
   program
@@ -65,6 +203,10 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .description("Entity-agnostic CLI for Drupal 11 JSON:API")
     .version("0.0.0")
     .option("--config <path>", "path to config file (overrides DROPSH_CONFIG)")
+    .option(
+      "--auth-profile <id>",
+      "auth profile to use (overrides the active profile and $DROPSH_AUTH_PROFILE)",
+    )
     .option("--format <id>", "output format: json (default) or a renderer id", "json")
     .option("--view-mode <name>", "entity view mode for interactive formats", "default");
 
@@ -77,7 +219,11 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     });
   const contextFactory =
     opts.contextFactory ??
-    (() => createCommandContext(resolveConfigPath(program.opts().config as string | undefined)));
+    (() => {
+      const o = program.opts();
+      const profile = (o.authProfile as string | undefined) ?? process.env.DROPSH_AUTH_PROFILE;
+      return defaultContext(resolveConfigPath(o.config as string | undefined), profile);
+    });
   const renderers = (opts.plugins ?? []).flatMap((p) => p.renderers ?? []);
   const output = createOutput({
     stdout,
@@ -109,24 +255,6 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     }
   }
 
-  async function authDeps(): Promise<import("./commands/auth.js").AuthDeps> {
-    const cfg = await loadConfig(resolveConfigPath(program.opts().config as string | undefined));
-    return {
-      baseUrl: cfg.site.base_url,
-      providers: collectProviders(cfg.plugins),
-      stdout,
-      stderr,
-      prompt: createPrompt(),
-      openBrowser: async (url: string) => {
-        const { default: open } = await import("open");
-        await open(url);
-      },
-      http: createHttpClient({ timeoutMs: cfg.defaults.timeout_ms }),
-      now: Date.now,
-      isTTY: Boolean(process.stdin.isTTY),
-    };
-  }
-
   function currentFormat(): string {
     return (program.opts().format as string | undefined) ?? "json";
   }
@@ -143,6 +271,24 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     if (f !== "json") {
       throw new ConfigError(`format '${f}' not applicable to command '${command}'`);
     }
+  }
+
+  async function authDeps(): Promise<import("./commands/auth.js").AuthDeps> {
+    const cfg = await loadConfig(resolveConfigPath(program.opts().config as string | undefined));
+    return {
+      baseUrl: cfg.site.base_url,
+      providers: collectProviders(cfg.plugins),
+      stdout,
+      stderr,
+      prompt: createPrompt(),
+      openBrowser: async (url: string) => {
+        const { default: open } = await import("open");
+        await open(url);
+      },
+      http: createHttpClient({ timeoutMs: cfg.defaults.timeout_ms }),
+      now: Date.now,
+      isTTY: Boolean(process.stdin.isTTY),
+    };
   }
 
   async function loadOrFetchSchema(
@@ -388,14 +534,25 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       run2(async () => runAuthLogin(o.provider ? { provider: o.provider } : {}, await authDeps())),
     );
   auth
+    .command("use <id>")
+    .description("Set the active auth profile for this host")
+    .action((id: string) => run2(async () => runAuthUse({ profile: id }, await authDeps())));
+  auth
     .command("logout")
-    .description("Clear the active session")
-    .action(() => run2(async () => runAuthLogout({}, await authDeps())));
+    .description("Clear a stored session (default: the active profile)")
+    .option("--profile <id>", "log out this profile instead of the active one")
+    .option("--all", "clear every profile for this host")
+    .action((o: { profile?: string; all?: boolean }) =>
+      run2(async () => runAuthLogout(o, await authDeps())),
+    );
   auth
     .command("status")
-    .description("Show the active session")
+    .description("List auth profiles and their session state")
     .option("--json", "machine-readable output")
-    .action((o: { json?: boolean }) => run2(async () => runAuthStatus(o, await authDeps())));
+    .option("--profile <id>", "show only this profile")
+    .action((o: { json?: boolean; profile?: string }) =>
+      run2(async () => runAuthStatus(o, await authDeps())),
+    );
 
   if (opts.plugins) {
     for (const plugin of opts.plugins) {
