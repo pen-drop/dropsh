@@ -33,7 +33,7 @@ describe("renderMarkdown", () => {
     expect(out).not.toContain("## Included");
   });
 
-  it("renders a single resource as frontmatter + body", () => {
+  it("renders every field as label: value", () => {
     const out = renderMarkdown(
       {
         data: {
@@ -48,11 +48,13 @@ describe("renderMarkdown", () => {
     expect(out).toContain("id: u1");
     expect(out).toContain("title: Hello");
     expect(out).toContain("status: true");
-    expect(out.startsWith("---\n")).toBe(true);
-    expect(out).toContain("\n---\n\nThe text.");
+    // text-field objects collapse to their text, still as label: value
+    expect(out).toContain("body: The text.");
+    // no frontmatter fence
+    expect(out.startsWith("---")).toBe(false);
   });
 
-  it("uses the longest string field as body when there is no body field", () => {
+  it("does not duplicate any field when there is no body field", () => {
     const out = renderMarkdown(
       {
         data: {
@@ -63,7 +65,11 @@ describe("renderMarkdown", () => {
       },
       ctx,
     );
-    expect(out.trimEnd().endsWith("a much longer piece of text here")).toBe(true);
+    expect(out).toContain("title: T");
+    expect(out).toContain("summary: short");
+    expect(out).toContain("teaser: a much longer piece of text here");
+    // each field appears exactly once (no body-fallback duplication)
+    expect(out.match(/teaser: /g)).toHaveLength(1);
   });
 
   it("lists relationships as type/id arrays", () => {

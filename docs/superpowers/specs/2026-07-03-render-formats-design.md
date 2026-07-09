@@ -148,10 +148,10 @@ renderers?: AnyRenderer[];
 ### `@dropsh/plugin-markdown` — detail view
 
 - Registers renderer `id: "md"`. Entity-agnostic.
-- Single resource → YAML frontmatter from scalar `attributes`
-  (string/number/bool) plus `type`/`id`. Body = heuristic: field `body`
-  (`.value`/`.processed`) if present, else the longest string field, else
-  empty. Relationships → frontmatter list `rel: [type/id, …]`.
+- Single resource → flat `label: value` list: `type`/`id` first, then every
+  attribute. Text-field objects (`{ .value | .processed }`) collapse to their
+  text; other objects/arrays fall back to compact JSON. Relationships →
+  `rel: [type/id, …]`.
 - Collection (`data: []`) → multiple Markdown blocks separated by `\n\n---\n\n`.
 - Dumb by design: no hard-wired field names, only heuristics. Specialized views
   are separate renderer plugins with their own `id`.
@@ -249,7 +249,7 @@ export default {
   exit. Renderer failures never contaminate stdout with partial output.
 - Empty collection (`data: []`): md → empty string / `_(no results)_`; table →
   header + `(0 rows)`. No crash.
-- md heuristic finds no body → frontmatter only, empty body. Legitimate.
+- md resource with no attributes → `type`/`id` lines only. Legitimate.
 - TUI without a TTY (pipe/CI): `--format tui` detects `!process.stdout.isTTY`
   and raises `ConfigError` `--format tui requires an interactive terminal`.
   No hang.
@@ -262,9 +262,9 @@ export default {
   exit 2, non-entity command + `--format` → exit 2, `emit` backward compat. The
   existing `contextFactory`/`stdout`/`stderr` injection makes this fully
   in-memory testable.
-- **plugin-markdown**: single → frontmatter+body, collection → blocks, body
-  heuristic, empty collection, relationships. Pure function tests (doc in,
-  string out).
+- **plugin-markdown**: single → `label: value` list, collection → blocks,
+  text-field flattening, empty collection, relationships. Pure function tests
+  (doc in, string out).
 - **plugin-table**: column selection, alignment/truncation, single key/value,
   0 rows.
 - **plugin-tui**: `ink-testing-library` — list renders rows, Enter → detail
