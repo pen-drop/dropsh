@@ -2,8 +2,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { runAuthLogin, runAuthLogout, runAuthStatus } from "../../../src/commands/auth.js";
-import { readSession } from "../../../src/core/auth/session-store.js";
+import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "../../../src/commands/auth.js";
+import { readProfile, readProfiles, readSession } from "../../../src/core/auth/session-store.js";
 import type { AuthProvider } from "../../../src/core/auth/types.js";
 
 function provider(id: string, login = true): AuthProvider {
@@ -58,11 +58,11 @@ describe("auth login", () => {
     await expect(runAuthLogin({}, { ...deps({ stateDir, isTTY: false }) })).rejects.toThrow(/non-interactive/);
   });
 
-  it("non-TTY with a single provider and no --provider errors", async () => {
+  it("non-TTY with a single provider and no --provider uses that provider", async () => {
     const stateDir = await tmp();
-    await expect(
-      runAuthLogin({}, { ...deps({ stateDir, isTTY: false, providers: [provider("only")] }) }),
-    ).rejects.toThrow(/non-interactive/);
+    await runAuthLogin({}, { ...deps({ stateDir, isTTY: false, providers: [provider("only")] }) });
+    const rec = await readSession("https://example.com", stateDir);
+    expect(rec?.activeProvider).toBe("only");
   });
 
   it("interactive picker selects by number", async () => {
@@ -72,15 +72,28 @@ describe("auth login", () => {
     expect(rec?.activeProvider).toBe("b");
   });
 
-  it("shows the picker even when there is only one provider", async () => {
+  it("uses the sole provider directly without prompting", async () => {
     const stateDir = await tmp();
     const stdout = vi.fn();
     const prompt = vi.fn(async () => "1");
     await runAuthLogin({}, { ...deps({ stateDir, stdout, prompt, providers: [provider("only")] }) });
-    expect(stdout.mock.calls.flat().join("")).toContain("Select an auth provider");
-    expect(prompt).toHaveBeenCalled();
+    expect(stdout.mock.calls.flat().join("")).not.toContain("Select an auth provider");
+    expect(prompt).not.toHaveBeenCalled();
     const rec = await readSession("https://example.com", stateDir);
     expect(rec?.activeProvider).toBe("only");
+  });
+
+  it("falls back to the default:true provider without prompting", async () => {
+    const stateDir = await tmp();
+    const prompt = vi.fn(async () => "1");
+    const withDefault = { ...provider("b"), default: true };
+    await runAuthLogin(
+      {},
+      { ...deps({ stateDir, prompt, providers: [provider("a"), withDefault] }) },
+    );
+    expect(prompt).not.toHaveBeenCalled();
+    const rec = await readSession("https://example.com", stateDir);
+    expect(rec?.activeProvider).toBe("b");
   });
 });
 
@@ -97,5 +110,72 @@ describe("auth logout / status", () => {
     const stdout = vi.fn();
     await runAuthStatus({}, { ...deps({ stateDir, stdout }) });
     expect(stdout.mock.calls.flat().join("")).toContain("not logged in");
+  });
+});
+
+describe("auth multi-profile commands", () => {
+  it("login writes a named profile and makes it active", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    const file = await readProfiles("https://example.com", stateDir);
+    expect(Object.keys(file?.profiles ?? {}).sort()).toEqual(["a", "b"]);
+    expect(file?.active).toBe("b"); // last login is active
+    // First profile's session survived the second login.
+    expect(await readProfile("https://example.com", "a", stateDir)).not.toBeNull();
+  });
+
+  it("use switches the active profile without re-login", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthUse({ profile: "a" }, { ...deps({ stateDir }) });
+    expect((await readProfiles("https://example.com", stateDir))?.active).toBe("a");
+  });
+
+  it("use errors for an unknown profile", async () => {
+    const stateDir = await tmp();
+    await expect(runAuthUse({ profile: "ghost" }, { ...deps({ stateDir }) })).rejects.toThrow(
+      /no auth profile 'ghost'/,
+    );
+  });
+
+  it("logout --profile clears one slot and leaves the other", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthLogout({ profile: "a" }, { ...deps({ stateDir }) });
+    const file = await readProfiles("https://example.com", stateDir);
+    expect(Object.keys(file?.profiles ?? {})).toEqual(["b"]);
+  });
+
+  it("logout --all clears every profile", async () => {
+    const stateDir = await tmp();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthLogout({ all: true }, { ...deps({ stateDir }) });
+    expect(await readProfiles("https://example.com", stateDir)).toBeNull();
+  });
+
+  it("status lists all profiles with an active marker", async () => {
+    const stateDir = await tmp();
+    const stdout = vi.fn();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthLogin({ provider: "b" }, { ...deps({ stateDir }) });
+    await runAuthUse({ profile: "a" }, { ...deps({ stateDir }) });
+    await runAuthStatus({}, { ...deps({ stateDir, stdout }) });
+    const out = stdout.mock.calls.flat().join("");
+    expect(out).toContain("* a:");
+    expect(out).toContain("  b:");
+  });
+
+  it("status --json emits a keyed map with the active pointer", async () => {
+    const stateDir = await tmp();
+    const stdout = vi.fn();
+    await runAuthLogin({ provider: "a" }, { ...deps({ stateDir }) });
+    await runAuthStatus({ json: true }, { ...deps({ stateDir, stdout }) });
+    const parsed = JSON.parse(stdout.mock.calls.flat().join(""));
+    expect(parsed.active).toBe("a");
+    expect(parsed.profiles.a.loggedIn).toBe(true);
   });
 });

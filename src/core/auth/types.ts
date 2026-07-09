@@ -2,6 +2,13 @@ import type { HttpClient, HttpRequest } from "../http.js";
 
 export interface AuthAdapter {
   apply(req: HttpRequest): Promise<HttpRequest>;
+  /**
+   * Force a credential refresh after the server rejected the current token (401),
+   * then persist it. Returns true if renewal succeeded (caller retries the request
+   * once), false if it could not renew (caller surfaces the original 401).
+   * Providers that cannot renew (e.g. basic auth) omit this.
+   */
+  renew?(): Promise<boolean>;
 }
 
 /** Provider-specific opaque session payload persisted to the state dir. */
@@ -13,6 +20,7 @@ export interface AuthStatusInfo {
   host?: string;
   expiresAt?: number;
   state?: "valid" | "expired";
+  sessionless?: boolean;
 }
 
 /** I/O the core supplies to a provider during login/logout so providers stay testable. */
@@ -38,9 +46,11 @@ export interface AdapterRuntime {
 export interface AuthProvider {
   readonly id: string;
   readonly displayName: string;
+  /** When true, this provider is the fallback profile if none is active/selected. */
+  readonly default?: boolean;
   readonly capabilities: { login: boolean; logout: boolean; status: boolean };
   login(ctx: AuthContext): Promise<AuthSession>;
   logout(ctx: AuthContext): Promise<void>;
   status(session: AuthSession | null): Promise<AuthStatusInfo>;
-  createAdapter(session: AuthSession, rt: AdapterRuntime): AuthAdapter;
+  createAdapter(session: AuthSession | undefined, rt: AdapterRuntime): AuthAdapter;
 }

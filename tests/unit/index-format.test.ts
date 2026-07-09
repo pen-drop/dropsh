@@ -10,6 +10,12 @@ function fakeClient(): JsonApiClient {
     patch: vi.fn(async () => ({ data: { type: "node--article", id: "u1" } })),
     delete: vi.fn(async () => ({ ok: true as const })),
     upload: vi.fn(async () => ({ data: { type: "file--file", id: "f1" } })),
+    collection: vi.fn(),
+    resource: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    upsert: vi.fn(),
+    me: vi.fn(),
   };
 }
 

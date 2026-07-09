@@ -2,27 +2,44 @@ import type { DropSHPlugin } from "dropsh/plugin";
 import { ConfigError } from "dropsh/plugin";
 import { oauth2Provider } from "./provider.js";
 
-export type OAuth2Config =
-  | {
-      type: "oauth2_password";
-      client_id: string;
-      username: string;
-      token_url: string;
-      scope?: string;
-    }
-  | {
-      type: "oauth2_client_credentials";
-      client_id: string;
-      token_url: string;
-      scope?: string;
-    }
-  | {
-      type: "oauth2_authcode";
-      client_id: string;
-      token_url: string;
-      scope?: string;
-      redirect_port?: number;
-    };
+/**
+ * Fields common to every oauth2 profile. `id` decouples the profile identity
+ * from `type` (the grant-flow selector), so two profiles of the same grant flow
+ * (e.g. two `client_credentials` with different scopes) can coexist. `default`
+ * marks the fallback profile when none is active/selected.
+ */
+interface OAuth2Common {
+  /** Profile id (defaults to `type` for backward compatibility). */
+  id?: string;
+  /** Fallback profile when none is active or explicitly selected. */
+  default?: boolean;
+}
+
+export type OAuth2Config = OAuth2Common &
+  (
+    | {
+        type: "oauth2_password";
+        client_id: string;
+        username: string;
+        token_url: string;
+        scope?: string;
+        client_secret?: string;
+      }
+    | {
+        type: "oauth2_client_credentials";
+        client_id: string;
+        token_url: string;
+        scope?: string;
+        client_secret?: string;
+      }
+    | {
+        type: "oauth2_authcode";
+        client_id: string;
+        token_url: string;
+        scope?: string;
+        redirect_port?: number;
+      }
+  );
 
 function validate(config: OAuth2Config): OAuth2Config {
   if (!config.client_id) throw new ConfigError("oauth2Plugin: client_id required");

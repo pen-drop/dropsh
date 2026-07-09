@@ -55,9 +55,13 @@ async function postToken(
 }
 
 export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
+  // Profile identity is `cfg.id` (falling back to `cfg.type`); `cfg.type` stays
+  // purely the grant-flow selector used by login/renew/status below.
+  const id = cfg.id ?? cfg.type;
   return {
-    id: cfg.type,
-    displayName: DISPLAY[cfg.type],
+    id,
+    displayName: cfg.id ? `${DISPLAY[cfg.type]} [${cfg.id}]` : DISPLAY[cfg.type],
+    default: cfg.default === true,
     capabilities: { login: true, logout: true, status: true },
 
     async login(ctx: AuthContext): Promise<AuthSession> {
@@ -75,7 +79,8 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
         });
       }
       const params = new URLSearchParams({ client_id: cfg.client_id });
-      const secret = await ctx.prompt({ label: "Client secret", secret: true });
+      const secret =
+        cfg.client_secret ?? (await ctx.prompt({ label: "Client secret", secret: true }));
       params.set("client_secret", secret);
       if (cfg.type === "oauth2_password") {
         const password = await ctx.prompt({ label: "Password", secret: true });
@@ -113,12 +118,12 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
     },
 
     createAdapter(session: AuthSession, rt: AdapterRuntime): AuthAdapter {
-      // Mutable reference to the live session, updated in place after a refresh
-      // so subsequent requests reuse the new token instead of re-refreshing.
+      // Mutable reference to the live session, updated in place after a renewal
+      // so subsequent requests reuse the new token instead of renewing again.
       let current = session;
-      let refreshing: Promise<void> | null = null;
+      let inflight: Promise<void> | null = null;
 
-      async function doRefresh(refreshToken: string): Promise<void> {
+      async function refreshAuthcode(refreshToken: string): Promise<void> {
         const params = new URLSearchParams({
           grant_type: "refresh_token",
           refresh_token: refreshToken,
@@ -130,29 +135,63 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
         await rt.save(refreshed);
       }
 
+      // client_credentials is idempotent: re-mint from client_id + secret, no
+      // refresh_token needed. The secret is config-provided and kept in memory
+      // only — never written to the persisted session (rt.save stores the token).
+      async function mintClientCredentials(secret: string): Promise<void> {
+        const params = new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: cfg.client_id,
+          client_secret: secret,
+        });
+        if (cfg.scope) params.set("scope", cfg.scope);
+        const minted = await postToken(rt.http, cfg.token_url, params, rt.now);
+        current = minted;
+        await rt.save(minted);
+      }
+
+      async function renewSession(): Promise<void> {
+        if (cfg.type === "oauth2_authcode") {
+          const refresh = current.refresh_token;
+          if (typeof refresh !== "string")
+            throw new AuthError("Session expired. Run 'dropsh auth login'.");
+          await refreshAuthcode(refresh);
+          return;
+        }
+        if (cfg.type === "oauth2_client_credentials" && cfg.client_secret) {
+          await mintClientCredentials(cfg.client_secret);
+          return;
+        }
+        throw new AuthError("Session expired. Run 'dropsh auth login'.");
+      }
+
+      // Coalesce concurrent renewals so we hit the token endpoint once.
+      function coalescedRenew(): Promise<void> {
+        if (!inflight)
+          inflight = renewSession().finally(() => {
+            inflight = null;
+          });
+        return inflight;
+      }
+
       return {
         async apply(req) {
           const token = current.access_token;
           const expiresAt = typeof current.expires_at === "number" ? current.expires_at : 0;
           if (typeof token === "string" && expiresAt - 30_000 > rt.now())
             return { ...req, headers: bearer(req, token) };
-          // Only the authcode grant uses a public client (PKCE) and can refresh
-          // with client_id alone. For oauth2_password / oauth2_client_credentials
-          // the client is confidential and a refresh without client_secret would
-          // 401; we do not persist the long-lived client_secret at rest, so a
-          // re-login is required instead.
-          if (cfg.type !== "oauth2_authcode")
-            throw new AuthError("Session expired. Run 'dropsh auth login'.");
-          const refresh = current.refresh_token;
-          if (typeof refresh !== "string")
-            throw new AuthError("Session expired. Run 'dropsh auth login'.");
-          // Coalesce concurrent refreshes so we exchange the token only once.
-          if (!refreshing)
-            refreshing = doRefresh(refresh).finally(() => {
-              refreshing = null;
-            });
-          await refreshing;
+          await coalescedRenew();
           return { ...req, headers: bearer(req, current.access_token as string) };
+        },
+        // Reactive path: the server rejected the token (401). Try once to re-mint /
+        // refresh from the credentials we have; report whether the caller may retry.
+        async renew() {
+          try {
+            await coalescedRenew();
+            return true;
+          } catch {
+            return false;
+          }
         },
       };
     },

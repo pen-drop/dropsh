@@ -18,6 +18,7 @@
     "drupal/core-recommended": "^11",
     "drupal/display_builder": "1.0.x-dev",
     "drupal/jsonapi_resources": "^1.2",
+    "drupal/jsonapi_schema": "^1.0",
     "drupal/jsonapi_sdc": "1.0.x-dev",
     "drupal/schemata": "1.x-dev",
     "drupal/simple_oauth": "^6",

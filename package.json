@@ -1,6 +1,6 @@
 {
   "name": "dropsh",
-  "version": "0.1.1",
+  "version": "0.5.1",
   "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the dropsh Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
@@ -31,7 +31,7 @@
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
     "prepublishOnly": "pnpm run typecheck && pnpm run build",
-    "release": "pnpm -r --include-workspace-root publish --no-git-checks"
+    "release": "node scripts/release.mjs"
   },
   "keywords": [
     "drupal",
@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "commander": "^12.1.0",
     "drupal-jsonapi-params": "^3.0.1",
     "open": "^11.0.0"
@@ -63,7 +64,9 @@
     "vitest": "^4.1.8"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"],
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
     "overrides": {
       "fast-uri": "^3.1.2",
       "qs": "^6.15.2",
