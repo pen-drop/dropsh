@@ -30,6 +30,8 @@ import { basicAuthPlugin } from 'dropsh/plugin';
 // import { oauth2Plugin } from '@dropsh/plugin-oauth2';
 // import { jsonapiSchemaPlugin } from '@dropsh/plugin-jsonapi-schema';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';
+// import { markdownPlugin } from '@dropsh/plugin-markdown';
+// import { tablePlugin } from '@dropsh/plugin-table';
 
 export default {
   site: {
@@ -82,5 +84,9 @@ export default {
     // returns HTTP 500 on Drupal 11 / PHP 8.4 — prefer jsonapiSchemaPlugin()
     // there. Requires @dropsh/plugin-schemata.
     // schemataPlugin(),
+
+    // Render plugins (alternative output formats via --format):
+    // markdownPlugin(),
+    // tablePlugin(),
   ],
 };

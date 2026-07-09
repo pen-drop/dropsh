@@ -8,8 +8,13 @@ const UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 function client(): JsonApiClient {
   return {
     get: vi.fn(), post: vi.fn(), patch: vi.fn(), upload: vi.fn(),
-    delete: vi.fn(async () => ({ ok: true })),
-    collection: vi.fn(), resource: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn(), me: vi.fn(),
+    delete: vi.fn(async () => ({ ok: true as const })),
+    collection: vi.fn(),
+    resource: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    upsert: vi.fn(),
+    me: vi.fn(),
   };
 }
 

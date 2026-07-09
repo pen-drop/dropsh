@@ -293,18 +293,47 @@ All commands write JSON to stdout, structured errors to stderr, and use stable
 exit codes.
 
 ```bash
-dropsh read <entity_type>/<bundle>/<uuid>
-dropsh search <entity_type> [--bundle=<bundle>] [--filter=key:value] [--limit=N]
-dropsh create <entity_type> --bundle=<bundle> --data=<json|@file> [--dry-run]
-dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run]
+dropsh read <entity_type>/<bundle>/<uuid> [--include=<field>,…]
+dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N] [--include=<field>,…]
+dropsh create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
+dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
 dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
-dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path>
+dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
 dropsh schema [--refresh]
 dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
 ```
 
 `create` and `update` validate payloads against the current schema by default.
 Pass `--no-validate` when you intentionally want to skip local validation.
+
+### `--include` on `read` / `search`
+
+Pass `--include` to embed related resources in the response's JSON:API
+`included` array (the standard `?include=` query parameter). Accepts a
+comma-separated list or repeated/space-separated values, and nested paths with
+dots:
+
+```bash
+dropsh read node/article/<uuid> --include field_related,field_image
+dropsh search node --bundle=article --include field_related --filter status:1
+dropsh read node/article/<uuid> --include field_related.uid
+```
+
+`read` and `search` are the only commands that accept `--include`. Without it,
+the response contains only the primary resource(s).
+
+### Output formats
+
+By default every command emits JSON. Load a renderer plugin and pass a global
+`--format <id>` (before the subcommand) to render entities differently:
+
+```bash
+dropsh --format md read node/article/<uuid>      # Markdown detail view
+dropsh --format table search node --bundle=article  # aligned table
+```
+
+`--format` applies only to entity commands (`read`, `search`, `create`,
+`update`). Using it on `delete`, `upload-file`, or `schema` exits with code 2.
 
 ## Plugins
 
