@@ -1,4 +1,5 @@
-import type { JsonApiResource } from "dropsh/plugin";
+import { renderMarkdown } from "@dropsh/plugin-markdown/render";
+import type { JsonApiDocument, JsonApiResource, RenderContext } from "dropsh/plugin";
 import { Box, Text } from "ink";
 import React, { type ReactElement } from "react";
 import { splitType } from "./jsonapi-type.js";
@@ -17,15 +18,23 @@ export class GenericEntityView extends TuiEntityView {
   static override viewModes: ViewModeMap = { default: {} };
 
   build(entity: JsonApiResource, ctx: BuildContext): ReactElement {
-    const attrs = entity.attributes ?? {};
     const rels = entity.relationships ?? {};
+    // Reuse the markdown renderer for the attribute pane (AC: "the detail pane
+    // reuses the markdown renderer"). Relationships are stripped from the copy
+    // fed to markdown so they stay focusable `TuiLink`s below, keeping in-pane
+    // navigation working instead of the markdown renderer's inert `[type/id]`.
+    const attrDoc: JsonApiDocument = {
+      data: {
+        type: entity.type,
+        id: entity.id,
+        ...(entity.attributes ? { attributes: entity.attributes } : {}),
+      },
+    };
+    const renderCtx: RenderContext = { command: "read", viewMode: ctx.viewMode };
+    const markdown = renderMarkdown(attrDoc, renderCtx);
     return (
       <Box flexDirection="column">
-        {Object.entries(attrs).map(([key, value]) => (
-          <Text key={`a:${key}`}>
-            {key}: {typeof value === "string" ? value : JSON.stringify(value)}
-          </Text>
-        ))}
+        <Text>{markdown}</Text>
         {Object.entries(rels).map(([key, rel]) => {
           const data = (rel as { data?: { type: string; id: string } }).data;
           if (!data || Array.isArray(data)) return <Text key={`r:${key}`}>{key}: —</Text>;

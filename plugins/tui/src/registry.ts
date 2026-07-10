@@ -41,7 +41,7 @@ function coreRoutes(): TuiRoute[] {
     path: "/{type}/{bundle}/{id}",
     controller: async (params, ctx) => {
       const ViewClass = ctx.resolveView(params.type as string, params.bundle);
-      const include = ViewClass?.viewModes?.[ctx.viewMode]?.include;
+      const include = ViewClass.viewModes[ctx.viewMode]?.include;
       const path = params.bundle
         ? `${params.type}/${params.bundle}/${params.id}`
         : `${params.type}/${params.id}`;
@@ -50,9 +50,7 @@ function coreRoutes(): TuiRoute[] {
           ? await ctx.client.get(path, new DrupalJsonApiParams().addInclude(include))
           : await ctx.client.get(path))) as JsonApiDocument;
       const entity = (Array.isArray(doc.data) ? doc.data[0] : doc.data) as JsonApiResource;
-      const instance = new (
-        ViewClass as unknown as { new (): { build: TuiEntityView["build"] } }
-      )();
+      const instance = new ViewClass();
       return React.createElement(
         React.Fragment,
         null,
@@ -70,9 +68,7 @@ function coreRoutes(): TuiRoute[] {
           params.bundle ? `${params.type}/${params.bundle}` : (params.type as string),
         ))) as JsonApiDocument;
       const rows = (Array.isArray(doc.data) ? doc.data : [doc.data]) as JsonApiResource[];
-      const instance = new (
-        ListClass as unknown as { new (): { build: TuiEntityList["build"] } }
-      )();
+      const instance = new ListClass();
       return React.createElement(
         React.Fragment,
         null,

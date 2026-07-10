@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FocusRegistryProvider, useFocusRegistry } from "./link.js";
 import type { Router } from "./router.js";
 
@@ -29,6 +29,9 @@ function Keys({
   setNavSeq: (fn: (n: number) => number) => void;
 }): null {
   const reg = useFocusRegistry();
+  // Guards against a second Enter landing while a navigation is still pending,
+  // which would push a duplicate screen onto the router stack.
+  const navigating = useRef(false);
   useInput((input, key) => {
     if (input === "q" || key.escape) {
       const hasMore = router.back();
@@ -44,8 +47,10 @@ function Keys({
     if (key.upArrow) setFocusedIndex((i) => Math.max(0, i - 1));
     if (key.downArrow) setFocusedIndex((i) => Math.min(Math.max(0, reg.count() - 1), i + 1));
     if (key.return) {
+      if (navigating.current) return;
       const target = reg.targetAt(focusedIndex);
       if (target) {
+        navigating.current = true;
         void router
           .navigate(target.route, target.params)
           .then(() => {
@@ -57,6 +62,9 @@ function Keys({
           .catch((err: unknown) => {
             setError(err instanceof Error ? err.message : String(err));
             bump();
+          })
+          .finally(() => {
+            navigating.current = false;
           });
       }
     }
@@ -70,6 +78,14 @@ export function Browse({ router, onExit }: BrowseProps): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [navSeq, setNavSeq] = useState(0);
   const bump = () => setNonce((n) => n + 1);
+  // Surface controller-initiated (fire-and-forget) navigation errors on the
+  // same red error line as host-level ones.
+  useEffect(() => {
+    router.setErrorHandler((msg) => {
+      setError(msg);
+      setNonce((n) => n + 1);
+    });
+  }, [router]);
   const element = router.current();
   return (
     <FocusRegistryProvider focusedIndex={focusedIndex}>

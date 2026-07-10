@@ -26,4 +26,24 @@ describe("GenericEntityView", () => {
     expect(lastFrame()).toContain("Alpha");
     expect(lastFrame()).toContain("uid");
   });
+
+  it("reuses the markdown renderer for the attribute pane (emits type/id lines)", () => {
+    const entity: JsonApiResource = {
+      type: "node--article",
+      id: "u1",
+      attributes: { title: "Alpha" },
+      relationships: { uid: { data: { type: "user--user", id: "a1" } } },
+    };
+    const doc: JsonApiDocument = { data: entity };
+    const el = new GenericEntityView().build(entity, ctx(doc));
+    const { lastFrame } = render(<FocusRegistryProvider>{el}</FocusRegistryProvider>);
+    // The markdown renderer prefixes every resource with `type:`/`id:` lines —
+    // the hand-rolled attribute loop never emitted these, so their presence
+    // proves the detail pane reuses `renderMarkdown`.
+    expect(lastFrame()).toContain("type: node--article");
+    expect(lastFrame()).toContain("id: u1");
+    expect(lastFrame()).toContain("title: Alpha");
+    // Relationships stay focusable links (navigation target id visible).
+    expect(lastFrame()).toContain("a1");
+  });
 });
