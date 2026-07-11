@@ -13,7 +13,13 @@ build/
 # Local agent/tool working dirs and worktrees
 .claude/
 .codex
-playground/canvas/
+
+# Per-worktree generated dropsh configs (produced by `pnpm run init-worktree`)
+playground/dropsh.config.js
+playground/plain/dropsh.config.js
+playground/schemata/dropsh.config.js
+playground/canvas/dropsh.config.js
+playground/db/dropsh.config.js
 
 # Secrets and environment
 .env
