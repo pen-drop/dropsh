@@ -30,6 +30,7 @@
     "lint:fix": "biome check --write src/ packages/ plugins/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
+    "init-worktree": "node scripts/init-worktree.mjs",
     "prepublishOnly": "pnpm run typecheck && pnpm run build",
     "release": "node scripts/release.mjs"
   },

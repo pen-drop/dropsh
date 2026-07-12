@@ -6,14 +6,14 @@ import { tuiPlugin } from "@dropsh/plugin-tui";
 
 export default {
   site: {
-    base_url: "http://drupal-cli-test-schemata-5fdcffda.ddev.site",
+    base_url: "http://__DDEV_PROJECT__.ddev.site",
     jsonapi_prefix: "/jsonapi",
   },
   plugins: [
     oauth2Plugin({
       type: "oauth2_authcode",
       client_id: "tests-authcode",
-      token_url: "http://drupal-cli-test-schemata-5fdcffda.ddev.site/oauth/token",
+      token_url: "http://__DDEV_PROJECT__.ddev.site/oauth/token",
       scope: "integration:content",
       redirect_port: 7432,
     }),
