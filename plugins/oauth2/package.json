@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/plugin-oauth2",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "main": "./dist/plugins/oauth2/src/index.js",
   "exports": {
