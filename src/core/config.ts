@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ConfigError } from "../errors.js";
-import type { DropSHPlugin } from "./plugin.js";
+import type { DropSHPlugin, PluginDescriptor } from "./plugin.js";
 
 export interface SiteConfig {
   base_url: string;
@@ -26,27 +26,24 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * install — so nothing has to resolve the plugin package from the config file's
  * own `import` statements (which resolve relative to the config file, not the CLI).
  */
-function isPluginDescriptor(e: unknown): e is Record<string, unknown> & { plugin: string } {
+function isPluginDescriptor(e: unknown): e is PluginDescriptor {
   return isRecord(e) && typeof e.plugin === "string";
 }
 
 /**
- * Resolve a named plugin package the way ESLint resolves plugins: by string
- * name, relative to the config file first, then the cwd, then dropsh's own
- * install (so a plugin installed alongside dropsh — a dropsh dep, or globally
- * next to a global dropsh, or via `npx -p`— is found). The config never imports
- * the package itself.
+ * Resolve + construct a single named-plugin descriptor the way ESLint resolves
+ * plugins: by string name against a list of base modules, first match wins (so
+ * a plugin installed alongside dropsh — a dropsh dep, or globally next to a
+ * global dropsh, or via `npx -p` — is found). The config never imports the
+ * package itself. Returns the built plugin plus the resolved module path +
+ * export name, which the graph expander uses for de-duplication.
  */
-async function loadNamedPlugin(
-  entry: Record<string, unknown> & { plugin: string },
-  configPath: string,
-): Promise<DropSHPlugin> {
+async function resolveDescriptor(
+  entry: PluginDescriptor,
+  bases: string[],
+  declaredBy: string | undefined,
+): Promise<{ plugin: DropSHPlugin; resolvedPath: string; exportName: string }> {
   const name = entry.plugin;
-  const bases = [
-    pathToFileURL(configPath).href,
-    pathToFileURL(`${process.cwd()}/`).href,
-    import.meta.url,
-  ];
   let resolved: string | undefined;
   for (const base of bases) {
     try {
@@ -56,10 +53,12 @@ async function loadNamedPlugin(
       // try the next base
     }
   }
-  if (resolved === undefined)
+  if (resolved === undefined) {
+    const from = declaredBy ? ` (declared by '${declaredBy}')` : "";
     throw new ConfigError(
-      `cannot resolve plugin '${name}'. Install it next to dropsh (project dep, dropsh dep, global next to a global dropsh, or 'npx -p dropsh -p ${name}').`,
+      `cannot resolve plugin '${name}'${from}. Install it next to dropsh (project dep, dropsh dep, global next to a global dropsh, or 'npx -p dropsh -p ${name}').`,
     );
+  }
 
   let mod: Record<string, unknown>;
   try {
@@ -71,23 +70,72 @@ async function loadNamedPlugin(
   const factory = mod[exportName];
   if (typeof factory !== "function")
     throw new ConfigError(`plugin '${name}' has no callable export '${exportName}'`);
-  return (factory as (opts?: unknown) => DropSHPlugin)(entry.with ?? entry.options);
+  const plugin = (factory as (opts?: unknown) => DropSHPlugin)(entry.with ?? entry.options);
+  return { plugin, resolvedPath: resolved, exportName };
 }
 
 /**
- * Expands `plugins[]` entries: named-package descriptors are resolved + built
- * into real plugins; already-constructed plugins pass through unchanged
- * (backward compat).
+ * Expands `plugins[]` into a flat plugin list: named-package descriptors are
+ * resolved + built, and each built plugin's `dependencies` are expanded
+ * *before* it (post-order DFS). A plugin is emitted once — dedup by resolved
+ * module path + export for descriptors, by `id` for the final list — and a
+ * dependency cycle is rejected with the offending chain. Pre-constructed plugin
+ * objects pass through unchanged (backward compat).
  */
 async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHPlugin[]> {
   if (!Array.isArray(raw)) return [];
-  return Promise.all(
-    raw.map((entry) =>
-      isPluginDescriptor(entry)
-        ? loadNamedPlugin(entry, configPath)
-        : Promise.resolve(entry as DropSHPlugin),
-    ),
-  );
+
+  const baseBases = [
+    pathToFileURL(configPath).href,
+    pathToFileURL(`${process.cwd()}/`).href,
+    import.meta.url,
+  ];
+  const out: DropSHPlugin[] = [];
+  const doneKeys = new Set<string>(); // resolvedPath::export — fully expanded
+  const doneIds = new Set<string>(); // plugin.id already emitted
+  const stack: string[] = []; // descriptor names on the current DFS path
+
+  const emit = (plugin: DropSHPlugin): void => {
+    if (doneIds.has(plugin.id)) return;
+    doneIds.add(plugin.id);
+    out.push(plugin);
+  };
+
+  const expandDeps = async (plugin: DropSHPlugin, bases: string[]): Promise<void> => {
+    for (const dep of plugin.dependencies ?? []) await expand(dep, bases, plugin.id);
+  };
+
+  async function expand(
+    entry: unknown,
+    bases: string[],
+    declaredBy: string | undefined,
+  ): Promise<void> {
+    if (!isPluginDescriptor(entry)) {
+      // Pre-constructed plugin object: expand its deps first, then emit it.
+      const plugin = entry as DropSHPlugin;
+      await expandDeps(plugin, bases);
+      emit(plugin);
+      return;
+    }
+
+    const { plugin, resolvedPath, exportName } = await resolveDescriptor(entry, bases, declaredBy);
+    const key = `${resolvedPath}::${exportName}`;
+    if (doneKeys.has(key)) return; // already expanded + emitted
+    if (stack.includes(entry.plugin))
+      throw new ConfigError(`plugin dependency cycle: ${[...stack, entry.plugin].join(" → ")}`);
+
+    stack.push(entry.plugin);
+    // Child descriptors resolve relative to this plugin's module first.
+    const childBases = [pathToFileURL(resolvedPath).href, ...baseBases];
+    await expandDeps(plugin, childBases);
+    stack.pop();
+
+    doneKeys.add(key);
+    emit(plugin);
+  }
+
+  for (const entry of raw) await expand(entry, baseBases, undefined);
+  return out;
 }
 
 export async function loadConfig(filePath: string): Promise<Config> {

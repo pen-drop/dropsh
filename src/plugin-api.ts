@@ -32,6 +32,11 @@ export type {
   Resource,
 } from "./core/jsonapi/resource.js";
 export type { JsonApiDocument, JsonApiResource } from "./core/jsonapi/types.js";
-export type { DropSHPlugin, PluginContext, SchemaOperation } from "./core/plugin.js";
+export type {
+  DropSHPlugin,
+  PluginContext,
+  PluginDescriptor,
+  SchemaOperation,
+} from "./core/plugin.js";
 export { AuthError, ConfigError, HttpError } from "./errors.js";
 export type { CommandContext } from "./index.js";

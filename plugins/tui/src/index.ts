@@ -80,6 +80,7 @@ export function tuiPlugin(tuiOpts: TuiOptions = {}): DropSHPlugin {
   return {
     id: "tui",
     requiredModules: [],
+    dependencies: [{ plugin: "@dropsh/plugin-markdown" }],
     async extendSchema(_entityType, _bundle, schema) {
       return schema;
     },
