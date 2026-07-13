@@ -6,6 +6,9 @@
   "exports": {
     ".": "./dist/plugins/tui/src/index.js"
   },
+  "files": [
+    "dist/plugins/tui/src"
+  ],
   "publishConfig": {
     "access": "public"
   },
