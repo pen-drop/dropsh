@@ -7,6 +7,9 @@ export interface SearchArgs {
   bundle?: string;
   filters: string[];
   limit: number;
+  offset?: number;
+  /** JSON:API sort field; a leading `-` requests descending order. */
+  sort?: string;
   include?: string[];
 }
 
@@ -17,23 +20,56 @@ export interface SearchDeps {
 
 export interface ParsedFilter {
   key: string;
-  value: string;
+  /** Filter value, or `null` for value-less operators (IS NULL / IS NOT NULL). */
+  value: string | null;
   operator?: string;
 }
 
+/**
+ * JSON:API filter operators recognised in the `key:op:value` form. Only when
+ * segment 2 of a `--filter` matches one of these is it treated as an operator;
+ * otherwise the remainder is kept verbatim as the value (so a value containing
+ * a colon — e.g. a URL — parses as key:value, not key:op:value).
+ *
+ * `!=` is accepted as an alias of `<>` for backwards compatibility.
+ */
+const KNOWN_OPERATORS = new Set([
+  "=",
+  "<>",
+  "!=",
+  ">",
+  ">=",
+  "<",
+  "<=",
+  "CONTAINS",
+  "STARTS_WITH",
+  "ENDS_WITH",
+  "IN",
+  "NOT IN",
+  "IS NULL",
+  "IS NOT NULL",
+]);
+
+/** Operators that take no value; expressed as `key:IS NULL` / `key:IS NOT NULL`. */
+const VALUELESS_OPERATORS = new Set(["IS NULL", "IS NOT NULL"]);
+
 export function parseFilterFlag(raw: string): ParsedFilter {
   const parts = raw.split(":");
-  if (parts.length === 2) {
-    const [key, value] = parts as [string, string];
-    return { key, value };
+  if (parts.length < 2) {
+    throw new ValidationError(`--filter must be key:value or key:op:value, got "${raw}"`);
   }
-  if (parts.length >= 3) {
-    const key = parts[0] as string;
-    const operator = parts[1] as string;
-    const value = parts.slice(2).join(":");
-    return { key, operator, value };
+  const key = parts[0] as string;
+  const rest = parts.slice(1).join(":");
+  // key:IS NULL / key:IS NOT NULL — value-less operator.
+  if (VALUELESS_OPERATORS.has(rest)) {
+    return { key, operator: rest, value: null };
   }
-  throw new ValidationError(`--filter must be key:value or key:op:value, got "${raw}"`);
+  // key:op:value — only when segment 2 is a known operator.
+  if (parts.length >= 3 && KNOWN_OPERATORS.has(parts[1] as string)) {
+    return { key, operator: parts[1] as string, value: parts.slice(2).join(":") };
+  }
+  // key:value — value kept verbatim (may contain colons, e.g. a URL).
+  return { key, value: rest };
 }
 
 export async function runSearch(args: SearchArgs, deps: SearchDeps): Promise<void> {
@@ -44,6 +80,12 @@ export async function runSearch(args: SearchArgs, deps: SearchDeps): Promise<voi
     else params.addFilter(f.key, f.value);
   }
   params.addPageLimit(args.limit);
+  if (args.offset !== undefined) params.addPageOffset(args.offset);
+  if (args.sort) {
+    const descending = args.sort.startsWith("-");
+    const field = descending ? args.sort.slice(1) : args.sort;
+    params.addSort(field, descending ? "DESC" : "ASC");
+  }
   if (args.include?.length) params.addInclude(args.include);
   const path = args.bundle ? `${args.entityType}/${args.bundle}` : args.entityType;
   const res = await deps.client.get(path, params);

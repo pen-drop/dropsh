@@ -368,16 +368,55 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .description("Search entities with filters")
     .option("--bundle <bundle>")
     .option("--filter <kv...>", "filter in key:value or key:op:value form", [])
-    .option("--limit <n>", "max results", (v) => parseInt(v, 10), 50)
+    .option("--limit <n>", "max results per page", (v) => parseInt(v, 10), 50)
+    .option("--offset <n>", "skip the first n results (page[offset])", (v) => parseInt(v, 10))
+    .option("--sort <field>", "sort by field; prefix with - for descending")
     .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .addHelpText(
+      "after",
+      `
+Filter operators (--filter key:op:value):
+  =            equals (default when op is omitted: key:value)
+  <>, !=       not equals
+  <, <=, >, >= comparisons
+  CONTAINS     substring match
+  STARTS_WITH  prefix match
+  ENDS_WITH    suffix match
+  IN, NOT IN   repeat --filter with the same key for each value
+  IS NULL      field is empty      (value-less: --filter key:IS NULL)
+  IS NOT NULL  field is not empty  (value-less: --filter key:IS NOT NULL)
+
+An operator is recognised only when it is a known operator above; a value
+containing a colon (e.g. a URL) is kept intact, so key:value still works:
+  --filter link:https://example.com/x   ->  link = "https://example.com/x"
+
+Paging & sort:
+  --limit <n>    max results per page (default 50)
+  --offset <n>   skip the first n results
+  --sort <field> sort ascending; prefix - for descending (e.g. --sort -created)
+
+Example:
+  dropsh search gaia_ticket --bundle gaia_ticket \\
+    --filter title:CONTAINS:search --filter conductor_id:IS NOT NULL \\
+    --sort -created --limit 20 --offset 20`,
+    )
     .action(
       (
         entityType: string,
-        o: { bundle?: string; filter: string[]; limit: number; include?: string[] },
+        o: {
+          bundle?: string;
+          filter: string[];
+          limit: number;
+          offset?: number;
+          sort?: string;
+          include?: string[];
+        },
       ) => {
         // biome-ignore lint/suspicious/noExplicitAny: optional bundle/include added conditionally
         const args = { entityType, filters: o.filter, limit: o.limit } as any;
         if (o.bundle !== undefined) args.bundle = o.bundle;
+        if (o.offset !== undefined) args.offset = o.offset;
+        if (o.sort !== undefined) args.sort = o.sort;
         const include = normalizeInclude(o.include);
         if (include.length > 0) args.include = include;
         const rctx: RenderContext = { command: "search", entityType };

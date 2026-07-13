@@ -46,4 +46,61 @@ describe("integration: search", () => {
       expect(item.attributes.status).toBe(true);
     }
   });
+
+  it("pages with --sort and --offset (AC-1, AC-2)", async () => {
+    // Three nodes sharing a prefix; suffix letters give a deterministic title order.
+    const prefix = `it-search-page-${crypto.randomUUID()}`;
+    for (const suffix of ["a", "b", "c"]) {
+      await createTestNode(`${prefix}-${suffix}`);
+    }
+    const common = [
+      "search",
+      "node",
+      "--bundle=article_test",
+      `--filter=title:CONTAINS:${prefix}`,
+      "--sort=title",
+    ];
+
+    const page1 = await runCli({ args: [...common, "--limit=2"] });
+    expect(page1.code).toBe(0);
+    const titles1 = parseJson<SearchResponse>(page1.stdout).data.map((n) => n.attributes.title);
+    expect(titles1).toEqual([`${prefix}-a`, `${prefix}-b`]);
+
+    const page2 = await runCli({ args: [...common, "--limit=2", "--offset=2"] });
+    expect(page2.code).toBe(0);
+    const titles2 = parseJson<SearchResponse>(page2.stdout).data.map((n) => n.attributes.title);
+    expect(titles2).toEqual([`${prefix}-c`]);
+
+    // Descending sort flips the leading result.
+    const desc = await runCli({ args: [...common.slice(0, 4), "--sort=-title", "--limit=1"] });
+    expect(desc.code).toBe(0);
+    const titlesDesc = parseJson<SearchResponse>(desc.stdout).data.map((n) => n.attributes.title);
+    expect(titlesDesc).toEqual([`${prefix}-c`]);
+  });
+
+  it("keeps a colon in the filter value instead of reading it as an operator (AC-3)", async () => {
+    const title = `it-search-colon-https://example.com/${crypto.randomUUID()}`;
+    const uuid = await createTestNode(title);
+
+    const result = await runCli({
+      args: ["search", "node", "--bundle=article_test", `--filter=title:${title}`],
+    });
+    expect(result.code).toBe(0);
+
+    const body = parseJson<SearchResponse>(result.stdout);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]?.id).toBe(uuid);
+  });
+
+  it("accepts a value-less operator over the wire (AC-4)", async () => {
+    await createTestNode(`it-search-notnull-${crypto.randomUUID()}`);
+
+    const result = await runCli({
+      args: ["search", "node", "--bundle=article_test", "--filter=title:IS NOT NULL", "--limit=1"],
+    });
+    expect(result.code).toBe(0);
+
+    const body = parseJson<SearchResponse>(result.stdout);
+    expect(body.data.length).toBeGreaterThanOrEqual(1);
+  });
 });
