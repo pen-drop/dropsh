@@ -52,7 +52,11 @@ run("pnpm install");
 run("pnpm run build");
 run("pnpm run build:packages");
 run("pnpm run build:plugins");
-run("pnpm --dir playground install");
+// The playground is a standalone npm project (its own package-lock.json + file:
+// deps on the built packages), NOT a pnpm-workspace member. Installing it with
+// pnpm resolves against the monorepo and leaves `dropsh`/`@dropsh/*` absent from
+// playground/node_modules, so the generated configs fail to load. Use npm.
+run("npm --prefix playground install");
 
 console.log(
   `\nWorktree ready. DDEV project: ${name}.ddev.site ` +
