@@ -17,6 +17,11 @@ describe("tuiPlugin", () => {
     expect((renderer as { interactive?: boolean }).interactive).toBe(true);
   });
 
+  it("declares the markdown plugin as a dependency", () => {
+    const plugin = tuiPlugin();
+    expect(plugin.dependencies).toEqual([{ plugin: "@dropsh/plugin-markdown" }]);
+  });
+
   it("run() rejects when stdout is not a TTY", async () => {
     const plugin = tuiPlugin();
     const renderer = plugin.renderers?.[0] as {

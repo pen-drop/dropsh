@@ -55,4 +55,62 @@ describe("loadConfig", () => {
       );
     });
   });
+
+  describe("plugin-declared dependencies", () => {
+    it("auto-loads a declared dependency, ordered before its declarer", async () => {
+      const cfg = await loadConfig(fixture("deps-basic.js"));
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["child", "parent"]);
+    });
+
+    it("honors the descriptor form (export + with) for a dependency", async () => {
+      const cfg = await loadConfig(fixture("deps-with.js"));
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["child-configured", "parent-with"]);
+    });
+
+    it("loads a shared dependency once (diamond graph)", async () => {
+      const cfg = await loadConfig(fixture("deps-diamond.js"));
+      const ids = cfg.plugins.map((p) => p.id);
+      expect(ids.filter((id) => id === "d")).toHaveLength(1);
+      // d before b and c; b and c before a
+      expect(ids.indexOf("d")).toBeLessThan(ids.indexOf("b"));
+      expect(ids.indexOf("b")).toBeLessThan(ids.indexOf("a"));
+      expect(ids.indexOf("c")).toBeLessThan(ids.indexOf("a"));
+    });
+
+    it("rejects a dependency cycle with the chain", async () => {
+      await expect(loadConfig(fixture("deps-cycle.js"))).rejects.toThrow(ConfigError);
+      await expect(loadConfig(fixture("deps-cycle.js"))).rejects.toThrow(
+        /dep-a\.mjs.*dep-b\.mjs.*dep-a\.mjs/s,
+      );
+    });
+
+    it("names the declaring parent when a dependency cannot be resolved", async () => {
+      await expect(loadConfig(fixture("deps-missing.js"))).rejects.toThrow(
+        /definitely-not-installed.*declared by/s,
+      );
+    });
+
+    it("constructs a shared dependency once, not per incoming edge (AC-3)", async () => {
+      (globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number }).__DROPSH_DIAMOND_D_CONSTRUCTIONS = 0;
+      await loadConfig(fixture("deps-diamond.js"));
+      expect(
+        (globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number })
+          .__DROPSH_DIAMOND_D_CONSTRUCTIONS,
+      ).toBe(1);
+    });
+
+    it("does not report a false cycle when one descriptor string names different files", async () => {
+      const cfg = await loadConfig(fixture("deps-false-cycle.js"));
+      const ids = cfg.plugins.map((p) => p.id);
+      expect(ids).toContain("leaf-root");
+      expect(ids).toContain("mid");
+      expect(ids).toContain("leaf-sub");
+      expect(ids).toContain("fp-a");
+    });
+
+    it("loads two same-package entries that differ only by options", async () => {
+      const cfg = await loadConfig(fixture("deps-dup-options.js"));
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["child-one", "child-two"]);
+    });
+  });
 });

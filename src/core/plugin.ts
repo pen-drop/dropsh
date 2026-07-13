@@ -24,9 +24,28 @@ export interface PluginContext {
 
 export type SchemaOperation = Operation;
 
+/**
+ * Import-free descriptor naming a plugin package as a string. Same shape used
+ * by the top-level `plugins[]` config; a plugin returns these in `dependencies`
+ * to have dropsh auto-load further plugins.
+ */
+export interface PluginDescriptor {
+  plugin: string;
+  with?: unknown;
+  options?: unknown;
+  export?: string;
+}
+
 export interface DropSHPlugin {
   readonly id: string;
   readonly requiredModules: string[];
+  /**
+   * Plugins this plugin depends on. dropsh resolves each descriptor and inserts
+   * the resulting plugin into the flat plugin list *before* this plugin, so a
+   * dependency's renderers / schema hooks are available when this plugin runs.
+   * De-duplicated across the whole graph; cycles are rejected at config load.
+   */
+  dependencies?: PluginDescriptor[];
   /** Provider-based auth (login/logout/status/createAdapter). */
   authProvider?: AuthProvider;
   /**
