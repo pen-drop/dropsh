@@ -68,3 +68,16 @@ export interface DropSHPlugin {
   registerCommands?(program: Command): void;
   renderers?: AnyRenderer[];
 }
+
+/**
+ * Combine several child plugins into one flat plugin list. An aggregator's
+ * factory returns `composePlugins(childA(), childB(), …)` and places the result
+ * as a single `plugins[]` entry (a nested array) or a single named-descriptor
+ * export; dropsh flattens it into separate plugin entries. This lets one config
+ * entry pull in N plugins without hand-merging their hooks or presence-guarding
+ * hook presence — each child stays a distinct entry, indistinguishable from N
+ * separate entries. Nested arrays (composed composites) are flattened one level.
+ */
+export function composePlugins(...children: (DropSHPlugin | DropSHPlugin[])[]): DropSHPlugin[] {
+  return children.flat();
+}

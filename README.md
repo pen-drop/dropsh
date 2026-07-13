@@ -439,6 +439,29 @@ export default {
 };
 ```
 
+`dropsh/plugin` ships its own TypeScript declarations (as do the
+`@dropsh/plugin-*` packages), so `import { DropSHPlugin } from "dropsh/plugin"`
+is typed with no ambient `declare module`.
+
+### Composing plugins
+
+`composePlugins(...children)` bundles several plugins into one flat list, so an
+aggregator plugin can present N children from a **single** `plugins[]` entry
+without hand-merging their hooks. dropsh flattens a nested array — or an array
+returned by a plugin factory — into separate entries; each child's own
+`dependencies` still expand first, and duplicate ids are de-duplicated.
+
+```ts
+import { composePlugins } from "dropsh/plugin";
+import { markdownPlugin } from "@dropsh/plugin-markdown";
+import { jsonapiSchemaPlugin } from "@dropsh/plugin-jsonapi-schema";
+
+export function essentials() {
+  return composePlugins(markdownPlugin(), jsonapiSchemaPlugin());
+}
+// config: plugins: [essentials()]  ← one entry, flattened into N children
+```
+
 ## Example Skills
 
 A dropsh skill does not need to know every Drupal internal. Keep `SKILL.md` as a

@@ -3,9 +3,16 @@
   "version": "0.5.5",
   "type": "module",
   "main": "./dist/plugins/markdown/src/index.js",
+  "types": "./dist/plugins/markdown/src/index.d.ts",
   "exports": {
-    ".": "./dist/plugins/markdown/src/index.js",
-    "./render": "./dist/plugins/markdown/src/render-md.js"
+    ".": {
+      "types": "./dist/plugins/markdown/src/index.d.ts",
+      "default": "./dist/plugins/markdown/src/index.js"
+    },
+    "./render": {
+      "types": "./dist/plugins/markdown/src/render-md.d.ts",
+      "default": "./dist/plugins/markdown/src/render-md.js"
+    }
   },
   "files": [
     "dist/plugins/markdown/src"
