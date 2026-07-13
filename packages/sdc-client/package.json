@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/sdc-client",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "type": "module",
   "main": "./dist/packages/sdc-client/src/index.js",
   "types": "./dist/packages/sdc-client/src/index.d.ts",
