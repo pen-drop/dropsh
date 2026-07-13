@@ -1,10 +1,13 @@
 {
   "name": "@dropsh/plugin-tui",
-  "version": "0.0.1-alpha.0",
+  "version": "0.5.2",
   "type": "module",
   "main": "./dist/plugins/tui/src/index.js",
   "exports": {
     ".": "./dist/plugins/tui/src/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
@@ -20,8 +23,8 @@
     "react": "^18.3.0"
   },
   "devDependencies": {
-    "dropsh": "workspace:*",
     "@types/react": "^18.3.0",
+    "dropsh": "workspace:*",
     "ink-testing-library": "^4.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
