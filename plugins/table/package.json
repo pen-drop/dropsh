@@ -7,6 +7,9 @@
     ".": "./dist/plugins/table/src/index.js",
     "./render": "./dist/plugins/table/src/render-table.js"
   },
+  "files": [
+    "dist/plugins/table/src"
+  ],
   "publishConfig": {
     "access": "public"
   },
