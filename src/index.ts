@@ -377,12 +377,14 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       `
 Filter operators (--filter key:op:value):
   =            equals (default when op is omitted: key:value)
-  <>, !=       not equals
+  <>, !=       not equals (!= is an alias of <>)
   <, <=, >, >= comparisons
   CONTAINS     substring match
   STARTS_WITH  prefix match
   ENDS_WITH    suffix match
-  IN, NOT IN   repeat --filter with the same key for each value
+  IN, NOT IN   value is a comma-separated list  (--filter key:IN:a,b,c)
+  BETWEEN      value is a comma-separated low,high pair
+  NOT BETWEEN  (--filter age:BETWEEN:18,65)
   IS NULL      field is empty      (value-less: --filter key:IS NULL)
   IS NOT NULL  field is not empty  (value-less: --filter key:IS NOT NULL)
 

@@ -31,7 +31,8 @@ export interface ParsedFilter {
  * otherwise the remainder is kept verbatim as the value (so a value containing
  * a colon — e.g. a URL — parses as key:value, not key:op:value).
  *
- * `!=` is accepted as an alias of `<>` for backwards compatibility.
+ * `!=` is accepted as an alias of `<>`; it is normalised to `<>` before the
+ * request is built (Drupal's allowed-operators list has `<>`, not `!=`).
  */
 const KNOWN_OPERATORS = new Set([
   "=",
@@ -46,12 +47,20 @@ const KNOWN_OPERATORS = new Set([
   "ENDS_WITH",
   "IN",
   "NOT IN",
+  "BETWEEN",
+  "NOT BETWEEN",
   "IS NULL",
   "IS NOT NULL",
 ]);
 
 /** Operators that take no value; expressed as `key:IS NULL` / `key:IS NOT NULL`. */
 const VALUELESS_OPERATORS = new Set(["IS NULL", "IS NOT NULL"]);
+
+/**
+ * Operators whose value is a list; the `--filter` value is split on commas into
+ * an array (e.g. `key:IN:a,b,c`). Drupal rejects a scalar for these.
+ */
+const MULTI_VALUE_OPERATORS = new Set(["IN", "NOT IN", "BETWEEN", "NOT BETWEEN"]);
 
 export function parseFilterFlag(raw: string): ParsedFilter {
   const parts = raw.split(":");
@@ -76,14 +85,30 @@ export async function runSearch(args: SearchArgs, deps: SearchDeps): Promise<voi
   const params = new DrupalJsonApiParams();
   for (const raw of args.filters) {
     const f = parseFilterFlag(raw);
-    if (f.operator) params.addFilter(f.key, f.value, f.operator);
-    else params.addFilter(f.key, f.value);
+    if (f.operator === undefined) {
+      params.addFilter(f.key, f.value);
+      continue;
+    }
+    // `!=` is an alias of `<>`; Drupal's allowed operators do not include `!=`.
+    const operator = f.operator === "!=" ? "<>" : f.operator;
+    // List operators (IN/NOT IN/BETWEEN/NOT BETWEEN) take an array value.
+    const value =
+      f.value !== null && MULTI_VALUE_OPERATORS.has(operator) ? f.value.split(",") : f.value;
+    params.addFilter(f.key, value, operator);
   }
   params.addPageLimit(args.limit);
-  if (args.offset !== undefined) params.addPageOffset(args.offset);
+  if (args.offset !== undefined) {
+    if (!Number.isInteger(args.offset) || args.offset < 0) {
+      throw new ValidationError(`--offset must be a non-negative integer, got "${args.offset}"`);
+    }
+    params.addPageOffset(args.offset);
+  }
   if (args.sort) {
     const descending = args.sort.startsWith("-");
     const field = descending ? args.sort.slice(1) : args.sort;
+    if (field === "") {
+      throw new ValidationError(`--sort requires a field name, got "${args.sort}"`);
+    }
     params.addSort(field, descending ? "DESC" : "ASC");
   }
   if (args.include?.length) params.addInclude(args.include);

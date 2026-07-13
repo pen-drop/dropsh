@@ -103,4 +103,31 @@ describe("integration: search", () => {
     const body = parseJson<SearchResponse>(result.stdout);
     expect(body.data.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("maps the != alias to <> over the wire (Blocker B #2)", async () => {
+    // Drupal's allowed operators include <> but not !=; a verbatim != 400s. Exit
+    // 0 proves the alias was normalised to <> before the request.
+    await createTestNode(`it-search-neq-${crypto.randomUUID()}`);
+
+    const result = await runCli({
+      args: ["search", "node", "--bundle=article_test", "--filter=status:!=:0", "--limit=1"],
+    });
+    expect(result.code).toBe(0);
+  });
+
+  it("filters with an IN comma-list over the wire (Blocker B #1)", async () => {
+    const a = `it-search-in-${crypto.randomUUID()}`;
+    const b = `it-search-in-${crypto.randomUUID()}`;
+    const uuidA = await createTestNode(a);
+    const uuidB = await createTestNode(b);
+
+    const result = await runCli({
+      args: ["search", "node", "--bundle=article_test", `--filter=title:IN:${a},${b}`],
+    });
+    expect(result.code).toBe(0);
+
+    const ids = parseJson<SearchResponse>(result.stdout).data.map((n) => n.id);
+    expect(ids).toEqual(expect.arrayContaining([uuidA, uuidB]));
+    expect(ids).toHaveLength(2);
+  });
 });
