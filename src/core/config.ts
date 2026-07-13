@@ -31,18 +31,21 @@ function isPluginDescriptor(e: unknown): e is PluginDescriptor {
 }
 
 /**
- * Resolve + construct a single named-plugin descriptor the way ESLint resolves
- * plugins: by string name against a list of base modules, first match wins (so
- * a plugin installed alongside dropsh — a dropsh dep, or globally next to a
- * global dropsh, or via `npx -p` — is found). The config never imports the
- * package itself. Returns the built plugin plus the resolved module path +
- * export name, which the graph expander uses for de-duplication.
+ * Resolve a single named-plugin descriptor to its module path + export the way
+ * ESLint resolves plugins: by string name against a list of base modules, first
+ * match wins (so a plugin installed alongside dropsh — a dropsh dep, or globally
+ * next to a global dropsh, or via `npx -p` — is found). The config never imports
+ * the package itself. This does **not** call the plugin factory: the resolved
+ * path + export + options form the identity the graph expander de-duplicates on,
+ * so construction is deferred to a cache miss (a shared/diamond dependency's
+ * factory must run exactly once — AC-3). Returns a `construct` thunk the caller
+ * invokes only when the resolved identity is new.
  */
 async function resolveDescriptor(
   entry: PluginDescriptor,
   bases: string[],
   declaredBy: string | undefined,
-): Promise<{ plugin: DropSHPlugin; resolvedPath: string; exportName: string }> {
+): Promise<{ resolvedPath: string; exportName: string; construct: () => DropSHPlugin }> {
   const name = entry.plugin;
   let resolved: string | undefined;
   for (const base of bases) {
@@ -70,17 +73,23 @@ async function resolveDescriptor(
   const factory = mod[exportName];
   if (typeof factory !== "function")
     throw new ConfigError(`plugin '${name}' has no callable export '${exportName}'`);
-  const plugin = (factory as (opts?: unknown) => DropSHPlugin)(entry.with ?? entry.options);
-  return { plugin, resolvedPath: resolved, exportName };
+  const construct = () =>
+    (factory as (opts?: unknown) => DropSHPlugin)(entry.with ?? entry.options);
+  return { resolvedPath: resolved, exportName, construct };
 }
 
 /**
  * Expands `plugins[]` into a flat plugin list: named-package descriptors are
  * resolved + built, and each built plugin's `dependencies` are expanded
- * *before* it (post-order DFS). A plugin is emitted once — dedup by resolved
- * module path + export for descriptors, by `id` for the final list — and a
- * dependency cycle is rejected with the offending chain. Pre-constructed plugin
- * objects pass through unchanged (backward compat).
+ * *before* it (post-order DFS). A descriptor's identity is its resolved module
+ * path + export + options (`with`/`options`) — that single key drives both
+ * de-duplication and on-path cycle detection, and construction happens only on a
+ * cache miss, so a shared dependency's factory runs exactly once (AC-3). Because
+ * the key is the *resolved* module, one relative string naming different files
+ * on a path is not a cycle, and two same-package entries with different options
+ * are two distinct plugins. `id` collisions are still de-duplicated in the final
+ * list. A dependency cycle is rejected with the offending chain of descriptor
+ * names. Pre-constructed plugin objects pass through unchanged (backward compat).
  */
 async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHPlugin[]> {
   if (!Array.isArray(raw)) return [];
@@ -91,9 +100,11 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
     import.meta.url,
   ];
   const out: DropSHPlugin[] = [];
-  const doneKeys = new Set<string>(); // resolvedPath::export — fully expanded
+  const doneKeys = new Set<string>(); // resolvedPath::export::options — fully expanded
   const doneIds = new Set<string>(); // plugin.id already emitted
-  const stack: string[] = []; // descriptor names on the current DFS path
+  // Descriptors on the current DFS path, keyed by resolved identity; `name` is
+  // the descriptor string, kept only to render the cycle-error chain.
+  const stack: { key: string; name: string }[] = [];
 
   const emit = (plugin: DropSHPlugin): void => {
     if (doneIds.has(plugin.id)) return;
@@ -118,17 +129,27 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
       return;
     }
 
-    const { plugin, resolvedPath, exportName } = await resolveDescriptor(entry, bases, declaredBy);
-    const key = `${resolvedPath}::${exportName}`;
-    if (doneKeys.has(key)) return; // already expanded + emitted
-    if (stack.includes(entry.plugin))
-      throw new ConfigError(`plugin dependency cycle: ${[...stack, entry.plugin].join(" → ")}`);
+    const { resolvedPath, exportName, construct } = await resolveDescriptor(
+      entry,
+      bases,
+      declaredBy,
+    );
+    const key = `${resolvedPath}::${exportName}::${JSON.stringify(entry.with ?? entry.options ?? null)}`;
+    if (doneKeys.has(key)) return; // same resolved identity already expanded + emitted — do not re-construct
+    if (stack.some((f) => f.key === key))
+      throw new ConfigError(
+        `plugin dependency cycle: ${[...stack.map((f) => f.name), entry.plugin].join(" → ")}`,
+      );
 
-    stack.push(entry.plugin);
-    // Child descriptors resolve relative to this plugin's module first.
-    const childBases = [pathToFileURL(resolvedPath).href, ...baseBases];
-    await expandDeps(plugin, childBases);
-    stack.pop();
+    const plugin = construct();
+    stack.push({ key, name: entry.plugin });
+    try {
+      // Child descriptors resolve relative to this plugin's module first.
+      const childBases = [pathToFileURL(resolvedPath).href, ...baseBases];
+      await expandDeps(plugin, childBases);
+    } finally {
+      stack.pop();
+    }
 
     doneKeys.add(key);
     emit(plugin);

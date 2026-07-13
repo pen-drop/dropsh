@@ -89,5 +89,28 @@ describe("loadConfig", () => {
         /definitely-not-installed.*declared by/s,
       );
     });
+
+    it("constructs a shared dependency once, not per incoming edge (AC-3)", async () => {
+      (globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number }).__DROPSH_DIAMOND_D_CONSTRUCTIONS = 0;
+      await loadConfig(fixture("deps-diamond.js"));
+      expect(
+        (globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number })
+          .__DROPSH_DIAMOND_D_CONSTRUCTIONS,
+      ).toBe(1);
+    });
+
+    it("does not report a false cycle when one descriptor string names different files", async () => {
+      const cfg = await loadConfig(fixture("deps-false-cycle.js"));
+      const ids = cfg.plugins.map((p) => p.id);
+      expect(ids).toContain("leaf-root");
+      expect(ids).toContain("mid");
+      expect(ids).toContain("leaf-sub");
+      expect(ids).toContain("fp-a");
+    });
+
+    it("loads two same-package entries that differ only by options", async () => {
+      const cfg = await loadConfig(fixture("deps-dup-options.js"));
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["child-one", "child-two"]);
+    });
   });
 });
