@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/plugin-jsonapi-schema",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "main": "./dist/plugins/jsonapi-schema/src/index.js",
   "exports": {
