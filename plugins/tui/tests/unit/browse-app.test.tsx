@@ -90,6 +90,49 @@ describe("Browse", () => {
     expect(lastFrame()).toContain("boom");
   });
 
+  it("ignores a second Enter while a navigation is already in flight", async () => {
+    let resolveGet: () => void = () => {};
+    const get = vi.fn(
+      () =>
+        new Promise((res) => {
+          resolveGet = () =>
+            res({
+              data: { type: "node--article", id: "u9", attributes: { title: "Fetched" } },
+            });
+        }),
+    );
+    const c = {
+      get,
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      upload: vi.fn(),
+    } as unknown as JsonApiClient;
+    const router = createRouter({ registry: buildRegistry([]), client: c, viewMode: "default" });
+    await router.navigate(
+      "entity.canonical",
+      { type: "node", bundle: "article", id: "u1" },
+      {
+        data: {
+          type: "node--article",
+          id: "u1",
+          attributes: { title: "Alpha" },
+          relationships: { uid: { data: { type: "user--user", id: "a1" } } },
+        },
+      },
+    );
+    const { stdin } = render(<Browse router={router} onExit={() => {}} />);
+    await tick();
+    stdin.write("\r"); // first Enter → navigate starts, client.get pending
+    await tick();
+    stdin.write("\r"); // second Enter while in flight → must be ignored
+    await tick();
+    resolveGet();
+    await tick();
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(router.stackDepth()).toBe(2);
+  });
+
   it("navigates using the newly-rendered entity's links, not the previous entity's (regression)", async () => {
     const rel = (id: string) => ({
       field_ref: { data: { type: "node--article", id } },

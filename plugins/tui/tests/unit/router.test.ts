@@ -88,4 +88,38 @@ describe("createRouter", () => {
     await router.navigate("entity.collection", { type: "node", bundle: "article" });
     expect(c.get).toHaveBeenCalledWith("node/article");
   });
+
+  it("routes controller-initiated navigation failures to the registered error handler", async () => {
+    const c = {
+      get: vi.fn(async () => {
+        throw new Error("nav boom");
+      }),
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+      upload: vi.fn(),
+    } as unknown as JsonApiClient;
+    const trigger = {
+      name: "trigger",
+      path: "/trigger",
+      controller: async (
+        _params: Record<string, string>,
+        ctx: import("../../src/types.js").ControllerContext,
+      ) => {
+        // Fire-and-forget controller-initiated navigation whose fetch rejects.
+        ctx.navigate("entity.canonical", { type: "node", id: "x" });
+        return null as never;
+      },
+    };
+    const router = createRouter({
+      registry: buildRegistry([{ id: "x", routes: [trigger] }]),
+      client: c,
+      viewMode: "default",
+    });
+    const errors: string[] = [];
+    router.setErrorHandler((m) => errors.push(m));
+    await router.navigate("trigger", {});
+    await new Promise((r) => setTimeout(r, 20));
+    expect(errors).toContain("nav boom");
+  });
 });

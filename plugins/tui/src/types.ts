@@ -19,8 +19,8 @@ export interface ControllerContext {
   viewMode: string;
   seededDoc?: JsonApiDocument;
   navigate(route: string, params: Record<string, string>): void;
-  resolveView(entityType: string, bundle?: string): EntityViewClass | undefined;
-  resolveList(entityType: string, bundle?: string): EntityListClass | undefined;
+  resolveView(entityType: string, bundle?: string): EntityViewClass;
+  resolveList(entityType: string, bundle?: string): EntityListClass;
 }
 
 export type TuiController = (

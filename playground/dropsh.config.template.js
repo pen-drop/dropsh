@@ -21,16 +21,9 @@ export default {
     // Render plugins: enable `--format md`, `--format table`, and `--format tui`.
     markdownPlugin(),
     tablePlugin(),
-    tuiPlugin({
-      defaultPageSize: 25,
-      views: [
-        {
-          entityType: "node",
-          bundle: "article_test",
-          columns: ["title", "status"],
-          filters: { status: "1" },
-        },
-      ],
-    }),
+    // Generic list/detail views handle every entity out of the box. Pass
+    // `{ plugins: [...] }` only to register custom TUI sub-plugins (entity
+    // views/lists and routes); see @dropsh/plugin-tui `TuiOptions`.
+    tuiPlugin(),
   ],
 };

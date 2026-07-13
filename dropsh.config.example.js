@@ -3,7 +3,7 @@
 // This file holds only NON-SECRET connection parameters. Secrets (passwords,
 // client secrets, tokens) are never stored here — they are prompted by
 // `dropsh auth login` and persisted to ~/.config/dropsh/<host>.json (mode 0600).
-import { basicAuthPlugin } from 'dropsh';
+import { basicAuthPlugin } from "dropsh";
 // import { oauth2Plugin } from '@dropsh/plugin-oauth2';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';
 // import { markdownPlugin } from '@dropsh/plugin-markdown';
@@ -12,8 +12,8 @@ import { basicAuthPlugin } from 'dropsh';
 
 export default {
   site: {
-    base_url: 'https://my-drupal.example.com',
-    jsonapi_prefix: '/jsonapi',
+    base_url: "https://my-drupal.example.com",
+    jsonapi_prefix: "/jsonapi",
   },
   defaults: {
     dry_run: false,
@@ -57,11 +57,8 @@ export default {
     // Render plugins (interactive/alternative output formats):
     // markdownPlugin(),
     // tablePlugin(),
-    // tuiPlugin({
-    //   defaultPageSize: 25,
-    //   views: [
-    //     { entityType: 'node', bundle: 'article', columns: ['title', 'status', 'changed'], filters: { status: '1' } },
-    //   ],
-    // }),
+    // Generic list/detail views handle every entity; pass { plugins: [...] }
+    // only to register custom TUI sub-plugins (entity views/lists and routes).
+    // tuiPlugin(),
   ],
 };
