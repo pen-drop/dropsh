@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DropSHPlugin, PluginContext } from "../../../src/core/plugin.js";
+import { composePlugins, type DropSHPlugin, type PluginContext } from "../../../src/core/plugin.js";
 
 const ctx: PluginContext = {
   http: { send: async () => ({ status: 200, headers: {}, body: "{}" }) },
@@ -76,5 +76,21 @@ describe("DropSHPlugin", () => {
       async extendSchema(_e, _b, s) { return s; },
     };
     expect(plugin.authProvider?.id).toBe("x");
+  });
+});
+
+describe("composePlugins", () => {
+  const p = (id: string): DropSHPlugin => ({ id, requiredModules: [] });
+
+  it("returns child plugins as a flat array", () => {
+    expect(composePlugins(p("a"), p("b")).map((x) => x.id)).toEqual(["a", "b"]);
+  });
+
+  it("flattens one level of nested child arrays (composed composites)", () => {
+    expect(composePlugins(p("a"), [p("b"), p("c")]).map((x) => x.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("returns an empty array with no children", () => {
+    expect(composePlugins()).toEqual([]);
   });
 });

@@ -38,5 +38,6 @@ export type {
   PluginDescriptor,
   SchemaOperation,
 } from "./core/plugin.js";
+export { composePlugins } from "./core/plugin.js";
 export { AuthError, ConfigError, HttpError } from "./errors.js";
 export type { CommandContext } from "./index.js";

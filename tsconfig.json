@@ -6,12 +6,12 @@
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": ".",
+    "declaration": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "declaration": false,
     "baseUrl": ".",
     "paths": {
       "dropsh/plugin": ["./src/plugin-api.ts"]

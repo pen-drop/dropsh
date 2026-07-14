@@ -113,4 +113,22 @@ describe("loadConfig", () => {
       expect(cfg.plugins.map((p) => p.id)).toEqual(["child-one", "child-two"]);
     });
   });
+
+  describe("plugin composition (nested array / composePlugins)", () => {
+    it("flattens an array returned by a descriptor factory into separate entries", async () => {
+      const cfg = await loadConfig(fixture("compose-descriptor.js"));
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["g-one", "g-two"]);
+    });
+
+    it("flattens a nested-array plugins[] entry, expanding each child's deps first", async () => {
+      const cfg = await loadConfig(fixture("compose-nested-array.js"));
+      // parent declares dep on child → child before parent; inline follows.
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["child", "parent", "inline"]);
+    });
+
+    it("de-duplicates a child id shared across two composite entries", async () => {
+      const cfg = await loadConfig(fixture("compose-dedup.js"));
+      expect(cfg.plugins.map((p) => p.id)).toEqual(["shared", "only-a", "only-b"]);
+    });
+  });
 });

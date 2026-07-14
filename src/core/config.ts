@@ -116,16 +116,27 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
     for (const dep of plugin.dependencies ?? []) await expand(dep, bases, plugin.id);
   };
 
+  // Expand a pre-constructed plugin (or a nested array of them): a composite —
+  // e.g. `composePlugins(a(), b())` — reaches here as an array, and is flattened
+  // into separate entries so N children register without hand-merging hooks.
+  const expandValue = async (value: unknown, bases: string[]): Promise<void> => {
+    if (Array.isArray(value)) {
+      for (const sub of value) await expand(sub, bases, undefined);
+      return;
+    }
+    const plugin = value as DropSHPlugin;
+    await expandDeps(plugin, bases);
+    emit(plugin);
+  };
+
   async function expand(
     entry: unknown,
     bases: string[],
     declaredBy: string | undefined,
   ): Promise<void> {
     if (!isPluginDescriptor(entry)) {
-      // Pre-constructed plugin object: expand its deps first, then emit it.
-      const plugin = entry as DropSHPlugin;
-      await expandDeps(plugin, bases);
-      emit(plugin);
+      // Pre-constructed plugin object, or a nested-array composite entry.
+      await expandValue(entry, bases);
       return;
     }
 
@@ -141,18 +152,20 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
         `plugin dependency cycle: ${[...stack.map((f) => f.name), entry.plugin].join(" → ")}`,
       );
 
-    const plugin = construct();
+    // A factory may return one plugin or an array of them (composePlugins); a
+    // returned array is flattened into separate entries under this descriptor's
+    // identity (one construction, so a shared descriptor still runs once).
+    const produced = construct();
     stack.push({ key, name: entry.plugin });
     try {
       // Child descriptors resolve relative to this plugin's module first.
       const childBases = [pathToFileURL(resolvedPath).href, ...baseBases];
-      await expandDeps(plugin, childBases);
+      await expandValue(produced, childBases);
     } finally {
       stack.pop();
     }
 
     doneKeys.add(key);
-    emit(plugin);
   }
 
   for (const entry of raw) await expand(entry, baseBases, undefined);
