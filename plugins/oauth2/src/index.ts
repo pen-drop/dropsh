@@ -52,7 +52,11 @@ function validate(config: OAuth2Config): OAuth2Config {
 export function oauth2Plugin(config: OAuth2Config): DropSHPlugin {
   const cfg = validate(config);
   return {
-    id: "oauth2",
+    // Derive the plugin id from the profile id so two profiles (e.g. session +
+    // pm) are distinct plugins, not collapsed by the resolver's emit-dedup.
+    // Provider identity stays `cfg.id` (see oauth2Provider), so profile
+    // selection is unchanged (DROPSH-12).
+    id: cfg.id ? `oauth2:${cfg.id}` : "oauth2",
     requiredModules: ["simple_oauth"],
     authProvider: oauth2Provider(cfg),
     async extendSchema(_entityType, _bundle, schema, _ctx) {

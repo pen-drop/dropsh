@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { collectProviders } from "../../../src/core/auth/registry.js";
 import { loadConfig } from "../../../src/core/config.js";
 import { ConfigError } from "../../../src/errors.js";
 
@@ -129,6 +130,26 @@ describe("loadConfig", () => {
     it("de-duplicates a child id shared across two composite entries", async () => {
       const cfg = await loadConfig(fixture("compose-dedup.js"));
       expect(cfg.plugins.map((p) => p.id)).toEqual(["shared", "only-a", "only-b"]);
+    });
+  });
+
+  describe("same-package descriptor de-dup by identity, not plugin.id (DROPSH-12)", () => {
+    it("keeps two distinct-option entries that share a constant plugin.id", async () => {
+      const cfg = await loadConfig(fixture("descriptor-dup-const-id.js"));
+      // Both instances survive resolution even though they carry the same
+      // plugin.id — descriptor identity (path + export + options) is distinct.
+      expect(cfg.plugins).toHaveLength(2);
+      const providers = collectProviders(cfg.plugins);
+      expect(providers.map((p) => p.id)).toEqual(["session", "pm"]);
+    });
+
+    it("still rejects two entries that resolve to the same auth profile id", async () => {
+      const cfg = await loadConfig(fixture("descriptor-dup-auth-collision.js"));
+      // Both entries are constructed and emitted (distinct descriptor identity),
+      // so the auth registry's duplicate-id guard is reachable again.
+      expect(cfg.plugins).toHaveLength(2);
+      expect(() => collectProviders(cfg.plugins)).toThrow(ConfigError);
+      expect(() => collectProviders(cfg.plugins)).toThrow(/duplicate auth profile id 'pm'/);
     });
   });
 });
