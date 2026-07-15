@@ -87,9 +87,12 @@ async function resolveDescriptor(
  * cache miss, so a shared dependency's factory runs exactly once (AC-3). Because
  * the key is the *resolved* module, one relative string naming different files
  * on a path is not a cycle, and two same-package entries with different options
- * are two distinct plugins. `id` collisions are still de-duplicated in the final
- * list. A dependency cycle is rejected with the offending chain of descriptor
- * names. Pre-constructed plugin objects pass through unchanged (backward compat).
+ * are two distinct plugins — even when they share a constant `plugin.id`
+ * (DROPSH-12), because descriptor de-dup keys on that identity, not `plugin.id`.
+ * Pre-constructed plugin objects (and `composePlugins` children) carry no such
+ * identity, so those are still de-duplicated by `plugin.id` in the final list. A
+ * dependency cycle is rejected with the offending chain of descriptor names.
+ * Pre-constructed plugin objects pass through unchanged (backward compat).
  */
 async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHPlugin[]> {
   if (!Array.isArray(raw)) return [];
@@ -106,9 +109,17 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
   // the descriptor string, kept only to render the cycle-error chain.
   const stack: { key: string; name: string }[] = [];
 
-  const emit = (plugin: DropSHPlugin): void => {
-    if (doneIds.has(plugin.id)) return;
-    doneIds.add(plugin.id);
+  // Descriptor-constructed plugins are already de-duplicated by their descriptor
+  // identity (`doneKeys`, computed in `expand`), so `emit` must not also collapse
+  // them by `plugin.id`: two profiles of the same plugin can legitimately share a
+  // constant `plugin.id` while being distinct instances (DROPSH-12). Only
+  // pre-constructed plugins (and `composePlugins` children) carry no descriptor
+  // identity, so those are still de-duplicated by `plugin.id`.
+  const emit = (plugin: DropSHPlugin, dedupById: boolean): void => {
+    if (dedupById) {
+      if (doneIds.has(plugin.id)) return;
+      doneIds.add(plugin.id);
+    }
     out.push(plugin);
   };
 
@@ -119,14 +130,18 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
   // Expand a pre-constructed plugin (or a nested array of them): a composite —
   // e.g. `composePlugins(a(), b())` — reaches here as an array, and is flattened
   // into separate entries so N children register without hand-merging hooks.
-  const expandValue = async (value: unknown, bases: string[]): Promise<void> => {
+  const expandValue = async (
+    value: unknown,
+    bases: string[],
+    dedupById: boolean,
+  ): Promise<void> => {
     if (Array.isArray(value)) {
       for (const sub of value) await expand(sub, bases, undefined);
       return;
     }
     const plugin = value as DropSHPlugin;
     await expandDeps(plugin, bases);
-    emit(plugin);
+    emit(plugin, dedupById);
   };
 
   async function expand(
@@ -135,8 +150,9 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
     declaredBy: string | undefined,
   ): Promise<void> {
     if (!isPluginDescriptor(entry)) {
-      // Pre-constructed plugin object, or a nested-array composite entry.
-      await expandValue(entry, bases);
+      // Pre-constructed plugin object, or a nested-array composite entry: no
+      // descriptor identity, so de-duplicate it by `plugin.id`.
+      await expandValue(entry, bases, true);
       return;
     }
 
@@ -160,7 +176,10 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
     try {
       // Child descriptors resolve relative to this plugin's module first.
       const childBases = [pathToFileURL(resolvedPath).href, ...baseBases];
-      await expandValue(produced, childBases);
+      // Descriptor-constructed: its identity is tracked by `doneKeys`, so it is
+      // emitted without `plugin.id` de-dup (a returned array's pre-constructed
+      // children still de-dup by id via the non-descriptor path above).
+      await expandValue(produced, childBases, false);
     } finally {
       stack.pop();
     }
