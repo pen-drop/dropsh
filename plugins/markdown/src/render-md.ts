@@ -35,15 +35,17 @@ function relIds(rel: unknown): string[] {
   return [];
 }
 
-// Flattens any attribute value to a single-line string for `label: value`
-// output. Text-field objects (`{ processed | value }`) collapse to their text;
-// other objects/arrays fall back to compact JSON.
-function fieldValue(v: unknown): string {
-  if (isScalar(v)) return yamlScalar(v);
+// Extracts an attribute's text as-is. Long-text objects (`{ value, format,
+// processed }`) resolve to their raw `value` (the markdown source) — never the
+// `processed` HTML; `processed` remains the fallback for text objects that
+// carry no raw value. Other objects/arrays fall back to compact JSON.
+function fieldText(v: unknown): string {
+  if (isScalar(v)) return typeof v === "string" ? v : String(v);
   if (v && typeof v === "object") {
     const o = v as Record<string, unknown>;
-    if (typeof o.processed === "string") return yamlScalar(o.processed);
-    if (typeof o.value === "string") return yamlScalar(o.value);
+    if (typeof o.value === "string" && typeof o.format === "string") return o.value;
+    if (typeof o.processed === "string") return o.processed;
+    if (typeof o.value === "string") return o.value;
     return JSON.stringify(v);
   }
   return "";
@@ -54,7 +56,15 @@ function fieldValue(v: unknown): string {
 function renderResource(res: JsonApiResource): string {
   const lines: string[] = [`type: ${res.type}`, `id: ${res.id}`];
   for (const [k, v] of Object.entries(res.attributes ?? {})) {
-    lines.push(`${k}: ${fieldValue(v)}`);
+    const text = fieldText(v);
+    if (text.includes("\n")) {
+      // Multi-line field content (descriptions, comment bodies) is emitted as
+      // a readable indented block, not a `\n`-escaped quoted one-liner.
+      lines.push(`${k}: |`);
+      for (const l of text.replace(/\n+$/, "").split("\n")) lines.push(l === "" ? "" : `  ${l}`);
+    } else {
+      lines.push(`${k}: ${yamlScalar(text)}`);
+    }
   }
   for (const [k, v] of Object.entries(res.relationships ?? {})) {
     const ids = relIds(v);

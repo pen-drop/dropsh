@@ -87,6 +87,65 @@ describe("renderMarkdown", () => {
     expect(out).toContain("uid: [user--user/a1]");
   });
 
+  it("renders the raw value of a long-text field, not the processed HTML", () => {
+    const out = renderMarkdown(
+      {
+        data: {
+          type: "gaia_ticket--gaia_ticket",
+          id: "t1",
+          attributes: {
+            description: {
+              value: "# Briefing\nThe **raw** markdown source.",
+              format: "gaia_rich",
+              processed: "<h1>Briefing</h1>\n<p>The <strong>raw</strong> markdown source.</p>",
+            },
+          },
+        },
+      },
+      ctx,
+    );
+    expect(out).toContain("# Briefing");
+    expect(out).toContain("The **raw** markdown source.");
+    expect(out).not.toContain("<h1>");
+    expect(out).not.toContain("<p>");
+  });
+
+  it("emits multi-line text as an indented block, not a \\n-escaped one-liner", () => {
+    const out = renderMarkdown(
+      {
+        data: {
+          type: "gaia_comment--gaia_comment",
+          id: "c1",
+          attributes: {
+            body: {
+              value: "line one\n\nline three",
+              format: "gaia_rich",
+              processed: "<p>line one</p>\n<p>line three</p>",
+            },
+          },
+        },
+      },
+      ctx,
+    );
+    expect(out).toContain("body: |");
+    expect(out).toContain("\n  line one\n\n  line three");
+    expect(out).not.toContain("\\n");
+  });
+
+  it("falls back to processed when a text object carries no raw value", () => {
+    const out = renderMarkdown(
+      {
+        data: {
+          type: "node--page",
+          id: "p1",
+          attributes: { body: { processed: "<p>Only processed.</p>" } },
+        },
+      },
+      ctx,
+    );
+    expect(out).toContain("body: <p>Only processed.</p>");
+  });
+
   it("joins a collection with a separator", () => {
     const out = renderMarkdown(
       {
