@@ -9,8 +9,13 @@ import path from "node:path";
 function client(): JsonApiClient {
   return {
     get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(),
-    upload: vi.fn(async () => ({ data: { id: "file-uuid" } })),
-    collection: vi.fn(), resource: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn(), me: vi.fn(),
+    upload: vi.fn(async () => ({ data: { type: "file--file", id: "file-uuid" } })),
+    collection: vi.fn(),
+    resource: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    upsert: vi.fn(),
+    me: vi.fn(),
   };
 }
 
@@ -30,7 +35,7 @@ describe("runUploadFile", () => {
       "hero.jpg",
       expect.any(Buffer),
     );
-    expect(emitted).toEqual([{ data: { id: "file-uuid" } }]);
+    expect(emitted).toEqual([{ data: { type: "file--file", id: "file-uuid" } }]);
   });
 
   it("validates target shape", async () => {

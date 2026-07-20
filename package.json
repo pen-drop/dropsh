@@ -1,14 +1,21 @@
 {
   "name": "dropsh",
-  "version": "0.3.3",
+  "version": "0.5.7",
   "description": "Entity-agnostic helper CLI for Drupal 11 JSON:API, used by the dropsh Claude skill for editorial publishing workflows.",
   "type": "module",
   "bin": {
     "dropsh": "./bin/dropsh"
   },
+  "types": "./dist/src/index.d.ts",
   "exports": {
-    ".": "./dist/src/index.js",
-    "./plugin": "./dist/src/plugin-api.js",
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./plugin": {
+      "types": "./dist/src/plugin-api.d.ts",
+      "default": "./dist/src/plugin-api.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -30,6 +37,7 @@
     "lint:fix": "biome check --write src/ packages/ plugins/ tests/integrations/helpers/ tests/integrations/schema/ tests/integrations/*.ts",
     "drupal:up": "bash tests/integrations/bin/drupal-up.sh",
     "drupal:down": "bash tests/integrations/bin/drupal-down.sh",
+    "init-worktree": "node scripts/init-worktree.mjs",
     "prepublishOnly": "pnpm run typecheck && pnpm run build",
     "release": "node scripts/release.mjs"
   },

@@ -28,6 +28,30 @@ describe("fetchHeuristic", () => {
     expect((schema as any).properties.data.properties.attributes.required).toEqual([]);
   });
 
+  it("does not lock a field that is null in every sample to type null", async () => {
+    // A field null in all samples carries no type information; constraining it to
+    // `type: null` makes it impossible to ever write a real value (would fail
+    // "must be null"). Such a field must stay permissive (no `type` constraint).
+    const body = JSON.stringify({
+      data: [
+        { attributes: { title: "a", field_test_text: null } },
+        { attributes: { title: "b", field_test_text: null } },
+      ],
+    });
+    const { schema } = await fetchHeuristic({
+      http: http(body),
+      auth,
+      baseUrl: "https://ex",
+      jsonapiPrefix: "/jsonapi",
+      entity: "node",
+      bundle: "article_test",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: test introspection of the built schema
+    const attrs = (schema as any).properties.data.properties.attributes.properties;
+    expect(attrs.title.type).toBe("string");
+    expect(attrs.field_test_text).toEqual({});
+  });
+
   it("includes relationship keys with data {type, id} shape", async () => {
     const body = readFileSync(resolve(__dirname, "../../../fixtures/samples/node--article-3-records.json"), "utf8");
     const { schema } = await fetchHeuristic({ http: http(body), auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", entity: "node", bundle: "article" });

@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import type { AuthAdapter, AuthProvider } from "./auth/types.js";
+import type { AnyRenderer } from "./cli/render.js";
 import type { HttpClient } from "./http.js";
 import type { Operation } from "./schema/to-jsonschema.js";
 
@@ -23,9 +24,28 @@ export interface PluginContext {
 
 export type SchemaOperation = Operation;
 
+/**
+ * Import-free descriptor naming a plugin package as a string. Same shape used
+ * by the top-level `plugins[]` config; a plugin returns these in `dependencies`
+ * to have dropsh auto-load further plugins.
+ */
+export interface PluginDescriptor {
+  plugin: string;
+  with?: unknown;
+  options?: unknown;
+  export?: string;
+}
+
 export interface DropSHPlugin {
   readonly id: string;
   readonly requiredModules: string[];
+  /**
+   * Plugins this plugin depends on. dropsh resolves each descriptor and inserts
+   * the resulting plugin into the flat plugin list *before* this plugin, so a
+   * dependency's renderers / schema hooks are available when this plugin runs.
+   * De-duplicated across the whole graph; cycles are rejected at config load.
+   */
+  dependencies?: PluginDescriptor[];
   /** Provider-based auth (login/logout/status/createAdapter). */
   authProvider?: AuthProvider;
   /**
@@ -46,4 +66,18 @@ export interface DropSHPlugin {
     ctx: PluginContext,
   ): Promise<unknown>;
   registerCommands?(program: Command): void;
+  renderers?: AnyRenderer[];
+}
+
+/**
+ * Combine several child plugins into one flat plugin list. An aggregator's
+ * factory returns `composePlugins(childA(), childB(), …)` and places the result
+ * as a single `plugins[]` entry (a nested array) or a single named-descriptor
+ * export; dropsh flattens it into separate plugin entries. This lets one config
+ * entry pull in N plugins without hand-merging their hooks or presence-guarding
+ * hook presence — each child stays a distinct entry, indistinguishable from N
+ * separate entries. Nested arrays (composed composites) are flattened one level.
+ */
+export function composePlugins(...children: (DropSHPlugin | DropSHPlugin[])[]): DropSHPlugin[] {
+  return children.flat();
 }

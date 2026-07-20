@@ -3,21 +3,34 @@
 Vier Unterordner, vier Drupal-Sites, ein DDEV. Jeder Ordner hat seine
 eigene `dropsh.config.js` für ein konkretes Integrations-Szenario.
 
-| Ordner      | DDEV-URL                                    | Plugin-Stack                              |
-|-------------|---------------------------------------------|-------------------------------------------|
-| `plain/`    | `http://dropsh-test.ddev.site`              | `oauth2Plugin` (OAuth 2.0 Authcode + PKCE)|
-| `schemata/` | `http://schemata.dropsh-test.ddev.site`     | `basicAuthPlugin` + `schemataPlugin`      |
-| `canvas/`   | `http://canvas.dropsh-test.ddev.site`       | `oauth2Plugin` + `canvasPlugin`           |
-| `db/`       | `http://db.dropsh-test.ddev.site`           | `oauth2Plugin` + `displayBuilderPlugin`   |
+Die `dropsh.config.js` in jedem Ordner werden **pro Worktree generiert**
+(`pnpm run init-worktree`) und sind gitignoriert; getrackt ist jeweils nur
+die `dropsh.config.template.js`. Der DDEV-Projektname `<name>` wird aus Branch
++ Worktree-Pfad abgeleitet, ist also je Worktree eindeutig.
+
+| Ordner      | DDEV-URL                              | Plugin-Stack                              |
+|-------------|---------------------------------------|-------------------------------------------|
+| `plain/`    | `http://<name>.ddev.site`             | `oauth2Plugin` (OAuth 2.0 Authcode + PKCE)|
+| `schemata/` | `http://schemata.<name>.ddev.site`    | `basicAuthPlugin` + `schemataPlugin`      |
+| `canvas/`   | `http://canvas.<name>.ddev.site`      | `oauth2Plugin` + `canvasPlugin`           |
+| `db/`       | `http://db.<name>.ddev.site`          | `oauth2Plugin` + `displayBuilderPlugin`   |
 
 ## Setup
 
 ```bash
-pnpm run drupal:up         # provisioniert alle 4 Sites
-pnpm run build             # Haupt-Package
-pnpm run build:plugins     # Plugins
-cd playground
-pnpm install
+pnpm run init-worktree     # generiert die Configs für diesen Worktree + baut alles
+```
+
+`init-worktree` leitet den DDEV-Namen ab, rendert die fünf
+`dropsh.config.template.js` → `dropsh.config.js`, schreibt den gitignorierten
+DDEV-Override `tests/integrations/drupal/.ddev/config.local.yaml` und führt die
+Build-Kette (`install` → `build` → `build:packages` → `build:plugins` →
+`playground install`) aus. DDEV wird dabei **nicht** gestartet.
+
+Zum Provisionieren der Sites auf dem abgeleiteten Namen anschließend separat:
+
+```bash
+pnpm run drupal:up         # provisioniert alle 4 Sites (separater Schritt)
 ```
 
 Zugangsdaten (alle vier Sites teilen dieselben Werte aus der Fixture):

@@ -1,0 +1,29 @@
+{
+  "name": "@dropsh/plugin-table",
+  "version": "0.5.7",
+  "type": "module",
+  "main": "./dist/plugins/table/src/index.js",
+  "exports": {
+    ".": "./dist/plugins/table/src/index.js",
+    "./render": "./dist/plugins/table/src/render-table.js"
+  },
+  "files": [
+    "dist/plugins/table/src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "dropsh": "*"
+  },
+  "devDependencies": {
+    "dropsh": "workspace:*",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

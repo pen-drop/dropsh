@@ -31,3 +31,22 @@ export function resolveType(spec: string): ResolvedType {
   }
   return { path: `${spec}/${spec}`, type: `${spec}--${spec}` };
 }
+
+/**
+ * JSON:API document envelope shapes used by the render layer. The ergonomic
+ * client returns `unknown`; renderers narrow to these via a runtime guard.
+ */
+export interface JsonApiResource {
+  type: string;
+  id: string;
+  attributes?: Record<string, unknown>;
+  relationships?: Record<string, unknown>;
+  links?: Record<string, unknown>;
+}
+
+export interface JsonApiDocument {
+  data: JsonApiResource | JsonApiResource[];
+  included?: JsonApiResource[];
+  meta?: Record<string, unknown>;
+  links?: Record<string, unknown>;
+}

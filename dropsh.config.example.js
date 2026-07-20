@@ -3,15 +3,17 @@
 // This file holds only NON-SECRET connection parameters. Secrets (passwords,
 // client secrets, tokens) are never stored here — they are prompted by
 // `dropsh auth login` and persisted to ~/.config/dropsh/<host>.json (mode 0600).
-import { basicAuthPlugin } from 'dropsh';
+import { basicAuthPlugin } from "dropsh";
 // import { oauth2Plugin } from '@dropsh/plugin-oauth2';
-// import { jsonapiSchemaPlugin } from '@dropsh/plugin-jsonapi-schema';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';
+// import { markdownPlugin } from '@dropsh/plugin-markdown';
+// import { tablePlugin } from '@dropsh/plugin-table';
+// import { tuiPlugin } from '@dropsh/plugin-tui';
 
 export default {
   site: {
-    base_url: 'https://my-drupal.example.com',
-    jsonapi_prefix: '/jsonapi',
+    base_url: "https://my-drupal.example.com",
+    jsonapi_prefix: "/jsonapi",
   },
   defaults: {
     dry_run: false,
@@ -50,14 +52,13 @@ export default {
     //   // scope: 'content',
     // }),
 
-    // Authoritative, constraint-bearing write schema (recommended). Backed by
-    // the jsonapi_schema Drupal module — works on Drupal 10.1+/11 + PHP 8.4.
-    // Requires @dropsh/plugin-jsonapi-schema and `drush en jsonapi_schema`.
-    // jsonapiSchemaPlugin(),
-
-    // Legacy alternative backed by the schemata module. NOTE: its endpoint
-    // returns HTTP 500 on Drupal 11 / PHP 8.4 — prefer jsonapiSchemaPlugin()
-    // there. Requires @dropsh/plugin-schemata.
     // schemataPlugin(),
+
+    // Render plugins (interactive/alternative output formats):
+    // markdownPlugin(),
+    // tablePlugin(),
+    // Generic list/detail views handle every entity; pass { plugins: [...] }
+    // only to register custom TUI sub-plugins (entity views/lists and routes).
+    // tuiPlugin(),
   ],
 };

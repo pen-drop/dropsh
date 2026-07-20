@@ -2,23 +2,58 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { authStatus, buildProgram, type CommandContext, resolveAuth } from "../../src/index.js";
 import { basicAuthPlugin } from "../../src/core/auth/basic.js";
 import { readProfile, writeProfile, writeSession } from "../../src/core/auth/session-store.js";
-import type { DropSHPlugin as Plugin } from "../../src/core/plugin.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
-import type { DropSHPlugin } from "../../src/core/plugin.js";
+import type { DropSHPlugin, DropSHPlugin as Plugin } from "../../src/core/plugin.js";
+import {
+  authStatus,
+  buildProgram,
+  type CommandContext,
+  normalizeInclude,
+  resolveAuth,
+} from "../../src/index.js";
 
 function fakeClient(): JsonApiClient {
   return {
-    get: vi.fn(async () => ({ data: { id: "u1" } })),
-    post: vi.fn(async () => ({ data: { id: "u2" } })),
-    patch: vi.fn(async () => ({ data: { id: "u1" } })),
-    delete: vi.fn(async () => ({ ok: true })),
-    upload: vi.fn(async () => ({ data: { id: "file" } })),
-    collection: vi.fn(), resource: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn(), me: vi.fn(),
+    get: vi.fn(async () => ({ data: { type: "node--article", id: "u1" } })),
+    post: vi.fn(async () => ({ data: { type: "node--article", id: "u2" } })),
+    patch: vi.fn(async () => ({ data: { type: "node--article", id: "u1" } })),
+    delete: vi.fn(async () => ({ ok: true as const })),
+    upload: vi.fn(async () => ({ data: { type: "file--file", id: "file" } })),
+    collection: vi.fn(),
+    resource: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    upsert: vi.fn(),
+    me: vi.fn(),
   };
 }
+
+describe("normalizeInclude", () => {
+  it("returns an empty array for undefined", () => {
+    expect(normalizeInclude(undefined)).toEqual([]);
+  });
+
+  it("passes through a plain variadic list", () => {
+    expect(normalizeInclude(["field_related", "field_image"])).toEqual([
+      "field_related",
+      "field_image",
+    ]);
+  });
+
+  it("splits comma-separated entries and trims whitespace", () => {
+    expect(normalizeInclude(["field_related, field_image", " field_tags "])).toEqual([
+      "field_related",
+      "field_image",
+      "field_tags",
+    ]);
+  });
+
+  it("drops empty strings produced by trailing commas or blanks", () => {
+    expect(normalizeInclude(["field_related,,", "  ", ""])).toEqual(["field_related"]);
+  });
+});
 
 describe("buildProgram", () => {
   it("registers all subcommands", () => {
@@ -38,7 +73,54 @@ describe("buildProgram", () => {
     });
     await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
     expect(c.get).toHaveBeenCalledWith("node/article/abcdef01-abcd-abcd-abcd-abcdef012345");
-    expect(JSON.parse(out.join(""))).toEqual({ data: { id: "u1" } });
+    expect(JSON.parse(out.join(""))).toEqual({ data: { type: "node--article", id: "u1" } });
+  });
+
+  it("read subcommand forwards --include as JSON:API params", async () => {
+    const c = fakeClient();
+    const p = buildProgram({
+      contextFactory: async () => ({ client: c, plugins: [] } as unknown as CommandContext),
+      stdout: () => {},
+      stderr: () => {},
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+      "--include",
+      "field_related,field_image",
+    ]);
+    const [target, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(target).toBe("node/article/abcdef01-abcd-abcd-abcd-abcdef012345");
+    expect(params.getQueryString({ encode: false })).toBe(
+      "include=field_related,field_image",
+    );
+  });
+
+  it("search subcommand forwards --include alongside filters and limit", async () => {
+    const c = fakeClient();
+    const p = buildProgram({
+      contextFactory: async () => ({ client: c, plugins: [] } as unknown as CommandContext),
+      stdout: () => {},
+      stderr: () => {},
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "search",
+      "node",
+      "--bundle",
+      "article",
+      "--include",
+      "field_related",
+      "field_image",
+    ]);
+    const [path, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(path).toBe("node/article");
+    expect(params.getQueryString({ encode: false })).toBe(
+      "include=field_related,field_image&page[limit]=50",
+    );
   });
 
   it("propagates ValidationError to stderr with exit-code signal", async () => {

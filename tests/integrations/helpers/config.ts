@@ -1,16 +1,51 @@
 // Multisite integration fixture coordinates.
 //
-// Static URLs + hardcoded credentials. Tests run against the DDEV project
-// dropsh-test; each subsite is exposed at <name>.dropsh-test.ddev.site with
-// its own database. The "plain" and "schemata" sites enable simple_oauth;
-// "canvas" and "db" rely on basic auth against /jsonapi/* only.
+// Hardcoded credentials; URLs derived from the DDEV project name so the suite
+// follows a per-worktree project (see `pnpm run init-worktree`) instead of a
+// fixed hostname. The base project is `dropsh-test`; each subsite is exposed at
+// <site>.<project>.ddev.site with its own database. The "plain" and "schemata"
+// sites enable simple_oauth; "canvas" and "db" rely on basic auth against
+// /jsonapi/* only.
 //
 // These credentials are NOT embedded in the dropsh config rendered by the test
 // helper. They are fed to the provider's interactive login (via a stub prompt in
 // `seedSession`), which then persists the resulting session to the state dir —
 // matching the real `dropsh auth login` flow.
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 export type SiteName = "plain" | "schemata" | "jsonapischema" | "canvas" | "db";
+
+const DDEV_DIR = join(dirname(fileURLToPath(import.meta.url)), "../drupal/.ddev");
+
+/** Extract the top-level `name:` value from a DDEV config YAML. Pure. */
+export function parseDdevName(yaml: string): string | null {
+  const m = yaml.match(/^name:[ \t]*(\S+)[ \t]*$/m);
+  return m?.[1] ?? null;
+}
+
+/** Build the JSON:API base URL for a site given the DDEV project name. Pure. */
+export function siteUrl(site: SiteName, project: string): string {
+  return site === "plain" ? `http://${project}.ddev.site` : `http://${site}.${project}.ddev.site`;
+}
+
+// Effective DDEV project name: the per-worktree override wins, then the base
+// config, then the historical default. Read once at module load.
+function resolveDdevProject(): string {
+  for (const file of ["config.local.yaml", "config.yaml"]) {
+    try {
+      const name = parseDdevName(readFileSync(join(DDEV_DIR, file), "utf8"));
+      if (name) return name;
+    } catch {
+      // File absent in this checkout — fall through to the next candidate.
+    }
+  }
+  return "dropsh-test";
+}
+
+const DDEV_PROJECT = resolveDdevProject();
 
 export interface OAuth2Config {
   scope: string;
@@ -47,7 +82,7 @@ const OAUTH2 = {
 
 const SITES: Record<SiteName, TestConfig> = {
   plain: {
-    url: "http://dropsh-test.ddev.site",
+    url: siteUrl("plain", DDEV_PROJECT),
     basic: TESTER,
     oauth2: OAUTH2,
     // Basic auth is fine for /jsonapi/* on the plain site and avoids the
@@ -55,7 +90,7 @@ const SITES: Record<SiteName, TestConfig> = {
     defaultAuth: "basic",
   },
   schemata: {
-    url: "http://schemata.dropsh-test.ddev.site",
+    url: siteUrl("schemata", DDEV_PROJECT),
     basic: TESTER,
     oauth2: OAUTH2,
     // /schemata/* does not opt into basic_auth, so default to OAuth Bearer
@@ -63,7 +98,7 @@ const SITES: Record<SiteName, TestConfig> = {
     defaultAuth: "oauth2_password",
   },
   jsonapischema: {
-    url: "http://jsonapischema.dropsh-test.ddev.site",
+    url: siteUrl("jsonapischema", DDEV_PROJECT),
     basic: TESTER,
     oauth2: OAUTH2,
     // jsonapi_schema's schema routes do NOT declare `_auth`, so Drupal core
@@ -73,12 +108,12 @@ const SITES: Record<SiteName, TestConfig> = {
     defaultAuth: "oauth2_password",
   },
   canvas: {
-    url: "http://canvas.dropsh-test.ddev.site",
+    url: siteUrl("canvas", DDEV_PROJECT),
     basic: TESTER,
     defaultAuth: "basic",
   },
   db: {
-    url: "http://db.dropsh-test.ddev.site",
+    url: siteUrl("db", DDEV_PROJECT),
     basic: TESTER,
     defaultAuth: "basic",
   },

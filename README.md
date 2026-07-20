@@ -28,8 +28,27 @@ content without hard-coding every content model.
 
 ## Install
 
+Install dropsh globally to put the `dropsh` binary on `PATH`. No local project,
+`package.json`, or `node_modules` is required — dropsh runs from anywhere:
+
+```bash
+npm i -g dropsh          # or: pnpm add -g dropsh
+dropsh --help            # binary now on PATH, no project needed
+```
+
+dropsh needs Node.js 20 or newer.
+
+Plugins are **separate published packages** and are **not** bundled in the
+`dropsh` tarball. To use one, install it next to dropsh — either globally
+(`npm i -g dropsh @dropsh/plugin-oauth2`) or for a single command via
+`npx -p dropsh -p @dropsh/plugin-oauth2 dropsh …`. See [Plugins](#plugins) for
+how names resolve.
+
+<details>
+<summary>From source (contributors)</summary>
+
 This repository is a pnpm workspace containing the root CLI, packages, and
-plugins.
+plugins. Build it from source when developing dropsh itself:
 
 ```bash
 corepack enable
@@ -38,6 +57,11 @@ pnpm run build
 ```
 
 The required Node.js and pinned pnpm versions are declared in `package.json`.
+Inside the workspace, plugins resolve from the local `node_modules`, so config
+may import the plugin factories directly (see the workspace variant under
+[Configuration](#configuration)).
+
+</details>
 
 ## Drupal Prerequisites
 
@@ -104,16 +128,17 @@ delete operations** at `/admin/config/services/jsonapi` (or via
 
 ## Configuration
 
-Create a `dropsh.config.js` in the project where you run dropsh. The config holds
-only non-secret connection settings. Passwords, client secrets, and tokens are
-prompted during login and stored outside the project in the per-host session
+Create a `dropsh.config.js` in the directory where you run dropsh. The config
+holds only non-secret connection settings. Passwords, client secrets, and tokens
+are prompted during login and stored outside the project in the per-host session
 store.
 
-```js
-import { basicAuthPlugin } from "dropsh";
-import { oauth2Plugin } from "@dropsh/plugin-oauth2";
-import { jsonapiSchemaPlugin } from "@dropsh/plugin-jsonapi-schema";
+Register plugins as **descriptor objects** — `{ plugin, with?, export? }` — that
+name a package by string. dropsh resolves and constructs each plugin itself, so
+the config needs **no `import` statements** and **no local `node_modules`**. This
+is the path a global install uses:
 
+```js
 export default {
   site: {
     base_url: "https://my-drupal.example.com",
@@ -123,6 +148,45 @@ export default {
     dry_run: false,
     timeout_ms: 30000,
   },
+  plugins: [
+    { plugin: "dropsh/plugin", export: "basicAuthPlugin" },
+    {
+      plugin: "@dropsh/plugin-oauth2",
+      export: "oauth2Plugin",
+      with: {
+        type: "oauth2_authcode",
+        client_id: "my-client",
+        token_url: "https://my-drupal.example.com/oauth/token",
+      },
+    },
+    { plugin: "@dropsh/plugin-jsonapi-schema", export: "jsonapiSchemaPlugin" },
+  ],
+};
+```
+
+Each descriptor's `with` is passed to the plugin factory (legacy alias:
+`options`). `export` names the factory to call and is **required** for every
+`@dropsh/plugin-*` package — they export named factories with no default export
+(see [Plugins](#plugins)). Basic auth lives on the `dropsh/plugin` entry, so its
+descriptor names `dropsh/plugin` with `export: "basicAuthPlugin"`.
+
+Use `dropsh.config.example.js` as a fuller starting point. Override the config
+path with `--config <path>` or `DROPSH_CONFIG`.
+
+<details>
+<summary>Workspace variant — importing factories directly</summary>
+
+Inside the pnpm workspace or any project that has the plugin packages in its
+local `node_modules`, you may skip descriptors and import the factories instead.
+The `plugins[]` array then holds constructed plugins:
+
+```js
+import { basicAuthPlugin } from "dropsh/plugin";
+import { oauth2Plugin } from "@dropsh/plugin-oauth2";
+import { jsonapiSchemaPlugin } from "@dropsh/plugin-jsonapi-schema";
+
+export default {
+  site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
   plugins: [
     basicAuthPlugin(),
     oauth2Plugin({
@@ -135,8 +199,10 @@ export default {
 };
 ```
 
-Use `dropsh.config.example.js` as a fuller starting point. Override the config
-path with `--config <path>` or `DROPSH_CONFIG`.
+The two forms may be mixed in one `plugins[]` array. `import` resolves relative
+to the config file, so it only works when the packages are installed there.
+
+</details>
 
 ## Authentication
 
@@ -227,18 +293,61 @@ All commands write JSON to stdout, structured errors to stderr, and use stable
 exit codes.
 
 ```bash
-dropsh read <entity_type>/<bundle>/<uuid>
-dropsh search <entity_type> [--bundle=<bundle>] [--filter=key:value] [--limit=N]
-dropsh create <entity_type> --bundle=<bundle> --data=<json|@file> [--dry-run]
-dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run]
+dropsh read <entity_type>/<bundle>/<uuid> [--include=<field>,…]
+dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N] [--include=<field>,…]
+dropsh create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
+dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
 dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
-dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path>
+dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
 dropsh schema [--refresh]
 dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
 ```
 
 `create` and `update` validate payloads against the current schema by default.
 Pass `--no-validate` when you intentionally want to skip local validation.
+
+### `--include` on `read` / `search`
+
+Pass `--include` to embed related resources in the response's JSON:API
+`included` array (the standard `?include=` query parameter). Accepts a
+comma-separated list or repeated/space-separated values, and nested paths with
+dots:
+
+```bash
+dropsh read node/article/<uuid> --include field_related,field_image
+dropsh search node --bundle=article --include field_related --filter status:1
+dropsh read node/article/<uuid> --include field_related.uid
+```
+
+`read` and `search` are the only commands that accept `--include`. Without it,
+the response contains only the primary resource(s).
+
+### Output formats
+
+By default every command emits JSON. Load a renderer plugin and pass a global
+`--format <id>` (before the subcommand) to render entities differently:
+
+```bash
+dropsh --format md read node/article/<uuid>      # Markdown detail view
+dropsh --format table search node --bundle=article  # aligned table
+```
+
+`--format` applies only to entity commands (`read`, `search`, `create`,
+`update`). Using it on `delete`, `upload-file`, or `schema` exits with code 2.
+
+The `@dropsh/plugin-tui` plugin adds an interactive full-screen format,
+selected the same way via `--format tui` (requires a TTY — an interactive
+terminal):
+
+```bash
+dropsh --format tui read node/article/<uuid>          # opens straight into the detail pane
+dropsh --format tui search node --bundle=article      # list → Enter → detail pane
+```
+
+`read --format tui` boots directly into the detail pane for the single
+entity. `search --format tui` shows a navigable list (↑/↓, Enter opens the
+detail pane, Esc/q goes back or quits). `--include` flows through to the
+detail pane in both cases.
 
 ## Plugins
 
@@ -257,14 +366,47 @@ structures, allowed values, and other metadata that helps the agent produce a
 valid payload. Auth plugins keep the same command interface while supporting
 common Drupal authentication systems such as basic auth or OAuth2.
 
-Bundled plugins:
+Plugins developed in this repository (**"bundled"** = part of this repo, **not**
+shipped inside the `dropsh` npm tarball — each is a separately published package):
 
-| Package | Purpose |
-| --- | --- |
-| [`@dropsh/plugin-oauth2`](plugins/oauth2/README.md) | OAuth2 auth provider for Drupal `simple_oauth` |
-| [`@dropsh/plugin-schemata`](plugins/schemata/README.md) | authoritative JSON Schema source from Drupal `schemata` |
-| [`@dropsh/plugin-canvas`](plugins/canvas/README.md) | Canvas component schemas from `jsonapi_sdc` |
-| [`@dropsh/plugin-display-builder`](plugins/display-builder/README.md) | Display Builder operation schemas and metadata |
+| Package | Factory export | Purpose |
+| --- | --- | --- |
+| [`@dropsh/plugin-oauth2`](plugins/oauth2/README.md) | `oauth2Plugin` | OAuth2 auth provider for Drupal `simple_oauth` |
+| [`@dropsh/plugin-jsonapi-schema`](plugins/jsonapi-schema/README.md) | `jsonapiSchemaPlugin` | authoritative JSON Schema from Drupal `jsonapi_schema` |
+| [`@dropsh/plugin-schemata`](plugins/schemata/README.md) | `schemataPlugin` | authoritative JSON Schema from Drupal `schemata` (legacy) |
+| [`@dropsh/plugin-canvas`](plugins/canvas/README.md) | `canvasPlugin` | Canvas component schemas from `jsonapi_sdc` |
+| [`@dropsh/plugin-display-builder`](plugins/display-builder/README.md) | `displayBuilderPlugin` | Display Builder operation schemas and metadata |
+
+Basic auth is not a separate package — its `basicAuthPlugin` factory ships in the
+core CLI's `dropsh/plugin` entry.
+
+### Installing and resolving plugins
+
+`@dropsh/plugin-*` packages are **not** dependencies of `dropsh` and are **not**
+part of its tarball, so a global dropsh does not carry them. Install the ones you
+use next to dropsh:
+
+```bash
+npm i -g dropsh @dropsh/plugin-oauth2        # globally, alongside a global dropsh
+npx -p dropsh -p @dropsh/plugin-oauth2 dropsh …   # or one-off, no global install
+```
+
+A descriptor's `plugin` name is resolved like ESLint resolves its plugins, by
+string name against these locations **in order**:
+
+1. the directory of the `dropsh.config.js` file
+2. the current working directory
+3. dropsh's own install location
+
+Location 3 is what lets a plugin installed globally next to a global `dropsh` be
+found with no local project. If the name cannot be resolved from any of them,
+dropsh reports which package to install.
+
+`export` selects the factory to call and defaults to `"default"`. Every
+`@dropsh/plugin-*` factory is a **named** export with **no default**, so a
+descriptor for one of these packages **must** set `export` (e.g.
+`export: "oauth2Plugin"` — see the table above). Basic auth uses
+`{ plugin: "dropsh/plugin", export: "basicAuthPlugin" }`.
 
 Plugin APIs are exported from `dropsh/plugin`:
 
@@ -282,16 +424,42 @@ export function examplePlugin(): dropshPlugin {
 }
 ```
 
-Register local or package plugins in `dropsh.config.js`:
+Register a package plugin with a descriptor (no import needed), and a local
+plugin either by descriptor (path name) or by importing it:
 
 ```js
-import { basicAuthPlugin } from "dropsh";
 import { examplePlugin } from "./plugins/example.js";
 
 export default {
   site: { base_url: "https://my-drupal.example.com", jsonapi_prefix: "/jsonapi" },
-  plugins: [basicAuthPlugin(), examplePlugin()],
+  plugins: [
+    { plugin: "dropsh/plugin", export: "basicAuthPlugin" }, // packaged, resolved by name
+    examplePlugin(), // local module, imported directly
+  ],
 };
+```
+
+`dropsh/plugin` ships its own TypeScript declarations (as do the
+`@dropsh/plugin-*` packages), so `import { DropSHPlugin } from "dropsh/plugin"`
+is typed with no ambient `declare module`.
+
+### Composing plugins
+
+`composePlugins(...children)` bundles several plugins into one flat list, so an
+aggregator plugin can present N children from a **single** `plugins[]` entry
+without hand-merging their hooks. dropsh flattens a nested array — or an array
+returned by a plugin factory — into separate entries; each child's own
+`dependencies` still expand first, and duplicate ids are de-duplicated.
+
+```ts
+import { composePlugins } from "dropsh/plugin";
+import { markdownPlugin } from "@dropsh/plugin-markdown";
+import { jsonapiSchemaPlugin } from "@dropsh/plugin-jsonapi-schema";
+
+export function essentials() {
+  return composePlugins(markdownPlugin(), jsonapiSchemaPlugin());
+}
+// config: plugins: [essentials()]  ← one entry, flattened into N children
 ```
 
 ## Example Skills

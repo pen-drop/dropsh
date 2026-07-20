@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "noEmit": false,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "dropsh/plugin": ["../../src/plugin-api.ts"],
+      "@dropsh/plugin-markdown/render": ["../markdown/src/render-md.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}

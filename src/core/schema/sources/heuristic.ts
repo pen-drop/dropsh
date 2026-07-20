@@ -36,7 +36,10 @@ function inferType(v: unknown): TypeMarker {
 function mergeTypes(types: Set<TypeMarker>): unknown {
   const arr = [...types].filter((t) => t !== undefined);
   if (arr.length === 0) return {};
-  if (arr.length === 1) return { type: arr[0] };
+  // A field that is `null` in every sample carries no type information — leave
+  // it permissive rather than locking it to `type: null` (which would reject any
+  // real value written later).
+  if (arr.length === 1) return arr[0] === "null" ? {} : { type: arr[0] };
   return { type: arr };
 }
 

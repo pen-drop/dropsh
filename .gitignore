@@ -10,6 +10,17 @@ build/
 # Runtime caches and local CLI state
 .dropsh/
 
+# Local agent/tool working dirs and worktrees
+.claude/
+.codex
+
+# Per-worktree generated dropsh configs (produced by `pnpm run init-worktree`)
+playground/dropsh.config.js
+playground/plain/dropsh.config.js
+playground/schemata/dropsh.config.js
+playground/canvas/dropsh.config.js
+playground/db/dropsh.config.js
+
 # Secrets and environment
 .env
 .env.*
@@ -55,3 +66,7 @@ npm-debug.log*
 .vscode/
 .codex
 .claude/worktrees
+
+# GAIA conductor: worktree dir + machine-local config overrides (never committed)
+.gaia-worktrees/
+.gaia/conductor.config.local.js

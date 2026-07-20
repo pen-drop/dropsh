@@ -1,0 +1,35 @@
+{
+  "name": "@dropsh/plugin-tui",
+  "version": "0.5.7",
+  "type": "module",
+  "main": "./dist/plugins/tui/src/index.js",
+  "exports": {
+    ".": "./dist/plugins/tui/src/index.js"
+  },
+  "files": [
+    "dist/plugins/tui/src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "dropsh": "*"
+  },
+  "dependencies": {
+    "@dropsh/plugin-markdown": "workspace:*",
+    "ink": "^5.0.0",
+    "react": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "dropsh": "workspace:*",
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

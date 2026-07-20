@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ConfigError } from "../errors.js";
-import type { DropSHPlugin } from "./plugin.js";
+import type { DropSHPlugin, PluginDescriptor } from "./plugin.js";
 
 export interface SiteConfig {
   base_url: string;
@@ -26,27 +26,27 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * install — so nothing has to resolve the plugin package from the config file's
  * own `import` statements (which resolve relative to the config file, not the CLI).
  */
-function isPluginDescriptor(e: unknown): e is Record<string, unknown> & { plugin: string } {
+function isPluginDescriptor(e: unknown): e is PluginDescriptor {
   return isRecord(e) && typeof e.plugin === "string";
 }
 
 /**
- * Resolve a named plugin package the way ESLint resolves plugins: by string
- * name, relative to the config file first, then the cwd, then dropsh's own
- * install (so a plugin installed alongside dropsh — a dropsh dep, or globally
- * next to a global dropsh, or via `npx -p`— is found). The config never imports
- * the package itself.
+ * Resolve a single named-plugin descriptor to its module path + export the way
+ * ESLint resolves plugins: by string name against a list of base modules, first
+ * match wins (so a plugin installed alongside dropsh — a dropsh dep, or globally
+ * next to a global dropsh, or via `npx -p` — is found). The config never imports
+ * the package itself. This does **not** call the plugin factory: the resolved
+ * path + export + options form the identity the graph expander de-duplicates on,
+ * so construction is deferred to a cache miss (a shared/diamond dependency's
+ * factory must run exactly once — AC-3). Returns a `construct` thunk the caller
+ * invokes only when the resolved identity is new.
  */
-async function loadNamedPlugin(
-  entry: Record<string, unknown> & { plugin: string },
-  configPath: string,
-): Promise<DropSHPlugin> {
+async function resolveDescriptor(
+  entry: PluginDescriptor,
+  bases: string[],
+  declaredBy: string | undefined,
+): Promise<{ resolvedPath: string; exportName: string; construct: () => DropSHPlugin }> {
   const name = entry.plugin;
-  const bases = [
-    pathToFileURL(configPath).href,
-    pathToFileURL(`${process.cwd()}/`).href,
-    import.meta.url,
-  ];
   let resolved: string | undefined;
   for (const base of bases) {
     try {
@@ -56,10 +56,12 @@ async function loadNamedPlugin(
       // try the next base
     }
   }
-  if (resolved === undefined)
+  if (resolved === undefined) {
+    const from = declaredBy ? ` (declared by '${declaredBy}')` : "";
     throw new ConfigError(
-      `cannot resolve plugin '${name}'. Install it next to dropsh (project dep, dropsh dep, global next to a global dropsh, or 'npx -p dropsh -p ${name}').`,
+      `cannot resolve plugin '${name}'${from}. Install it next to dropsh (project dep, dropsh dep, global next to a global dropsh, or 'npx -p dropsh -p ${name}').`,
     );
+  }
 
   let mod: Record<string, unknown>;
   try {
@@ -71,23 +73,122 @@ async function loadNamedPlugin(
   const factory = mod[exportName];
   if (typeof factory !== "function")
     throw new ConfigError(`plugin '${name}' has no callable export '${exportName}'`);
-  return (factory as (opts?: unknown) => DropSHPlugin)(entry.with ?? entry.options);
+  const construct = () =>
+    (factory as (opts?: unknown) => DropSHPlugin)(entry.with ?? entry.options);
+  return { resolvedPath: resolved, exportName, construct };
 }
 
 /**
- * Expands `plugins[]` entries: named-package descriptors are resolved + built
- * into real plugins; already-constructed plugins pass through unchanged
- * (backward compat).
+ * Expands `plugins[]` into a flat plugin list: named-package descriptors are
+ * resolved + built, and each built plugin's `dependencies` are expanded
+ * *before* it (post-order DFS). A descriptor's identity is its resolved module
+ * path + export + options (`with`/`options`) — that single key drives both
+ * de-duplication and on-path cycle detection, and construction happens only on a
+ * cache miss, so a shared dependency's factory runs exactly once (AC-3). Because
+ * the key is the *resolved* module, one relative string naming different files
+ * on a path is not a cycle, and two same-package entries with different options
+ * are two distinct plugins — even when they share a constant `plugin.id`
+ * (DROPSH-12), because descriptor de-dup keys on that identity, not `plugin.id`.
+ * Pre-constructed plugin objects (and `composePlugins` children) carry no such
+ * identity, so those are still de-duplicated by `plugin.id` in the final list. A
+ * dependency cycle is rejected with the offending chain of descriptor names.
+ * Pre-constructed plugin objects pass through unchanged (backward compat).
  */
 async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHPlugin[]> {
   if (!Array.isArray(raw)) return [];
-  return Promise.all(
-    raw.map((entry) =>
-      isPluginDescriptor(entry)
-        ? loadNamedPlugin(entry, configPath)
-        : Promise.resolve(entry as DropSHPlugin),
-    ),
-  );
+
+  const baseBases = [
+    pathToFileURL(configPath).href,
+    pathToFileURL(`${process.cwd()}/`).href,
+    import.meta.url,
+  ];
+  const out: DropSHPlugin[] = [];
+  const doneKeys = new Set<string>(); // resolvedPath::export::options — fully expanded
+  const doneIds = new Set<string>(); // plugin.id already emitted
+  // Descriptors on the current DFS path, keyed by resolved identity; `name` is
+  // the descriptor string, kept only to render the cycle-error chain.
+  const stack: { key: string; name: string }[] = [];
+
+  // Descriptor-constructed plugins are already de-duplicated by their descriptor
+  // identity (`doneKeys`, computed in `expand`), so `emit` must not also collapse
+  // them by `plugin.id`: two profiles of the same plugin can legitimately share a
+  // constant `plugin.id` while being distinct instances (DROPSH-12). Only
+  // pre-constructed plugins (and `composePlugins` children) carry no descriptor
+  // identity, so those are still de-duplicated by `plugin.id`.
+  const emit = (plugin: DropSHPlugin, dedupById: boolean): void => {
+    if (dedupById) {
+      if (doneIds.has(plugin.id)) return;
+      doneIds.add(plugin.id);
+    }
+    out.push(plugin);
+  };
+
+  const expandDeps = async (plugin: DropSHPlugin, bases: string[]): Promise<void> => {
+    for (const dep of plugin.dependencies ?? []) await expand(dep, bases, plugin.id);
+  };
+
+  // Expand a pre-constructed plugin (or a nested array of them): a composite —
+  // e.g. `composePlugins(a(), b())` — reaches here as an array, and is flattened
+  // into separate entries so N children register without hand-merging hooks.
+  const expandValue = async (
+    value: unknown,
+    bases: string[],
+    dedupById: boolean,
+  ): Promise<void> => {
+    if (Array.isArray(value)) {
+      for (const sub of value) await expand(sub, bases, undefined);
+      return;
+    }
+    const plugin = value as DropSHPlugin;
+    await expandDeps(plugin, bases);
+    emit(plugin, dedupById);
+  };
+
+  async function expand(
+    entry: unknown,
+    bases: string[],
+    declaredBy: string | undefined,
+  ): Promise<void> {
+    if (!isPluginDescriptor(entry)) {
+      // Pre-constructed plugin object, or a nested-array composite entry: no
+      // descriptor identity, so de-duplicate it by `plugin.id`.
+      await expandValue(entry, bases, true);
+      return;
+    }
+
+    const { resolvedPath, exportName, construct } = await resolveDescriptor(
+      entry,
+      bases,
+      declaredBy,
+    );
+    const key = `${resolvedPath}::${exportName}::${JSON.stringify(entry.with ?? entry.options ?? null)}`;
+    if (doneKeys.has(key)) return; // same resolved identity already expanded + emitted — do not re-construct
+    if (stack.some((f) => f.key === key))
+      throw new ConfigError(
+        `plugin dependency cycle: ${[...stack.map((f) => f.name), entry.plugin].join(" → ")}`,
+      );
+
+    // A factory may return one plugin or an array of them (composePlugins); a
+    // returned array is flattened into separate entries under this descriptor's
+    // identity (one construction, so a shared descriptor still runs once).
+    const produced = construct();
+    stack.push({ key, name: entry.plugin });
+    try {
+      // Child descriptors resolve relative to this plugin's module first.
+      const childBases = [pathToFileURL(resolvedPath).href, ...baseBases];
+      // Descriptor-constructed: its identity is tracked by `doneKeys`, so it is
+      // emitted without `plugin.id` de-dup (a returned array's pre-constructed
+      // children still de-dup by id via the non-descriptor path above).
+      await expandValue(produced, childBases, false);
+    } finally {
+      stack.pop();
+    }
+
+    doneKeys.add(key);
+  }
+
+  for (const entry of raw) await expand(entry, baseBases, undefined);
+  return out;
 }
 
 export async function loadConfig(filePath: string): Promise<Config> {

@@ -27,6 +27,7 @@ import type { AuthAdapter, AuthProvider, AuthStatusInfo } from "./core/auth/type
 import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
 import { createPrompt } from "./core/cli/prompt.js";
+import type { RenderContext } from "./core/cli/render.js";
 import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
@@ -58,6 +59,17 @@ export interface ProgramOptions {
 
 function resolveConfigPath(override?: string): string {
   return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
+}
+
+// Normalizes a variadic --include option into a flat, trimmed list of field
+// names: splits any comma-containing entries (so both `--include a,b` and
+// `--include a b` work) and drops empty strings.
+export function normalizeInclude(raw: string[] | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .flatMap((entry) => entry.split(","))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 export interface ResolveAuthDeps {
@@ -194,7 +206,9 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .option(
       "--auth-profile <id>",
       "auth profile to use (overrides the active profile and $DROPSH_AUTH_PROFILE)",
-    );
+    )
+    .option("--format <id>", "output format: json (default) or a renderer id", "json")
+    .option("--view-mode <name>", "entity view mode for interactive formats", "default");
 
   const stdout = opts.stdout ?? ((s) => process.stdout.write(s));
   const stderr = opts.stderr ?? ((s) => process.stderr.write(s));
@@ -210,10 +224,20 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       const profile = (o.authProfile as string | undefined) ?? process.env.DROPSH_AUTH_PROFILE;
       return defaultContext(resolveConfigPath(o.config as string | undefined), profile);
     });
-  const output = createOutput({ stdout, stderr });
+  const renderers = (opts.plugins ?? []).flatMap((p) => p.renderers ?? []);
+  const output = createOutput({
+    stdout,
+    stderr,
+    renderers,
+    getFormat: () => (program.opts().format as string | undefined) ?? "json",
+  });
 
-  async function run(fn: (ctx: CommandContext) => Promise<void>): Promise<void> {
+  async function run(
+    fn: (ctx: CommandContext) => Promise<void>,
+    precheck?: () => void,
+  ): Promise<void> {
     try {
+      precheck?.();
       const ctx = await contextFactory();
       await fn(ctx);
     } catch (err) {
@@ -228,6 +252,24 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     } catch (err) {
       output.fail(err);
       setExitCode(exitCodeFor(err));
+    }
+  }
+
+  function currentFormat(): string {
+    return (program.opts().format as string | undefined) ?? "json";
+  }
+  function assertRenderable(): void {
+    const f = currentFormat();
+    if (!output.hasFormat(f)) {
+      throw new ConfigError(
+        `Unknown format '${f}'. Available: ${["json", ...renderers.map((r) => r.id)].join(", ")}`,
+      );
+    }
+  }
+  function assertJsonOnly(command: string): void {
+    const f = currentFormat();
+    if (f !== "json") {
+      throw new ConfigError(`format '${f}' not applicable to command '${command}'`);
     }
   }
 
@@ -300,22 +342,98 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
   program
     .command("read <target>")
     .description("Read entity_type/bundle/uuid")
-    .action((target: string) =>
-      run((ctx) => runRead({ target }, { client: ctx.client, emit: output.emit })),
-    );
+    .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .action((target: string, o: { include?: string[] }) => {
+      const [entityType, bundle] = target.split("/") as [string?, string?];
+      const rctx: RenderContext = { command: "read", target };
+      if (entityType !== undefined) rctx.entityType = entityType;
+      if (bundle !== undefined) rctx.bundle = bundle;
+      rctx.viewMode = program.opts().viewMode as string;
+      // biome-ignore lint/suspicious/noExplicitAny: optional include added conditionally
+      const args = { target } as any;
+      const include = normalizeInclude(o.include);
+      if (include.length > 0) args.include = include;
+      return run(
+        (ctx) =>
+          runRead(args, {
+            client: ctx.client,
+            emit: (v) => output.emit(v, rctx, { client: ctx.client, baseUrl: ctx.baseUrl }),
+          }),
+        assertRenderable,
+      );
+    });
 
   program
     .command("search <entity_type>")
     .description("Search entities with filters")
     .option("--bundle <bundle>")
     .option("--filter <kv...>", "filter in key:value or key:op:value form", [])
-    .option("--limit <n>", "max results", (v) => parseInt(v, 10), 50)
-    .action((entityType: string, o: { bundle?: string; filter: string[]; limit: number }) => {
-      // biome-ignore lint/suspicious/noExplicitAny: optional bundle added conditionally
-      const args = { entityType, filters: o.filter, limit: o.limit } as any;
-      if (o.bundle !== undefined) args.bundle = o.bundle;
-      run((ctx) => runSearch(args, { client: ctx.client, emit: output.emit }));
-    });
+    .option("--limit <n>", "max results per page", (v) => parseInt(v, 10), 50)
+    .option("--offset <n>", "skip the first n results (page[offset])", (v) => parseInt(v, 10))
+    .option("--sort <field>", "sort by field; prefix with - for descending")
+    .option("--include <fields...>", "related fields to include (JSON:API include)")
+    .addHelpText(
+      "after",
+      `
+Filter operators (--filter key:op:value):
+  =            equals (default when op is omitted: key:value)
+  <>, !=       not equals (!= is an alias of <>)
+  <, <=, >, >= comparisons
+  CONTAINS     substring match
+  STARTS_WITH  prefix match
+  ENDS_WITH    suffix match
+  IN, NOT IN   value is a comma-separated list  (--filter key:IN:a,b,c)
+  BETWEEN      value is a comma-separated low,high pair
+  NOT BETWEEN  (--filter age:BETWEEN:18,65)
+  IS NULL      field is empty      (value-less: --filter key:IS NULL)
+  IS NOT NULL  field is not empty  (value-less: --filter key:IS NOT NULL)
+
+An operator is recognised only when it is a known operator above; a value
+containing a colon (e.g. a URL) is kept intact, so key:value still works:
+  --filter link:https://example.com/x   ->  link = "https://example.com/x"
+
+Paging & sort:
+  --limit <n>    max results per page (default 50)
+  --offset <n>   skip the first n results
+  --sort <field> sort ascending; prefix - for descending (e.g. --sort -created)
+
+Example:
+  dropsh search gaia_ticket --bundle gaia_ticket \\
+    --filter title:CONTAINS:search --filter conductor_id:IS NOT NULL \\
+    --sort -created --limit 20 --offset 20`,
+    )
+    .action(
+      (
+        entityType: string,
+        o: {
+          bundle?: string;
+          filter: string[];
+          limit: number;
+          offset?: number;
+          sort?: string;
+          include?: string[];
+        },
+      ) => {
+        // biome-ignore lint/suspicious/noExplicitAny: optional bundle/include added conditionally
+        const args = { entityType, filters: o.filter, limit: o.limit } as any;
+        if (o.bundle !== undefined) args.bundle = o.bundle;
+        if (o.offset !== undefined) args.offset = o.offset;
+        if (o.sort !== undefined) args.sort = o.sort;
+        const include = normalizeInclude(o.include);
+        if (include.length > 0) args.include = include;
+        const rctx: RenderContext = { command: "search", entityType };
+        if (o.bundle !== undefined) rctx.bundle = o.bundle;
+        rctx.viewMode = program.opts().viewMode as string;
+        return run(
+          (ctx) =>
+            runSearch(args, {
+              client: ctx.client,
+              emit: (v) => output.emit(v, rctx, { client: ctx.client, baseUrl: ctx.baseUrl }),
+            }),
+          assertRenderable,
+        );
+      },
+    );
 
   program
     .command("create <entity_type>")
@@ -338,12 +456,13 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         } = { entityType, bundle: o.bundle, dataArg: o.data };
         if (o.dryRun !== undefined) args.dryRun = o.dryRun;
         if (o.validate === false) args.noValidate = true;
-        run(async (ctx) => {
+        return run(async (ctx) => {
+          const rctx: RenderContext = { command: "create", entityType, bundle: o.bundle };
           const deps: {
             client: JsonApiClient;
             emit: (v: unknown) => void;
             validate?: (payload: unknown, target: string) => void | Promise<void>;
-          } = { client: ctx.client, emit: output.emit };
+          } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
           if (!args.noValidate) {
             deps.validate = async (payload: unknown, target: string) => {
               const schema = await loadOrFetchSchema(ctx, target, "create");
@@ -351,7 +470,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
             };
           }
           await runCreate(args, deps);
-        });
+        }, assertRenderable);
       },
     );
 
@@ -370,12 +489,16 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       } = { target, dataArg: o.data };
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
       if (o.validate === false) args.noValidate = true;
-      run(async (ctx) => {
+      return run(async (ctx) => {
+        const [entityType, bundle] = target.split("/") as [string?, string?];
+        const rctx: RenderContext = { command: "update", target };
+        if (entityType !== undefined) rctx.entityType = entityType;
+        if (bundle !== undefined) rctx.bundle = bundle;
         const deps: {
           client: JsonApiClient;
           emit: (v: unknown) => void;
           validate?: (payload: unknown, target: string) => void | Promise<void>;
-        } = { client: ctx.client, emit: output.emit };
+        } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
         if (!args.noValidate) {
           deps.validate = async (payload: unknown, t: string) => {
             const schema = await loadOrFetchSchema(ctx, t, "update");
@@ -383,7 +506,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
           };
         }
         await runUpdate(args, deps);
-      });
+      }, assertRenderable);
     });
 
   program
@@ -394,7 +517,10 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run((ctx) => runDelete(args, { client: ctx.client, emit: output.emit }));
+      return run(
+        (ctx) => runDelete(args, { client: ctx.client, emit: output.emit }),
+        () => assertJsonOnly("delete"),
+      );
     });
 
   program
@@ -407,7 +533,10 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       // biome-ignore lint/suspicious/noExplicitAny: optional dryRun added conditionally
       const args = { target: o.target, file: o.file } as any;
       if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      run((ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }));
+      return run(
+        (ctx) => runUploadFile(args, { client: ctx.client, emit: output.emit }),
+        () => assertJsonOnly("upload-file"),
+      );
     });
 
   program
@@ -421,17 +550,19 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         target !== undefined
           ? { target, operation, refresh: Boolean(o.refresh) }
           : { operation, refresh: Boolean(o.refresh) };
-      run((ctx) =>
-        runSchema(schemaArgs, {
-          http: ctx.http,
-          auth: ctx.auth,
-          baseUrl: ctx.baseUrl,
-          jsonapiPrefix: ctx.jsonapiPrefix,
-          cwd: ctx.cwd,
-          emit: output.emit,
-          warn: (m) => stderr(`${m}\n`),
-          plugins: ctx.plugins,
-        }),
+      return run(
+        (ctx) =>
+          runSchema(schemaArgs, {
+            http: ctx.http,
+            auth: ctx.auth,
+            baseUrl: ctx.baseUrl,
+            jsonapiPrefix: ctx.jsonapiPrefix,
+            cwd: ctx.cwd,
+            emit: output.emit,
+            warn: (m) => stderr(`${m}\n`),
+            plugins: ctx.plugins,
+          }),
+        () => assertJsonOnly("schema"),
       );
     });
 
