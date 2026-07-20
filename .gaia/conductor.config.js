@@ -66,7 +66,8 @@ export default {
   // URLs baked into tests/integrations/helpers/config.ts. No after_done: there
   // is no per-worktree environment to reclaim.
   workspace: {
-    plugin: '@gaia-ai/plugin-herdr-workspace',
+    plugin: '@gaia-ai/plugin-herdr',
+    export: 'herdrWorkspace',
     with: {
       hooks: { after_create: 'pnpm install' },
     },
