@@ -27,6 +27,7 @@
     "dropsh": "*"
   },
   "devDependencies": {
+    "ajv": "^8.18.0",
     "dropsh": "workspace:*",
     "typescript": "^5.6.0",
     "vitest": "^4.1.8"

@@ -52,19 +52,32 @@ type Json = any;
 const ABSOLUTE_REF = /^https?:\/\//;
 
 /**
+ * Keys whose *values* are maps of user-defined field names, not schema
+ * keywords. A key literally named `links` (etc.) living inside one of these is
+ * an entity field — e.g. gaia_ticket's `links` base field — and must survive.
+ */
+const FIELD_NAME_MAPS = new Set(["properties", "definitions", "patternProperties"]);
+
+/**
  * Strip hyper-schema noise that Ajv either ignores or cannot compile:
  * `links` (JSON hyper-schema; carries absolute `$ref`s to related routes),
  * document identity keywords (`$schema`, `$id`), and any leftover absolute
  * `$ref` (neutralised to an always-true `{}` so compilation never fails).
+ *
+ * The strip is context-aware: `links`/`$schema`/`$id` are only removed at
+ * schema-keyword positions, never as keys inside a `properties` /
+ * `definitions` / `patternProperties` map (those keys are user field names).
+ * Without this, an entity field literally named `links` would be dropped and
+ * then rejected by the sibling `additionalProperties: false` — see GAIA-184.
  */
-function sanitize(node: Json): Json {
-  if (Array.isArray(node)) return node.map(sanitize);
+function sanitize(node: Json, inFieldNameMap = false): Json {
+  if (Array.isArray(node)) return node.map((n) => sanitize(n, false));
   if (node === null || typeof node !== "object") return node;
   if (typeof node.$ref === "string" && ABSOLUTE_REF.test(node.$ref)) return {};
   const out: Record<string, Json> = {};
   for (const [key, value] of Object.entries(node)) {
-    if (key === "links" || key === "$schema" || key === "$id") continue;
-    out[key] = sanitize(value);
+    if (!inFieldNameMap && (key === "links" || key === "$schema" || key === "$id")) continue;
+    out[key] = sanitize(value, FIELD_NAME_MAPS.has(key));
   }
   return out;
 }
