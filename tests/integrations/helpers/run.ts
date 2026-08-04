@@ -92,9 +92,12 @@ function pluginImport(plugin: string): { importLine: string; instantiation: stri
 }
 
 /**
- * Render a dropsh config that carries only NON-SECRET connection params. The
- * provider plugin matching `auth` is registered so the runtime can resolve the
- * session seeded by `seedSession`. Secrets are never written here.
+ * Render a dropsh config carrying the connection params for `auth`. The provider
+ * plugin matching `auth` is registered so the runtime can resolve the session
+ * seeded by `seedSession`. The oauth2 client secret is a config value, written
+ * as the `plugins[].with.client_secret` field for the password and
+ * client_credentials grants; the user *password* (password grant) stays a
+ * runtime credential and is never written here.
  */
 function renderConfig(url: string, auth: Auth, site: SiteName): string {
   const oauthSrc = pathToFileURL(resolve("plugins/oauth2/src/index.js")).href;
@@ -117,6 +120,7 @@ function renderConfig(url: string, auth: Auth, site: SiteName): string {
         "    oauth2Plugin({",
         "      type: 'oauth2_password',",
         `      client_id: ${JSON.stringify(auth.clientId)},`,
+        `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
         `      username: ${JSON.stringify(auth.user)},`,
         `      token_url: ${JSON.stringify(tokenUrl)},`,
         ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
@@ -127,6 +131,7 @@ function renderConfig(url: string, auth: Auth, site: SiteName): string {
         "    oauth2Plugin({",
         "      type: 'oauth2_client_credentials',",
         `      client_id: ${JSON.stringify(auth.clientId)},`,
+        `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
         `      token_url: ${JSON.stringify(tokenUrl)},`,
         ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
         "    }),",
@@ -153,30 +158,33 @@ function renderConfig(url: string, auth: Auth, site: SiteName): string {
   ].join("\n");
 }
 
-/** Build the AuthProvider for an `Auth` and the secret value its login prompts for. */
-function providerFor(url: string, auth: Auth): { provider: AuthProvider; secret: string } {
+/**
+ * Build the AuthProvider for an `Auth`. For the oauth2 grants the client secret
+ * is supplied through config (`client_secret`), so `login()` resolves it via the
+ * provider's `requireClientSecret()` guard instead of prompting for it.
+ */
+function providerFor(url: string, auth: Auth): AuthProvider {
   const tokenUrl = `${url.replace(/\/$/, "")}/oauth/token`;
   if (auth.type === "basic") {
-    const provider = basicAuthProvider();
-    return { provider, secret: auth.pass };
+    return basicAuthProvider();
   }
   if (auth.type === "oauth2_password") {
-    const provider = oauth2Plugin({
+    return oauth2Plugin({
       type: "oauth2_password",
       client_id: auth.clientId,
+      client_secret: auth.clientSecret,
       username: auth.user,
       token_url: tokenUrl,
       ...(auth.scope ? { scope: auth.scope } : {}),
     }).authProvider as AuthProvider;
-    return { provider, secret: auth.clientSecret };
   }
-  const provider = oauth2Plugin({
+  return oauth2Plugin({
     type: "oauth2_client_credentials",
     client_id: auth.clientId,
+    client_secret: auth.clientSecret,
     token_url: tokenUrl,
     ...(auth.scope ? { scope: auth.scope } : {}),
   }).authProvider as AuthProvider;
-  return { provider, secret: auth.clientSecret };
 }
 
 /**
@@ -185,8 +193,9 @@ function providerFor(url: string, auth: Auth): { provider: AuthProvider; secret:
  * `runCli` so the spawned CLI resolves the seeded session at runtime.
  *
  * For basic auth the login prompts username + password; for the oauth2 password
- * grant it prompts client_secret + password; for client_credentials it prompts
- * client_secret. The stub `prompt` answers each label from the `Auth` payload.
+ * grant it prompts only the user *Password* (the client secret comes from
+ * config); the client_credentials grant prompts nothing. The stub `prompt`
+ * answers each label from the `Auth` payload.
  *
  * NOTE: the `oauth2_authcode` (browser PKCE) flow is NOT seeded here — it cannot
  * be driven non-interactively. To test it by hand run `dropsh auth login
@@ -194,16 +203,15 @@ function providerFor(url: string, auth: Auth): { provider: AuthProvider; secret:
  * redirect, then run a `read`/`search` command with the same config.
  */
 export async function seedSession(url: string, auth: Auth): Promise<string> {
-  const { provider, secret } = providerFor(url, auth);
+  const provider = providerFor(url, auth);
   const http = createHttpClient({ timeoutMs: 30_000 });
 
   const answers: Record<string, string> = {};
   if (auth.type === "basic") {
     answers.Username = auth.user;
     answers.Password = auth.pass;
-  } else {
-    answers["Client secret"] = secret;
-    if (auth.type === "oauth2_password") answers.Password = auth.pass;
+  } else if (auth.type === "oauth2_password") {
+    answers.Password = auth.pass;
   }
 
   const ctx: AuthContext = {
