@@ -1,14 +1,23 @@
 import type { HttpClient, HttpRequest } from "../http.js";
 
+/**
+ * Outcome of a reactive credential renewal. On failure the renewal cause is
+ * carried back so the caller can surface *why* renewal failed instead of the
+ * bare, unexplained 401 that first triggered it.
+ */
+export type RenewOutcome = { ok: true } | { ok: false; cause?: unknown };
+
 export interface AuthAdapter {
   apply(req: HttpRequest): Promise<HttpRequest>;
   /**
    * Force a credential refresh after the server rejected the current token (401),
-   * then persist it. Returns true if renewal succeeded (caller retries the request
-   * once), false if it could not renew (caller surfaces the original 401).
-   * Providers that cannot renew (e.g. basic auth) omit this.
+   * then persist it. Resolves `{ ok: true }` when renewal succeeded (caller
+   * retries the request once) or `{ ok: false, cause }` when it could not renew,
+   * where `cause` is the error explaining the failure (the caller surfaces it in
+   * place of the original 401). Providers that cannot renew (e.g. basic auth)
+   * omit this method.
    */
-  renew?(): Promise<boolean>;
+  renew?(): Promise<RenewOutcome>;
 }
 
 /** Provider-specific opaque session payload persisted to the state dir. */

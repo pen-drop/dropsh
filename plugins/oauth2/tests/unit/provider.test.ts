@@ -30,19 +30,20 @@ const tokenHttp = (body: object): HttpClient => ({
 });
 
 describe("oauth2 provider — client_credentials", () => {
-  it("login prompts client_secret and returns a token session", async () => {
+  it("login without a configured client_secret fails as a config error and never prompts", async () => {
     const provider = oauth2Plugin({
       type: "oauth2_client_credentials",
       client_id: "cid",
       token_url: "https://example.com/oauth/token",
     }).authProvider!;
     const prompt = vi.fn(async () => "the-secret");
-    const session = await provider.login(
-      ctx({ prompt, http: tokenHttp({ access_token: "tok", expires_in: 3600 }) }),
-    );
-    expect(prompt).toHaveBeenCalledWith({ label: "Client secret", secret: true });
-    expect(session.access_token).toBe("tok");
-    expect(session.expires_at).toBe(1_000_000 + 3600 * 1000 - 5000);
+    const err = await provider
+      .login(ctx({ prompt, http: tokenHttp({ access_token: "tok", expires_in: 3600 }) }))
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect(err.details?.reason).toBe("secret_not_configured");
+    expect(err.message).toContain("client_secret");
+    expect(prompt).not.toHaveBeenCalled();
   });
 
   it("createAdapter sets a Bearer header from the session", async () => {
@@ -61,7 +62,7 @@ describe("oauth2 provider — client_credentials", () => {
 });
 
 describe("oauth2 provider — refresh", () => {
-  it("client_credentials with an expired session does not refresh, rejects with AuthError", async () => {
+  it("client_credentials with an expired session and no secret fails as a config error, no request", async () => {
     const provider = oauth2Plugin({
       type: "oauth2_client_credentials",
       client_id: "cid",
@@ -72,9 +73,9 @@ describe("oauth2 provider — refresh", () => {
       { access_token: "tok", refresh_token: "rt", expires_at: 1 },
       { http: { send }, now: () => 1_000_000, async save() {} },
     );
-    await expect(adapter.apply({ method: "GET", url: "https://x" })).rejects.toBeInstanceOf(
-      AuthError,
-    );
+    const err = await adapter.apply({ method: "GET", url: "https://x" }).catch((e) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect(err.details?.reason).toBe("secret_not_configured");
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -155,7 +156,7 @@ describe("oauth2 provider — client_credentials headless", () => {
     expect(body).toContain("client_secret=shh");
   });
 
-  it("createAdapter without client_secret still throws on expiry", async () => {
+  it("createAdapter without client_secret fails with the config error on expiry (not 'Session expired')", async () => {
     const provider = oauth2Plugin({
       type: "oauth2_client_credentials",
       client_id: "c",
@@ -165,9 +166,11 @@ describe("oauth2 provider — client_credentials headless", () => {
       { access_token: "stale", expires_at: 0 },
       { http: { send: vi.fn() }, now: () => 1_000_000, async save() {} },
     );
-    await expect(adapter.apply({ method: "GET", url: "/x", headers: {} })).rejects.toThrow(
-      "Session expired",
-    );
+    const err = await adapter.apply({ method: "GET", url: "/x", headers: {} }).catch((e) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect(err.details?.reason).toBe("secret_not_configured");
+    expect(err.message).toContain("client_secret");
+    expect(err.message).not.toContain("Session expired");
   });
 });
 
@@ -237,7 +240,7 @@ describe("oauth2 provider — profile identity (id decoupled from type)", () => 
 });
 
 describe("oauth2 adapter — reactive renew()", () => {
-  it("client_credentials re-mints and reports renewed=true when a secret is configured", async () => {
+  it("client_credentials re-mints and reports ok:true when a secret is configured", async () => {
     const provider = oauth2Plugin({
       type: "oauth2_client_credentials",
       client_id: "cid",
@@ -255,14 +258,14 @@ describe("oauth2 adapter — reactive renew()", () => {
         },
       },
     );
-    expect(await adapter.renew!()).toBe(true);
+    expect(await adapter.renew!()).toEqual({ ok: true });
     // The freshly minted token is applied and persisted.
     const req = await adapter.apply({ method: "GET", url: "/x", headers: {} });
     expect(req.headers?.Authorization).toBe("Bearer new");
     expect(saved).toHaveLength(1);
   });
 
-  it("reports renewed=false when it cannot renew (no secret, no refresh_token)", async () => {
+  it("reports ok:false and carries the cause when it cannot renew (no secret)", async () => {
     const provider = oauth2Plugin({
       type: "oauth2_client_credentials",
       client_id: "cid",
@@ -272,6 +275,11 @@ describe("oauth2 adapter — reactive renew()", () => {
       { access_token: "old", expires_at: 5 },
       { http: tokenHttp({ access_token: "x" }), now: () => 1_000_000, async save() {} },
     );
-    expect(await adapter.renew!()).toBe(false);
+    const outcome = await adapter.renew!();
+    expect(outcome.ok).toBe(false);
+    const cause = (outcome as { ok: false; cause?: unknown }).cause as {
+      details?: Record<string, unknown>;
+    };
+    expect(cause?.details?.reason).toBe("secret_not_configured");
   });
 });
