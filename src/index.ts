@@ -78,34 +78,68 @@ export interface ResolveAuthDeps {
   http: HttpClient;
   now: () => number;
   stateDir?: string;
-  /** Explicit profile from --auth-profile / $DROPSH_AUTH_PROFILE (highest precedence). */
+  /** Explicit profile from --auth-profile (highest precedence). */
   profile?: string;
+  /** Value of $DROPSH_AUTH_PROFILE. Injectable for tests; defaults to process.env.DROPSH_AUTH_PROFILE. */
+  envProfile?: string;
+}
+
+/** Where a chosen profile name came from, highest precedence first. */
+type ProfileOrigin = "flag" | "env" | "active" | "default" | "sole";
+interface ChosenProfile {
+  name: string;
+  origin: ProfileOrigin;
 }
 
 /**
- * Choose the profile name to authenticate as. Precedence:
- *   explicit → stored `active` → config `default:true` → the sole provider.
+ * Choose the profile name to authenticate as, together with its origin. Precedence:
+ *   explicit `--auth-profile` (flag) → `$DROPSH_AUTH_PROFILE` (env) → stored `active`
+ *   pointer → config `default:true` → the sole provider.
  * Returns undefined when nothing selects a profile (caller then tries sessionless).
  */
 function chooseProfile(
   providers: AuthProvider[],
   file: ProfilesFile | null,
-  explicit?: string,
-): string | undefined {
-  if (explicit) return explicit;
-  if (file?.active) return file.active;
+  explicit: string | undefined,
+  envProfile: string | undefined,
+): ChosenProfile | undefined {
+  if (explicit) return { name: explicit, origin: "flag" };
+  if (envProfile) return { name: envProfile, origin: "env" };
+  if (file?.active) return { name: file.active, origin: "active" };
   const def = defaultProvider(providers);
-  if (def) return def.id;
-  return providers.length === 1 ? providers[0]?.id : undefined;
+  if (def) return { name: def.id, origin: "default" };
+  const sole = providers.length === 1 ? providers[0] : undefined;
+  return sole ? { name: sole.id, origin: "sole" } : undefined;
+}
+
+/** Render a profile origin as human-readable provenance for error messages. */
+function describeOrigin(origin: ProfileOrigin): string {
+  switch (origin) {
+    case "flag":
+      return "--auth-profile";
+    case "env":
+      return "$DROPSH_AUTH_PROFILE";
+    case "active":
+      return "the active profile (auth use)";
+    case "default":
+      return "config default:true";
+    case "sole":
+      return "the sole configured profile";
+  }
 }
 
 export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
   const providers = collectProviders(deps.plugins);
   const file = await readProfiles(deps.baseUrl, deps.stateDir);
-  const name = chooseProfile(providers, file, deps.profile);
-  if (name) {
+  const envProfile = deps.envProfile ?? process.env.DROPSH_AUTH_PROFILE;
+  const chosen = chooseProfile(providers, file, deps.profile, envProfile);
+  if (chosen) {
+    const { name, origin } = chosen;
     const provider = providerById(providers, name);
-    if (!provider) throw new ConfigError(`auth profile '${name}' has no configured provider`);
+    if (!provider)
+      throw new ConfigError(
+        `auth profile '${name}' (from ${describeOrigin(origin)}) has no configured provider`,
+      );
     const rec = file?.profiles[name];
     if (rec) {
       return provider.createAdapter(rec.session, {
@@ -124,7 +158,7 @@ export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
       });
     }
     throw new AuthError(
-      `Not authenticated for profile '${name}'. Run 'dropsh auth login --provider ${name}'.`,
+      `Not authenticated for profile '${name}' (from ${describeOrigin(origin)}). Run 'dropsh auth login --provider ${name}'.`,
     );
   }
   const sessionless = sessionlessProvider(providers);
@@ -146,18 +180,22 @@ export interface AuthStatusDeps {
   plugins: DropSHPlugin[];
   stateDir?: string;
   profile?: string;
+  /** Value of $DROPSH_AUTH_PROFILE. Injectable for tests; defaults to process.env.DROPSH_AUTH_PROFILE. */
+  envProfile?: string;
 }
 
 export async function authStatus(deps: AuthStatusDeps): Promise<AuthStatusInfo> {
   const providers = collectProviders(deps.plugins);
   const file = await readProfiles(deps.baseUrl, deps.stateDir);
-  const name = chooseProfile(providers, file, deps.profile);
-  if (!name) {
+  const envProfile = deps.envProfile ?? process.env.DROPSH_AUTH_PROFILE;
+  const chosen = chooseProfile(providers, file, deps.profile, envProfile);
+  if (!chosen) {
     const sessionless = sessionlessProvider(providers);
     return sessionless
       ? { loggedIn: true, provider: sessionless.id, sessionless: true }
       : { loggedIn: false };
   }
+  const { name } = chosen;
   const provider = providerById(providers, name);
   if (!provider) return { loggedIn: false };
   const rec = file?.profiles[name];
@@ -221,7 +259,9 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     opts.contextFactory ??
     (() => {
       const o = program.opts();
-      const profile = (o.authProfile as string | undefined) ?? process.env.DROPSH_AUTH_PROFILE;
+      // The env var is read once inside resolveAuth/authStatus (origin "env");
+      // the flag stays highest precedence because it is the explicit argument.
+      const profile = o.authProfile as string | undefined;
       return defaultContext(resolveConfigPath(o.config as string | undefined), profile);
     });
   const renderers = (opts.plugins ?? []).flatMap((p) => p.renderers ?? []);
