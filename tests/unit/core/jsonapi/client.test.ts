@@ -122,7 +122,7 @@ describe("JsonApiClient", () => {
       apply: async (r) => ({ ...r, headers: { ...r.headers, Authorization: `Bearer ${token}` } }),
       renew: vi.fn(async () => {
         token = "fresh";
-        return true;
+        return { ok: true };
       }),
     };
     const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth });
@@ -138,7 +138,7 @@ describe("JsonApiClient", () => {
         throw new HttpError(401, "HTTP 401");
       },
     };
-    const auth: AuthAdapter = { apply: async (r) => r, renew: async () => false };
+    const auth: AuthAdapter = { apply: async (r) => r, renew: async () => ({ ok: false }) };
     const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth });
     await expect(client.get("node/article")).rejects.toThrow(HttpError);
   });
@@ -169,7 +169,7 @@ describe("JsonApiClient", () => {
         throw new HttpError(500, "HTTP 500");
       },
     };
-    const auth: AuthAdapter = { apply: async (r) => r, renew: vi.fn(async () => true) };
+    const auth: AuthAdapter = { apply: async (r) => r, renew: vi.fn(async () => ({ ok: true })) };
     const client = createJsonApiClient({ baseUrl: "https://site", prefix: "/jsonapi", http, auth });
     await expect(client.get("node/article")).rejects.toThrow(HttpError);
     expect(auth.renew).not.toHaveBeenCalled();

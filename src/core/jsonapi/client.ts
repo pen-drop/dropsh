@@ -76,10 +76,12 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
       res = await opts.http.send(await opts.auth.apply(req));
     } catch (err) {
       // The server rejected the token (401). Ask the auth adapter to renew and,
-      // if it could, retry the request exactly once with a fresh token.
+      // if it could, retry the request exactly once with a fresh token. If it
+      // could not, surface the renewal cause (e.g. an unconfigured secret) so
+      // the caller sees *why* renewal failed, not just the original 401.
       if (!(err instanceof HttpError) || err.status !== 401 || !opts.auth.renew) throw err;
-      const renewed = await opts.auth.renew();
-      if (!renewed) throw err;
+      const outcome = await opts.auth.renew();
+      if (!outcome.ok) throw outcome.cause ?? err;
       res = await opts.http.send(await opts.auth.apply(req));
     }
     if (res.status === 204 || res.body.length === 0) return { ok: true };

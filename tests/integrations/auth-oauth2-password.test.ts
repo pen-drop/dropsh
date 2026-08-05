@@ -1,3 +1,4 @@
+import { AuthError } from "dropsh/plugin";
 import { describe, expect, it } from "vitest";
 import { oauth2Config } from "./helpers/config.js";
 import {
@@ -25,8 +26,12 @@ describe("integration: auth oauth2 password grant", () => {
   });
 
   it("login fails with a wrong password", async () => {
-    // The token exchange happens during login (seedSession), so a bad password
-    // is rejected by the token endpoint there with an AuthError.
+    // With a valid (config-supplied) client secret, requireClientSecret() passes
+    // and the token endpoint is actually contacted during login (seedSession).
+    // simple_oauth rejects the wrong resource-owner password with RFC 6749
+    // `invalid_grant`, which the provider maps to the generic
+    // `credentials_rejected` reason — proving the endpoint was reached, not a
+    // pre-flight `secret_not_configured` guard.
     const oauth = oauth2Config();
     const badAuth: Auth = {
       type: "oauth2_password",
@@ -37,6 +42,9 @@ describe("integration: auth oauth2 password grant", () => {
       scope: oauth.scope,
     };
 
-    await expect(seedSession(testConfig().url, badAuth)).rejects.toThrow();
+    const err = await seedSession(testConfig().url, badAuth).catch((e) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect((err as AuthError).details.reason).not.toBe("secret_not_configured");
+    expect((err as AuthError).details.reason).toBe("credentials_rejected");
   });
 });
