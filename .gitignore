@@ -70,3 +70,6 @@ npm-debug.log*
 # GAIA conductor: worktree dir + machine-local config overrides (never committed)
 .gaia-worktrees/
 .gaia/conductor.config.local.js
+# Runtime log + the backups `gaia upgrade` leaves beside a migrated config
+.gaia/log.txt
+.gaia/*.bak

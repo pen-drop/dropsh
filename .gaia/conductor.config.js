@@ -34,30 +34,48 @@ async function loadLocal() {
 const machine = await loadMachine();
 const local = await loadLocal();
 const project = local.project ?? 'dropsh';
-const baseUrl = local.base_url ?? machine.base_url;
-const clientId = local.oauth?.client_id ?? machine.client_id ?? 'gaia-agent';
-const clientSecret = local.oauth?.client_secret ?? machine.client_secret;
 const composedMachineId =
   machine.user_id && machine.machine_id
     ? `${machine.user_id}-${machine.machine_id}-${project}`
     : undefined;
 
 export default {
-  site: { base_url: baseUrl, jsonapi_prefix: local.jsonapi_prefix ?? '/jsonapi' },
   project,
   machine_id: local.machine_id ?? composedMachineId,
   states: ['spec', 'diagnose', 'coding', 'review'],
   max_parallel: 5,
-  remote: { plugin: '@gaia-ai/gaia/plugins', export: 'drupalRemote' },
+  remote: { plugin: '@gaia-ai/addon-remote-drupal' },
   // No hard-wired diff pane for review: the review diff surface is hunk
   // (GAIA-55) — agent-driven + opt-in in the human's interactive pane, not an
   // executor-forced git-diff pane. Clicking a changed file in that hunk pane
   // opens it editable in a spiceedit overlay (see conductor/README.md).
-  executor: { plugin: '@gaia-ai/plugin-herdr' },
-  agent: {
-    plugin: '@gaia-ai/plugin-claude',
-    with: { model: local.model ?? 'claude-opus-4-8' },
-  },
+  executor: { plugin: '@gaia-ai/addon-herdr' },
+  // Agent selection by static ticket assessment (GAIA-144): `agent` may be an
+  // array of `{ agent, priority?(ticket) }` candidates. The conductor calls each
+  // priority(ticket) at dispatch (ticket carries sideloaded `labels` +
+  // `environments`), sorts highest-first, and runs the top one; a candidate with
+  // no `priority` scores -Infinity. Here: codex and grok win ONLY when the ticket
+  // carries the matching label; claude is the default (baseline priority 0) for
+  // everything else.
+  agent: [
+    {
+      agent: { plugin: '@gaia-ai/addon-codex' },
+      priority: (ticket) =>
+        ticket.labels?.includes('codex') ? 100 : Number.NEGATIVE_INFINITY,
+    },
+    {
+      agent: { plugin: '@gaia-ai/addon-grok', with: { model: 'grok-4.5' } },
+      priority: (ticket) =>
+        ticket.labels?.includes('grok') ? 100 : Number.NEGATIVE_INFINITY,
+    },
+    {
+      agent: {
+        plugin: '@gaia-ai/addon-claude',
+        with: { model: local.model ?? 'claude-opus-5' },
+      },
+      priority: () => 0,
+    },
+  ],
   // dropsh is a Node CLI, not a Drupal app — no per-worktree DDEV. A fresh git
   // worktree shares .git but not node_modules, so after_create only installs
   // deps. The integration-test target is the shared `dropsh-test` DDEV
@@ -66,43 +84,10 @@ export default {
   // URLs baked into tests/integrations/helpers/config.ts. No after_done: there
   // is no per-worktree environment to reclaim.
   workspace: {
-    plugin: '@gaia-ai/plugin-herdr',
+    plugin: '@gaia-ai/addon-herdr',
     export: 'herdrWorkspace',
     with: {
       hooks: { after_create: 'pnpm install' },
     },
   },
-  // oauth2 is a real dep of the host (npm installs it alongside @gaia-ai/gaia).
-  // NOTE: plugins[] is consumed by DROPSH, which reloads this config with its OWN
-  // resolver (`export ?? 'default'`, no sole-function auto-pick) on every
-  // `gaia dropsh …` command. @dropsh/plugin-oauth2 has no default export, so
-  // these entries MUST name `export: 'oauth2Plugin'` — unlike the four conductor
-  // slots above, which the conductor resolves and auto-picks.
-  plugins: [
-    {
-      plugin: '@dropsh/plugin-oauth2',
-      export: 'oauth2Plugin',
-      with: {
-        id: 'session',
-        default: true,
-        type: 'oauth2_client_credentials',
-        client_id: clientId,
-        client_secret: clientSecret,
-        token_url: `${baseUrl}/oauth/token`,
-        scope: 'gaia:session',
-      },
-    },
-    {
-      plugin: '@dropsh/plugin-oauth2',
-      export: 'oauth2Plugin',
-      with: {
-        id: 'pm',
-        type: 'oauth2_client_credentials',
-        client_id: clientId,
-        client_secret: clientSecret,
-        token_url: `${baseUrl}/oauth/token`,
-        scope: 'gaia:project_manager',
-      },
-    },
-  ],
 };
