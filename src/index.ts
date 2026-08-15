@@ -32,7 +32,8 @@ import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
-import type { DropSHPlugin } from "./core/plugin.js";
+import type { DropSHPlugin, PluginContext } from "./core/plugin.js";
+import { composeRequestHooks } from "./core/request-hooks.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
@@ -179,11 +180,18 @@ async function defaultContext(configPath: string, profile?: string): Promise<Com
     now: Date.now,
     ...(profile !== undefined ? { profile } : {}),
   });
+  const pluginContext: PluginContext = {
+    http,
+    auth,
+    baseUrl: cfg.site.base_url,
+    jsonapiPrefix: cfg.site.jsonapi_prefix,
+  };
   const client = createJsonApiClient({
     baseUrl: cfg.site.base_url,
     prefix: cfg.site.jsonapi_prefix,
     http,
     auth,
+    alterRequest: composeRequestHooks(cfg.plugins, pluginContext),
   });
   return {
     client,
