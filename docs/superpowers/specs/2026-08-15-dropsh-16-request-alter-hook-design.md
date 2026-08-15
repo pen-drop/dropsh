@@ -90,6 +90,11 @@ The client derives `entityType` and `bundle` centrally from the structured
 JSON:API path. Plugins do not parse URLs. Root requests such as `me()` have no
 entity target, so both values are `undefined`.
 
+GET classification is deterministic from the client call's resource path: an
+empty root path is `read`; a one- or two-segment collection path is `search`;
+and a path with an entity id as its third segment is `read`. The first path
+segment is `entityType`, and the second, when present, is `bundle`.
+
 Higher-level client operations retain the operation of each actual request.
 For example, `upsert()` produces a `search` followed by either `update` or
 `create`.
@@ -102,6 +107,22 @@ composed callback and passes it to `createJsonApiClient()` through an optional
 `JsonApiOptions` member. The JSON:API client remains independent of
 `DropSHPlugin`; it only invokes the callback with the request and operation
 metadata.
+
+The optional client callback has the concrete internal signature:
+
+```ts
+alterRequest?: (
+  req: HttpRequest,
+  operation: DropSHOperation,
+  entityType?: string,
+  bundle?: string,
+) => Promise<HttpRequest>;
+```
+
+`DropSHOperation` lives with the JSON:API request types so the client does not
+depend on `DropSHPlugin`. `defaultContext()` closes over the stable
+`PluginContext` and adapts this callback to each plugin's public
+`alterRequest(req, requestContext)` method.
 
 For each request, the composed callback creates a `RequestContext` from the
 stable plugin context plus `operation`, `entityType`, and `bundle`. It then
@@ -151,7 +172,8 @@ Only the 401 retry reapplies auth after the one-time alteration.
 Add a dedicated `PluginError` extending `CliError` with code `E_PLUGIN`. Its
 message identifies the plugin and hook, and its details contain the plugin id,
 hook name, and stringified cause. Export it through the existing public error
-surface and give it a stable CLI exit-code mapping.
+surface and map it to CLI exit code `6`, following the existing specific codes
+`2` through `5`.
 
 The composer wraps both a thrown/rejected hook error and an invalid
 `undefined` result as `PluginError`. Composition finishes before the first
