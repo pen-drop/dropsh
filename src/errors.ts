@@ -41,10 +41,22 @@ export class HttpError extends CliError {
   }
 }
 
+export class PluginError extends CliError {
+  constructor(pluginId: string, hook: string, cause: unknown) {
+    super("E_PLUGIN", `plugin '${pluginId}' failed in ${hook}`, {
+      pluginId,
+      hook,
+      cause: String(cause),
+    });
+    this.name = "PluginError";
+  }
+}
+
 export function exitCodeFor(err: unknown): number {
   if (err instanceof ConfigError) return 2;
   if (err instanceof AuthError) return 3;
   if (err instanceof ValidationError) return 4;
   if (err instanceof HttpError) return 5;
+  if (err instanceof PluginError) return 6;
   return 1;
 }

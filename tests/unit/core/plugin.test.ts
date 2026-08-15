@@ -57,6 +57,31 @@ describe("DropSHPlugin interface", () => {
 
     expect(extended).toEqual({ type: "object", "x-test-operation": "create" });
   });
+
+  it("accepts an async alterRequest hook with request context", async () => {
+    const plugin: DropSHPlugin = {
+      id: "tenant",
+      requiredModules: [],
+      async alterRequest(req, requestCtx) {
+        expect(requestCtx.operation).toBe("create");
+        expect(requestCtx.entityType).toBe("gaia_ticket");
+        expect(requestCtx.bundle).toBe("gaia_ticket");
+        return { ...req, headers: { ...req.headers, "X-Plugin": plugin.id } };
+      },
+    };
+
+    const altered = await plugin.alterRequest?.(
+      { method: "POST", url: "https://example.com/jsonapi/gaia_ticket/gaia_ticket" },
+      {
+        ...ctx,
+        operation: "create",
+        entityType: "gaia_ticket",
+        bundle: "gaia_ticket",
+      },
+    );
+
+    expect(altered?.headers?.["X-Plugin"]).toBe("tenant");
+  });
 });
 
 describe("DropSHPlugin", () => {

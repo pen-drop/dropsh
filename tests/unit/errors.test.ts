@@ -4,6 +4,7 @@ import {
   ConfigError,
   AuthError,
   HttpError,
+  PluginError,
   ValidationError,
   exitCodeFor,
 } from "../../src/errors.js";
@@ -35,11 +36,21 @@ describe("errors", () => {
     expect(new ValidationError("missing title").code).toBe("E_VALIDATION");
   });
 
+  it("PluginError identifies the plugin and hook", () => {
+    const err = new PluginError("tenant", "alterRequest", new Error("boom"));
+    expect(err.name).toBe("PluginError");
+    expect(err.code).toBe("E_PLUGIN");
+    expect(err.message).toContain("tenant");
+    expect(err.details).toMatchObject({ pluginId: "tenant", hook: "alterRequest" });
+    expect(exitCodeFor(err)).toBe(6);
+  });
+
   it("exitCodeFor maps each error class", () => {
     expect(exitCodeFor(new ConfigError("x"))).toBe(2);
     expect(exitCodeFor(new AuthError("x"))).toBe(3);
     expect(exitCodeFor(new ValidationError("x"))).toBe(4);
     expect(exitCodeFor(new HttpError(500, "x"))).toBe(5);
+    expect(exitCodeFor(new PluginError("test", "alterRequest", "x"))).toBe(6);
     expect(exitCodeFor(new Error("x"))).toBe(1);
   });
 });

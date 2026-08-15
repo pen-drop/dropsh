@@ -6,6 +6,8 @@ import { type Collection, createCollection } from "./collection.js";
 import { type JsonApiResourceObject, type Resource, toResource } from "./resource.js";
 import { resolveType } from "./types.js";
 
+export type DropSHOperation = "read" | "search" | "create" | "update" | "delete" | "upload";
+
 /** Attributes/relationships payload accepted by create/update/upsert. */
 export interface ResourceWriteBody {
   attributes?: Record<string, unknown>;
