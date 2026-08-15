@@ -1,7 +1,7 @@
 import type { DrupalJsonApiParams } from "drupal-jsonapi-params";
 import { HttpError } from "../../errors.js";
 import type { AuthAdapter } from "../auth/types.js";
-import type { HttpClient } from "../http.js";
+import type { HttpClient, HttpRequest } from "../http.js";
 import { type Collection, createCollection } from "./collection.js";
 import { type JsonApiResourceObject, type Resource, toResource } from "./resource.js";
 import { resolveType } from "./types.js";
@@ -46,6 +46,12 @@ export interface JsonApiOptions {
   prefix: string;
   http: HttpClient;
   auth: AuthAdapter;
+  alterRequest?: (
+    req: HttpRequest,
+    operation: DropSHOperation,
+    entityType?: string,
+    bundle?: string,
+  ) => Promise<HttpRequest>;
 }
 
 function joinUrl(base: string, prefix: string, path: string): string {
@@ -60,22 +66,42 @@ const JSONAPI_HEADERS = {
   "Content-Type": "application/vnd.api+json",
 };
 
+function targetFromPath(path: string): { entityType?: string; bundle?: string } {
+  const [entityType, bundle] = path.split("/").filter(Boolean);
+  return {
+    ...(entityType !== undefined ? { entityType } : {}),
+    ...(bundle !== undefined ? { bundle } : {}),
+  };
+}
+
+function getOperation(path: string): DropSHOperation {
+  const segments = path.split("/").filter(Boolean);
+  return segments.length === 0 || segments.length >= 3 ? "read" : "search";
+}
+
 export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
   async function send(
     method: "GET" | "POST" | "PATCH" | "DELETE",
-    url: string,
+    path: string,
+    operation: DropSHOperation,
     body?: string | Uint8Array,
     extraHeaders: Record<string, string> = {},
+    queryString = "",
   ): Promise<unknown> {
     const reqBase = {
       method,
-      url,
+      url: joinUrl(opts.baseUrl, opts.prefix, path) + queryString,
       headers: { ...JSONAPI_HEADERS, ...extraHeaders },
     };
     const req = body !== undefined ? { ...reqBase, body } : reqBase;
+    const authenticatedRequest = await opts.auth.apply(req);
+    const { entityType, bundle } = targetFromPath(path);
+    const alteredRequest = opts.alterRequest
+      ? await opts.alterRequest(authenticatedRequest, operation, entityType, bundle)
+      : authenticatedRequest;
     let res: Awaited<ReturnType<HttpClient["send"]>>;
     try {
-      res = await opts.http.send(await opts.auth.apply(req));
+      res = await opts.http.send(alteredRequest);
     } catch (err) {
       // The server rejected the token (401). Ask the auth adapter to renew and,
       // if it could, retry the request exactly once with a fresh token. If it
@@ -84,7 +110,7 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
       if (!(err instanceof HttpError) || err.status !== 401 || !opts.auth.renew) throw err;
       const outcome = await opts.auth.renew();
       if (!outcome.ok) throw outcome.cause ?? err;
-      res = await opts.http.send(await opts.auth.apply(req));
+      res = await opts.http.send(await opts.auth.apply(alteredRequest));
     }
     if (res.status === 204 || res.body.length === 0) return { ok: true };
     return JSON.parse(res.body) as unknown;
@@ -93,19 +119,19 @@ export function createJsonApiClient(opts: JsonApiOptions): JsonApiClient {
   const client: JsonApiClient = {
     async get(path, params) {
       const qs = params ? `?${params.getQueryString()}` : "";
-      return send("GET", joinUrl(opts.baseUrl, opts.prefix, path) + qs);
+      return send("GET", path, getOperation(path), undefined, {}, qs);
     },
     async post(path, body) {
-      return send("POST", joinUrl(opts.baseUrl, opts.prefix, path), JSON.stringify(body));
+      return send("POST", path, "create", JSON.stringify(body));
     },
     async patch(path, body) {
-      return send("PATCH", joinUrl(opts.baseUrl, opts.prefix, path), JSON.stringify(body));
+      return send("PATCH", path, "update", JSON.stringify(body));
     },
     async delete(path) {
-      return send("DELETE", joinUrl(opts.baseUrl, opts.prefix, path));
+      return send("DELETE", path, "delete");
     },
     async upload(path, filename, data) {
-      return send("POST", joinUrl(opts.baseUrl, opts.prefix, path), data, {
+      return send("POST", path, "upload", data, {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `file; filename="${filename}"`,
       });

@@ -17,6 +17,201 @@ function httpStub(respond: (req: HttpRequest) => { status: number; body: string 
 const passthroughAuth: AuthAdapter = { apply: async (r) => r };
 
 describe("JsonApiClient", () => {
+  it.each([
+    {
+      name: "read",
+      operation: "read",
+      entityType: "node",
+      bundle: "article",
+      method: "GET",
+      body: undefined,
+      invoke: (client: ReturnType<typeof createJsonApiClient>) => client.get("node/article/u1"),
+    },
+    {
+      name: "search",
+      operation: "search",
+      entityType: "node",
+      bundle: "article",
+      method: "GET",
+      body: undefined,
+      invoke: (client: ReturnType<typeof createJsonApiClient>) => client.get("node/article"),
+    },
+    {
+      name: "create",
+      operation: "create",
+      entityType: "node",
+      bundle: "article",
+      method: "POST",
+      body: '{"data":{}}',
+      invoke: (client: ReturnType<typeof createJsonApiClient>) =>
+        client.post("node/article", { data: {} }),
+    },
+    {
+      name: "update",
+      operation: "update",
+      entityType: "node",
+      bundle: "article",
+      method: "PATCH",
+      body: '{"data":{}}',
+      invoke: (client: ReturnType<typeof createJsonApiClient>) =>
+        client.patch("node/article/u1", { data: {} }),
+    },
+    {
+      name: "delete",
+      operation: "delete",
+      entityType: "node",
+      bundle: "article",
+      method: "DELETE",
+      body: undefined,
+      invoke: (client: ReturnType<typeof createJsonApiClient>) => client.delete("node/article/u1"),
+    },
+    {
+      name: "upload",
+      operation: "upload",
+      entityType: "node",
+      bundle: "article",
+      method: "POST",
+      body: expect.any(Uint8Array),
+      invoke: (client: ReturnType<typeof createJsonApiClient>) =>
+        client.upload("node/article/u1/field_image", "hero.jpg", Buffer.from("image")),
+    },
+  ])(
+    "classifies $name requests and exposes their transport shape",
+    async ({ operation, entityType, bundle, method, body, invoke }) => {
+      const seen: unknown[][] = [];
+      const client = createJsonApiClient({
+        baseUrl: "https://site",
+        prefix: "/jsonapi",
+        http: httpStub(() => ({ status: method === "DELETE" ? 204 : 200, body: "{}" })),
+        auth: passthroughAuth,
+        alterRequest: async (req, actualOperation, actualEntityType, actualBundle) => {
+          seen.push([actualOperation, actualEntityType, actualBundle, req.method, req.body]);
+          return req;
+        },
+      });
+
+      await invoke(client);
+
+      expect(seen).toEqual([[operation, entityType, bundle, method, body]]);
+    },
+  );
+
+  it("classifies me() as a targetless read", async () => {
+    const seen: unknown[][] = [];
+    const client = createJsonApiClient({
+      baseUrl: "https://site",
+      prefix: "/jsonapi",
+      http: httpStub(() => ({
+        status: 200,
+        body: '{"meta":{"links":{"me":{"meta":{"id":"u1"}}}}}',
+      })),
+      auth: passthroughAuth,
+      alterRequest: async (req, operation, entityType, bundle) => {
+        seen.push([operation, entityType, bundle]);
+        return req;
+      },
+    });
+
+    await client.me();
+
+    expect(seen).toEqual([["read", undefined, undefined]]);
+  });
+
+  it("authenticates, alters, then sends the first request", async () => {
+    const events: string[] = [];
+    const client = createJsonApiClient({
+      baseUrl: "https://site",
+      prefix: "/jsonapi",
+      auth: {
+        apply: async (req) => {
+          events.push("auth");
+          return { ...req, headers: { ...req.headers, Authorization: "Bearer original" } };
+        },
+      },
+      alterRequest: async (req) => {
+        events.push("alter");
+        expect(req.headers?.Authorization).toBe("Bearer original");
+        return { ...req, headers: { ...req.headers, Authorization: "Plugin replacement" } };
+      },
+      http: httpStub((req) => {
+        events.push("send");
+        expect(req.headers?.Authorization).toBe("Plugin replacement");
+        return { status: 200, body: "{}" };
+      }),
+    });
+
+    await client.get("node/article/u1");
+
+    expect(events).toEqual(["auth", "alter", "send"]);
+  });
+
+  it("a no-op alteration preserves the request exactly", async () => {
+    async function capture(alterRequest?: (req: HttpRequest) => Promise<HttpRequest>) {
+      let captured: HttpRequest | undefined;
+      const client = createJsonApiClient({
+        baseUrl: "https://site",
+        prefix: "/jsonapi",
+        auth: passthroughAuth,
+        http: httpStub((req) => {
+          captured = req;
+          return { status: 200, body: "{}" };
+        }),
+        ...(alterRequest ? { alterRequest } : {}),
+      });
+      await client.post("node/article", { data: {} });
+      return captured;
+    }
+
+    const withoutHook = await capture();
+    const withHook = await capture(async (req) => req);
+
+    expect(withHook).toEqual(withoutHook);
+    expect(withHook?.body).toBe(withoutHook?.body);
+  });
+
+  it("alters once and reapplies renewed auth to that request after a 401", async () => {
+    const calls: HttpRequest[] = [];
+    let token = "stale";
+    const alterRequest = vi.fn(async (req: HttpRequest) => ({
+      ...req,
+      body: '{"data":{"marker":"altered"}}',
+      headers: { ...req.headers, Authorization: "Plugin replacement" },
+    }));
+    const auth: AuthAdapter = {
+      apply: async (req) => ({
+        ...req,
+        headers: { ...req.headers, Authorization: `Bearer ${token}` },
+      }),
+      renew: async () => {
+        token = "fresh";
+        return { ok: true };
+      },
+    };
+    const http: HttpClient = {
+      async send(req) {
+        calls.push(req);
+        if (calls.length === 1) throw new HttpError(401, "HTTP 401");
+        return { status: 200, headers: {}, body: "{}" };
+      },
+    };
+    const client = createJsonApiClient({
+      baseUrl: "https://site",
+      prefix: "/jsonapi",
+      auth,
+      http,
+      alterRequest,
+    });
+
+    await client.post("node/article", { data: {} });
+
+    expect(alterRequest).toHaveBeenCalledOnce();
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.body).toBe('{"data":{"marker":"altered"}}');
+    expect(calls[1]?.body).toBe(calls[0]?.body);
+    expect(calls[0]?.headers?.Authorization).toBe("Plugin replacement");
+    expect(calls[1]?.headers?.Authorization).toBe("Bearer fresh");
+  });
+
   it("GET builds full URL with prefix and query string from params", async () => {
     const http = httpStub((req) => {
       expect(req.method).toBe("GET");
