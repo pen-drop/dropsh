@@ -21,6 +21,7 @@ export { loadConfig } from "./core/config.js";
 export type { HttpClient, HttpRequest } from "./core/http.js";
 export { createHttpClient } from "./core/http.js";
 export type {
+  DropSHOperation,
   JsonApiClient,
   JsonApiOptions,
   ResourceWriteBody,
@@ -36,8 +37,9 @@ export type {
   DropSHPlugin,
   PluginContext,
   PluginDescriptor,
+  RequestContext,
   SchemaOperation,
 } from "./core/plugin.js";
 export { composePlugins } from "./core/plugin.js";
-export { AuthError, ConfigError, HttpError } from "./errors.js";
+export { AuthError, ConfigError, HttpError, PluginError } from "./errors.js";
 export type { CommandContext } from "./index.js";

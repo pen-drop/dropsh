@@ -1,7 +1,8 @@
 import type { Command } from "commander";
 import type { AuthAdapter, AuthProvider } from "./auth/types.js";
 import type { AnyRenderer } from "./cli/render.js";
-import type { HttpClient } from "./http.js";
+import type { HttpClient, HttpRequest } from "./http.js";
+import type { DropSHOperation } from "./jsonapi/client.js";
 import type { Operation } from "./schema/to-jsonschema.js";
 
 export interface PluginContext {
@@ -23,6 +24,12 @@ export interface PluginContext {
 }
 
 export type SchemaOperation = Operation;
+
+export interface RequestContext extends PluginContext {
+  operation: DropSHOperation;
+  entityType?: string;
+  bundle?: string;
+}
 
 /**
  * Import-free descriptor naming a plugin package as a string. Same shape used
@@ -65,6 +72,7 @@ export interface DropSHPlugin {
     operationSchema: unknown,
     ctx: PluginContext,
   ): Promise<unknown>;
+  alterRequest?(req: HttpRequest, ctx: RequestContext): Promise<HttpRequest>;
   registerCommands?(program: Command): void;
   renderers?: AnyRenderer[];
 }

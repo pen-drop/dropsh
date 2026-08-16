@@ -2,6 +2,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { PluginError } from "../../src/plugin-api.js";
+import type {
+  DropSHOperation,
+  DropSHPlugin,
+  RequestContext,
+} from "../../src/plugin-api.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -47,6 +53,18 @@ describe("AC-1: dropsh ships type declarations via exports", () => {
 
   it("ships the declaration directory in the tarball (files includes dist/src)", () => {
     expect(pkg.files as string[]).toContain("dist/src");
+  });
+});
+
+describe("request alteration plugin contract", () => {
+  it("exports request alteration plugin types", () => {
+    const operation: DropSHOperation = "create";
+    const acceptsContext = (_ctx: RequestContext): void => {};
+    const acceptsPlugin = (_plugin: DropSHPlugin): void => {};
+    expect(operation).toBe("create");
+    expect(acceptsContext).toBeTypeOf("function");
+    expect(acceptsPlugin).toBeTypeOf("function");
+    expect(new PluginError("tenant", "alterRequest", "boom").code).toBe("E_PLUGIN");
   });
 });
 
