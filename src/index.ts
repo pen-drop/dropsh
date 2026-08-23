@@ -38,7 +38,9 @@ import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
 import { buildPayloadFromParameters } from "./core/params/from-parameters.js";
+import { findCachedSchema, renderFieldHelp } from "./core/params/help.js";
 import { parseFieldArgs } from "./core/params/parse-args.js";
+import { indexSchemaFields } from "./core/params/schema-fields.js";
 import type { DropSHPlugin, PluginContext } from "./core/plugin.js";
 import { composeRequestHooks } from "./core/request-hooks.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
@@ -218,23 +220,27 @@ async function defaultContext(configPath: string, profile?: string): Promise<Com
   };
 }
 
-const FIELD_PARAMETER_HELP = `
-Field parameters (instead of --data):
-  --<field> <value>          set a field, e.g. --title "Hello"
-  --<field>=<value>          same; also the form for many fields in one call
-  --<field>.<sub> <value>    set a sub-property, e.g. --body.value "Text"
-  --<relationship> <uuid>    reference by UUID; repeat for a multi-valued field
-  --json <field>=<json>      raw JSON value, for arrays of objects
-
-Field names come from the bundle's schema (see 'dropsh schema <entity>/<bundle>'),
-so an unknown name is rejected instead of ignored. A value starting with --
-needs the --<field>=<value> form. A field whose name collides with a reserved
-option (--bundle, --data, --dry-run, --no-validate, --format, --auth-profile,
---config, --view-mode, --json) can only be set through --data.
-
-Example:
-  dropsh create node --bundle article --title "Hello" --body.value "Text" \\
-    --uid 123e4567-e89b-12d3-a456-426614174000 --dry-run`;
+/**
+ * Field-parameter help for one write command. Commander renders help
+ * synchronously, so the bundle's fields can only come from the on-disk schema
+ * cache — `findCachedSchema` says which host's cache answered, and the generic
+ * forms stand in when nothing is cached yet.
+ *
+ * `resolve` reads the target off the partially parsed command: at help time
+ * Commander has populated the options and left the positional in `args[0]`.
+ */
+function fieldParameterHelp(
+  op: "create" | "update",
+  resolve: (cmd: Command) => { entity?: string; bundle?: string },
+): (ctx: { command: Command }) => string {
+  return (ctx) => {
+    const { entity, bundle } = resolve(ctx.command);
+    if (entity === undefined || bundle === undefined) return renderFieldHelp();
+    const hit = findCachedSchema(process.cwd(), entity, bundle, op);
+    if (!hit) return renderFieldHelp();
+    return renderFieldHelp({ index: indexSchemaFields(hit.schema), host: hit.host });
+  };
+}
 
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
@@ -540,7 +546,14 @@ Example:
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
     .allowUnknownOption()
-    .addHelpText("after", FIELD_PARAMETER_HELP)
+    .addHelpText(
+      "after",
+      fieldParameterHelp("create", (cmd) => {
+        const entity = cmd.args[0];
+        const { bundle } = cmd.opts() as { bundle?: string };
+        return { ...(entity ? { entity } : {}), ...(bundle ? { bundle } : {}) };
+      }),
+    )
     .action(
       (
         entityType: string,
@@ -569,7 +582,13 @@ Example:
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
     .allowUnknownOption()
-    .addHelpText("after", FIELD_PARAMETER_HELP)
+    .addHelpText(
+      "after",
+      fieldParameterHelp("update", (cmd) => {
+        const [entity, bundle] = (cmd.args[0] ?? "").split("/");
+        return { ...(entity ? { entity } : {}), ...(bundle ? { bundle } : {}) };
+      }),
+    )
     .action(
       (
         target: string,

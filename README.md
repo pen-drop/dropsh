@@ -324,6 +324,31 @@ relationship:
 Any number of fields goes into a single invocation; the `--<field>=<value>` pair
 form and the spaced form are interchangeable and produce identical output.
 
+**`--help` lists the bundle's actual fields.** Once a bundle's schema is in the
+local cache, `dropsh create <entity> --bundle=<b> --help` and
+`dropsh update <entity>/<bundle>/<uuid> --help` name every settable parameter,
+including dotted sub-paths, each relationship's target type, and which
+relationships are repeatable:
+
+```
+Field parameters for node--article_test (from the schema cached for schemata.example.ddev.site):
+
+  Attributes:
+  --status <value>                         true|false, or bare for true
+  --title <value>
+  --body.value <value>
+  --body.format <value>
+  --field_test_text <value>
+
+  Relationships (take a UUID):
+  --uid <uuid>                             user--user
+  --field_image <uuid>                     file--file
+```
+
+Help is rendered synchronously, so it reads the cache rather than fetching. Run
+`dropsh schema <entity>/<bundle>` once to populate it; until then `--help` shows
+the generic forms and says so.
+
 Rules worth knowing:
 
 - **Field names come from the schema** (`dropsh schema <entity>/<bundle>`), so an
