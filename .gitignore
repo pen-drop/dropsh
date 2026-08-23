@@ -73,3 +73,6 @@ npm-debug.log*
 # Runtime log + the backups `gaia upgrade` leaves beside a migrated config
 .gaia/log.txt
 .gaia/*.bak
+
+# GAIA transient run artifacts (reports, logs, probes) — reaped with the worktree.
+assets-ai/
