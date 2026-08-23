@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { indexSchemaFields, propertiesOf } from "../../../../src/core/payload/schema-fields.js";
+import { indexSchemaFields, propertiesOf } from "../../../../src/core/params/schema-fields.js";
 import { toOperationVariant } from "../../../../src/core/schema/to-jsonschema.js";
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -1,5 +1,5 @@
 import { ValidationError } from "../../errors.js";
-import type { RawParameter } from "../params/parse-args.js";
+import type { RawParameter } from "./parse-args.js";
 import {
   type FieldDescriptor,
   indexSchemaFields,

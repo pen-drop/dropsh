@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseFieldArgs } from "../../../../src/core/params/parse-args.js";
-import { buildPayloadFromParameters } from "../../../../src/core/payload/from-parameters.js";
+import { buildPayloadFromParameters } from "../../../../src/core/params/from-parameters.js";
 import { toOperationVariant } from "../../../../src/core/schema/to-jsonschema.js";
 import { ValidationError } from "../../../../src/errors.js";
 
