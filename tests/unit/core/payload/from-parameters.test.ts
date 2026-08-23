@@ -168,3 +168,96 @@ describe("buildPayloadFromParameters — attributes", () => {
     ).toThrow(/update requires the entity id/);
   });
 });
+
+describe("buildPayloadFromParameters — relationships", () => {
+  const UUID = "123e4567-e89b-12d3-a456-426614174000";
+  const OTHER = "223e4567-e89b-12d3-a456-426614174001";
+
+  it("AC 4: builds a single relationship from a bare UUID", () => {
+    expect(build(["--uid", UUID])).toEqual({
+      data: {
+        type: "node--article",
+        relationships: { uid: { data: { type: "user--user", id: UUID } } },
+      },
+    });
+  });
+
+  it("accumulates a multi-valued relationship over repeated flags", () => {
+    expect(build(["--field_tags", UUID, "--field_tags", OTHER])).toEqual({
+      data: {
+        type: "node--article",
+        relationships: {
+          field_tags: {
+            data: [
+              { type: "taxonomy_term--tags", id: UUID },
+              { type: "taxonomy_term--tags", id: OTHER },
+            ],
+          },
+        },
+      },
+    });
+  });
+
+  it("rejects a second value on a single-valued relationship", () => {
+    expect(() => build(["--uid", UUID, "--uid", OTHER])).toThrow(
+      /relationship 'uid' accepts a single value/,
+    );
+  });
+
+  it("requires <type>:<uuid> when the schema allows several target types", () => {
+    expect(() => build(["--field_ref", UUID])).toThrow(/allows several target types/);
+    expect(() => build(["--field_ref", UUID])).toThrow(/node--article, node--page/);
+  });
+
+  it("accepts the explicit <type>:<uuid> form", () => {
+    expect(build(["--field_ref", `node--page:${UUID}`])).toEqual({
+      data: {
+        type: "node--article",
+        relationships: { field_ref: { data: { type: "node--page", id: UUID } } },
+      },
+    });
+  });
+
+  it("rejects an explicit type the schema does not allow", () => {
+    expect(() => build(["--uid", `node--page:${UUID}`])).toThrow(
+      /'node--page' is not an allowed target type for 'uid'/,
+    );
+  });
+
+  it("rejects a sub-path on a relationship", () => {
+    expect(() => build(["--uid.data.id", UUID])).toThrow(
+      /relationship 'uid' takes a UUID, not a sub-path/,
+    );
+  });
+
+  it("rejects a relationship with no value", () => {
+    expect(() => build(["--uid"])).toThrow(/missing value for --uid/);
+  });
+
+  it("orders relationships after attributes and in schema order", () => {
+    const built = build(["--field_tags", UUID, "--title", "T", "--uid", OTHER]);
+    expect(Object.keys(built as Record<string, unknown>)).toEqual(["data"]);
+    const data = (built as { data: Record<string, unknown> }).data;
+    expect(Object.keys(data)).toEqual(["type", "attributes", "relationships"]);
+    expect(Object.keys(data.relationships as object)).toEqual(["uid", "field_tags"]);
+  });
+
+  it("writes an array-of-object attribute through --json", () => {
+    expect(build(["--json", 'links=[{"uri":"https://x","title":"X"}]'])).toEqual({
+      data: {
+        type: "node--article",
+        attributes: { links: [{ uri: "https://x", title: "X" }] },
+      },
+    });
+  });
+
+  it("orders keys inside a --json array by the item subschema", () => {
+    const built = build(["--json", 'links=[{"title":"X","uri":"https://x"}]']);
+    const links = (built as { data: { attributes: { links: object[] } } }).data.attributes.links;
+    expect(Object.keys(links[0] as object)).toEqual(["uri", "title"]);
+  });
+
+  it("rejects invalid JSON", () => {
+    expect(() => build(["--json", "links=[{"])).toThrow(/--json links is not valid JSON/);
+  });
+});

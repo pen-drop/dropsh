@@ -150,18 +150,74 @@ function unknownParameter(name: string, index: SchemaFieldIndex): never {
   );
 }
 
+interface ResourceIdentifier {
+  type: string;
+  id: string;
+}
+
+/**
+ * A relationship parameter is a bare UUID whenever the schema allows exactly one
+ * target type, and `<type>:<uuid>` when it allows several. The UUID itself never
+ * contains a colon, so the split is unambiguous.
+ */
+function resourceIdentifier(field: FieldDescriptor, param: RawParameter): ResourceIdentifier {
+  if (!param.hasValue) {
+    throw new ValidationError(`missing value for --${field.name} (expected a UUID)`);
+  }
+  const allowed = field.targetTypes ?? [];
+  const colon = param.value.lastIndexOf(":");
+  if (colon > 0) {
+    const type = param.value.slice(0, colon);
+    const id = param.value.slice(colon + 1);
+    if (allowed.length > 0 && !allowed.includes(type)) {
+      throw new ValidationError(
+        `'${type}' is not an allowed target type for '${field.name}'; allowed: ${allowed.join(", ")}`,
+      );
+    }
+    return { type, id };
+  }
+  if (allowed.length === 0) {
+    throw new ValidationError(
+      `relationship '${field.name}' declares no target type in the schema; pass <type>:<uuid>`,
+    );
+  }
+  if (allowed.length > 1) {
+    throw new ValidationError(
+      `relationship '${field.name}' allows several target types (${allowed.join(", ")}); ` +
+        "pass <type>:<uuid>",
+    );
+  }
+  return { type: allowed[0] as string, id: param.value };
+}
+
 export function buildPayloadFromParameters(input: BuildPayloadInput): unknown {
   const index = indexSchemaFields(input.schema);
   const attributes: Record<string, unknown> = {};
+  const relationships = new Map<string, ResourceIdentifier[]>();
 
   for (const param of input.parameters) {
     const segments = param.path.split(".");
     const name = segments[0] as string;
     const field = index.fields.get(name);
     if (!field) unknownParameter(name, index);
+
     if (field.kind === "relationship") {
-      throw new ValidationError(`relationship '${name}' is not supported yet`);
+      if (segments.length > 1) {
+        throw new ValidationError(
+          `relationship '${name}' takes a UUID, not a sub-path ('${param.path}')`,
+        );
+      }
+      const collected = relationships.get(name) ?? [];
+      if (collected.length > 0 && field.multiple !== true) {
+        throw new ValidationError(
+          `relationship '${name}' accepts a single value; it was given more than once`,
+        );
+      }
+      collected.push(resourceIdentifier(field, param));
+      relationships.set(name, collected);
+      continue;
     }
+
     const tail = segments.slice(1);
     const leaf = resolveLeaf(field, tail);
     const value =
@@ -188,6 +244,18 @@ export function buildPayloadFromParameters(input: BuildPayloadInput): unknown {
   const attributeNode = propertiesOf(propertiesOf(input.schema)?.data)?.attributes;
   if (Object.keys(attributes).length > 0) {
     data.attributes = ordered(attributeNode, attributes);
+  }
+  if (relationships.size > 0) {
+    const out: Record<string, unknown> = {};
+    for (const name of index.order) {
+      const collected = relationships.get(name);
+      if (!collected) continue;
+      const field = index.fields.get(name) as FieldDescriptor;
+      out[name] = {
+        data: field.multiple === true ? collected : (collected[0] as ResourceIdentifier),
+      };
+    }
+    data.relationships = out;
   }
   return { data };
 }
