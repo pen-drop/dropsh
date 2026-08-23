@@ -781,3 +781,84 @@ describe("--fields lists the bundle's parameters", () => {
     expect(out.join("")).toMatch(/node--article — field parameters/);
   });
 });
+
+describe("schema --fields", () => {
+  it("lists the bundle's parameters as a table", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, fakeClient()),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync(["node", "dropsh", "schema", "node/article", "--fields"]);
+    const text = out.join("");
+    expect(text).toMatch(/node--article — field parameters/);
+    expect(text).toMatch(/--title <value>\s+string\s+required/);
+    expect(text).toMatch(/--uid <uuid>\s+user--user/);
+  });
+
+  it("honours --for=update", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "update");
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, fakeClient()),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync(["node", "dropsh", "schema", "node/article", "--for=update", "--fields"]);
+    expect(out.join("")).toMatch(/node--article — field parameters/);
+  });
+
+  it("hands back JSON on an explicit --format json", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, fakeClient()),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "--format",
+      "json",
+      "schema",
+      "node/article",
+      "--fields",
+    ]);
+    const listed = JSON.parse(out.join("")) as { type: string; attributes: unknown[] };
+    expect(listed.type).toBe("node--article");
+    expect(listed.attributes.length).toBeGreaterThan(0);
+  });
+
+  it("still prints the raw schema without --fields", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, fakeClient()),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync(["node", "dropsh", "schema", "node/article"]);
+    const raw = JSON.parse(out.join("")) as { properties?: unknown };
+    expect(raw.properties).toBeDefined();
+  });
+
+  it("rejects --fields without a target", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    let code: number | undefined;
+    const errs: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, fakeClient()),
+      stdout: () => {},
+      stderr: (s) => errs.push(s),
+      setExitCode: (n) => {
+        code = n;
+      },
+    });
+    await p.parseAsync(["node", "dropsh", "schema", "--fields"]);
+    expect(code).toBe(4);
+    expect(errs.join("")).toMatch(/--fields needs a target/);
+  });
+});

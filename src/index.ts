@@ -290,6 +290,20 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     }
   }
   /**
+   * Print a resolved schema as its field listing: a table for a human, or the
+   * same data verbatim on an explicit `--format json`. Shared by `create`,
+   * `update` and `schema`, so the three cannot drift.
+   */
+  function emitFieldListing(schema: unknown, rctx?: RenderContext): void {
+    const described = describeFields(schema);
+    if (program.getOptionValueSource("format") === "default") {
+      stdout(`${renderFieldsTable(described)}\n`);
+    } else {
+      output.emit(described, rctx);
+    }
+  }
+
+  /**
    * The write-command wiring `create` and `update` share: decide `--data` vs
    * field parameters, fetch the operation schema at most once, build the payload
    * from the parameters, and hand back the args/deps both `runCreate` and
@@ -318,13 +332,10 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     // It reads as a table because a human asked what the fields are; an explicit
     // --format json hands back the same data verbatim for a caller to consume.
     if (options.fields === true) {
-      const schema = await loadOrFetchSchema(ctx, input.schemaTarget, input.operation);
-      const described = describeFields(schema);
-      if (program.getOptionValueSource("format") === "default") {
-        stdout(`${renderFieldsTable(described)}\n`);
-      } else {
-        output.emit(described, input.rctx);
-      }
+      emitFieldListing(
+        await loadOrFetchSchema(ctx, input.schemaTarget, input.operation),
+        input.rctx,
+      );
       return "listed";
     }
     const fields = parseFieldArgs(input.tokens);
@@ -641,27 +652,38 @@ Example:
     .description("Catalog (no target) or JSON Schema for <entity>/<bundle>")
     .option("--for <op>", "create|update", "create")
     .option("--refresh", "bypass cache for this call")
-    .action((target: string | undefined, o: { for?: string; refresh?: boolean }) => {
-      const operation: Operation = o.for === "update" ? "update" : "create";
-      const schemaArgs =
-        target !== undefined
-          ? { target, operation, refresh: Boolean(o.refresh) }
-          : { operation, refresh: Boolean(o.refresh) };
-      return run(
-        (ctx) =>
-          runSchema(schemaArgs, {
-            http: ctx.http,
-            auth: ctx.auth,
-            baseUrl: ctx.baseUrl,
-            jsonapiPrefix: ctx.jsonapiPrefix,
-            cwd: ctx.cwd,
-            emit: output.emit,
-            warn: (m) => stderr(`${m}\n`),
-            plugins: ctx.plugins,
-          }),
-        () => assertJsonOnly("schema"),
-      );
-    });
+    .option("--fields", "list the target's field parameters instead of its schema")
+    .action(
+      (target: string | undefined, o: { for?: string; refresh?: boolean; fields?: boolean }) => {
+        const operation: Operation = o.for === "update" ? "update" : "create";
+        const schemaArgs =
+          target !== undefined
+            ? { target, operation, refresh: Boolean(o.refresh) }
+            : { operation, refresh: Boolean(o.refresh) };
+        return run(
+          (ctx) => {
+            if (o.fields === true && target === undefined) {
+              throw new ValidationError(
+                "--fields needs a target: dropsh schema <entity_type>/<bundle> --fields",
+              );
+            }
+            // --fields is the same schema, viewed as its parameters: swapping the
+            // emitter inherits runSchema's caching and --refresh untouched.
+            return runSchema(schemaArgs, {
+              http: ctx.http,
+              auth: ctx.auth,
+              baseUrl: ctx.baseUrl,
+              jsonapiPrefix: ctx.jsonapiPrefix,
+              cwd: ctx.cwd,
+              emit: o.fields === true ? (schema) => emitFieldListing(schema) : output.emit,
+              warn: (m) => stderr(`${m}\n`),
+              plugins: ctx.plugins,
+            });
+          },
+          () => assertJsonOnly("schema"),
+        );
+      },
+    );
 
   const auth = program.command("auth").description("Manage authentication");
   auth

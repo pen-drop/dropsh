@@ -300,7 +300,7 @@ dropsh update <entity_type>/<bundle>/<uuid> (--data=<json|@file> | <field parame
 dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
 dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
 dropsh schema [--refresh]
-dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
+dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh] [--fields]
 ```
 
 `create` and `update` validate payloads against the current schema by default.
@@ -329,7 +329,8 @@ form and the spaced form are interchangeable and produce identical output.
 then exits without sending anything:
 
 ```bash
-dropsh create node --bundle=article_test --fields
+dropsh schema node/article_test --fields          # the introspection route
+dropsh create node --bundle=article_test --fields  # same listing, on the command
 ```
 
 ```
@@ -349,9 +350,9 @@ Relationships (take a UUID):
 Each row carries the schema type, whether the field is required, and the field's
 human label. Object attributes appear as their dotted leaves (`--body.value`,
 never `--body`), array attributes as their `--json` form, and a relationship that
-allows several target types is spelled `<type>:<uuid>`. `--fields` works on
-`update` the same way and goes through the normal fetch-and-cache path, so it
-needs no warm cache.
+allows several target types is spelled `<type>:<uuid>`. The same listing is reachable three ways, all derived from the schema alone with
+no extra request: `dropsh schema <entity>/<bundle> --fields` (honouring `--for`
+and `--refresh`), and `--fields` on `create` and `update`.
 
 Add an explicit `--format json` to get the same listing as JSON — `parameter`,
 `path`, `type`, `label`, `required`, `bare_flag` per attribute, and `targets`,
