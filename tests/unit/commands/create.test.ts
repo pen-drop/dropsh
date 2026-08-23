@@ -19,16 +19,14 @@ function client(): JsonApiClient {
   };
 }
 
+const DOC = { data: { type: "node--article", attributes: { title: "Hi" } } };
+
 describe("runCreate", () => {
-  it("POSTs to entity_type/bundle with given data", async () => {
+  it("POSTs the given document to entity_type/bundle", async () => {
     const c = client();
     const emitted: unknown[] = [];
     await runCreate(
-      {
-        entityType: "node",
-        bundle: "article",
-        dataArg: '{"data":{"type":"node--article","attributes":{"title":"Hi"}}}',
-      },
+      { entityType: "node", bundle: "article", payload: DOC },
       {
         client: c,
         emit: (v) => {
@@ -36,20 +34,18 @@ describe("runCreate", () => {
         },
       },
     );
-    expect(c.post).toHaveBeenCalledWith("node/article", {
-      data: { type: "node--article", attributes: { title: "Hi" } },
-    });
+    expect(c.post).toHaveBeenCalledWith("node/article", DOC);
     expect(emitted).toEqual([{ data: { type: "node--article", id: "new-uuid" } }]);
   });
 
-  it("dry-run returns payload without calling client", async () => {
+  it("dry-run emits the document without calling the client", async () => {
     const c = client();
     const emitted: unknown[] = [];
     await runCreate(
       {
         entityType: "node",
         bundle: "article",
-        dataArg: '{"data":{"type":"node--article"}}',
+        payload: { data: { type: "node--article" } },
         dryRun: true,
       },
       {
@@ -70,36 +66,25 @@ describe("runCreate", () => {
     ]);
   });
 
-  it("validates payload against schema before posting", async () => {
+  it("validates the document against the schema before posting", async () => {
     const validate = vi.fn();
     const c = client();
-    const emitted: unknown[] = [];
     await runCreate(
-      {
-        entityType: "node",
-        bundle: "article",
-        dataArg: JSON.stringify({ data: { type: "node--article", attributes: { title: "ok" } } }),
-      },
-      {
-        client: c,
-        emit: (v) => {
-          emitted.push(v);
-        },
-        validate,
-      },
+      { entityType: "node", bundle: "article", payload: DOC },
+      { client: c, emit: () => {}, validate },
     );
-    expect(validate).toHaveBeenCalledWith(expect.anything(), "node/article");
+    expect(validate).toHaveBeenCalledWith(DOC, "node/article");
     expect(c.post).toHaveBeenCalled();
   });
 
-  it("throws ValidationError without posting when validator fails", async () => {
+  it("throws ValidationError without posting when the validator fails", async () => {
     const validate = vi.fn(() => {
       throw new ValidationError("bad", { errors: [{ message: "nope" }] });
     });
     const c = client();
     await expect(
       runCreate(
-        { entityType: "node", bundle: "article", dataArg: "{}" },
+        { entityType: "node", bundle: "article", payload: {} },
         { client: c, emit: () => {}, validate },
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -112,77 +97,26 @@ describe("runCreate", () => {
     });
     const c = client();
     await runCreate(
-      { entityType: "node", bundle: "article", dataArg: "{}", noValidate: true },
+      { entityType: "node", bundle: "article", payload: {}, noValidate: true },
       { client: c, emit: () => {}, validate },
     );
     expect(validate).not.toHaveBeenCalled();
     expect(c.post).toHaveBeenCalled();
   });
-});
 
-describe("runCreate with a pre-built payload", () => {
-  it("POSTs the given payload without touching dataArg", async () => {
+  it("sends the document verbatim, whatever produced it", async () => {
     const c = client();
-    const emitted: unknown[] = [];
+    const built = {
+      data: {
+        type: "node--article",
+        attributes: { title: "Built" },
+        relationships: { uid: { data: { type: "user--user", id: "u1" } } },
+      },
+    };
     await runCreate(
-      {
-        entityType: "node",
-        bundle: "article",
-        payload: { data: { type: "node--article", attributes: { title: "Built" } } },
-      },
-      {
-        client: c,
-        emit: (v) => {
-          emitted.push(v);
-        },
-      },
+      { entityType: "node", bundle: "article", payload: built },
+      { client: c, emit: () => {} },
     );
-    expect(c.post).toHaveBeenCalledWith("node/article", {
-      data: { type: "node--article", attributes: { title: "Built" } },
-    });
-  });
-
-  it("validates a pre-built payload like any other", async () => {
-    const validate = vi.fn();
-    const c = client();
-    await runCreate(
-      { entityType: "node", bundle: "article", payload: { data: { type: "node--article" } } },
-      { client: c, emit: () => {}, validate },
-    );
-    expect(validate).toHaveBeenCalledWith({ data: { type: "node--article" } }, "node/article");
-  });
-
-  it("dry-runs a pre-built payload without posting", async () => {
-    const c = client();
-    const emitted: unknown[] = [];
-    await runCreate(
-      {
-        entityType: "node",
-        bundle: "article",
-        payload: { data: { type: "node--article", attributes: { title: "Built" } } },
-        dryRun: true,
-      },
-      {
-        client: c,
-        emit: (v) => {
-          emitted.push(v);
-        },
-      },
-    );
-    expect(c.post).not.toHaveBeenCalled();
-    expect(emitted).toEqual([
-      {
-        dry_run: true,
-        method: "POST",
-        path: "node/article",
-        payload: { data: { type: "node--article", attributes: { title: "Built" } } },
-      },
-    ]);
-  });
-
-  it("requires either a payload or dataArg", async () => {
-    await expect(
-      runCreate({ entityType: "node", bundle: "article" }, { client: client(), emit: () => {} }),
-    ).rejects.toThrow(/either --data or field parameters/);
+    expect(c.post).toHaveBeenCalledWith("node/article", built);
   });
 });

@@ -1,13 +1,14 @@
 import type { JsonApiClient } from "../core/jsonapi/client.js";
 import { ValidationError } from "../errors.js";
-import { readDataArg } from "./_data.js";
 
 export interface UpdateArgs {
   target: string;
-  /** Raw `--data` argument (inline JSON or @path). Absent in parameter mode. */
-  dataArg?: string;
-  /** Document already built from field parameters. Absent in `--data` mode. */
-  payload?: unknown;
+  /**
+   * The JSON:API document to send. Resolving it — from `--data` or from field
+   * parameters — happens before this command runs, so nothing here knows or
+   * cares which route produced it.
+   */
+  payload: unknown;
   dryRun?: boolean;
   noValidate?: boolean;
 }
@@ -33,11 +34,7 @@ export function assertUpdateTarget(target: string): void {
 
 export async function runUpdate(args: UpdateArgs, deps: UpdateDeps): Promise<void> {
   assertUpdateTarget(args.target);
-  if (args.payload === undefined && args.dataArg === undefined) {
-    throw new ValidationError("provide either --data or field parameters (--<field> <value>)");
-  }
-  const payload =
-    args.payload !== undefined ? args.payload : await readDataArg(args.dataArg as string);
+  const { payload } = args;
   const [entity, bundle] = args.target.split("/", 3) as [string, string, string];
   const schemaTarget = `${entity}/${bundle}`;
   if (!args.noValidate && deps.validate) {

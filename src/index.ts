@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { Command } from "commander";
+import { readDataArg } from "./commands/_data.js";
 import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "./commands/auth.js";
 import { type CreateArgs, type CreateDeps, runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
@@ -62,7 +63,7 @@ export interface CommandContext {
  * The payload-carrying half of `CreateArgs`/`UpdateArgs` — everything both write
  * commands share once their own target identification is set aside.
  */
-type PayloadArgs = Pick<CreateArgs, "dataArg" | "payload" | "dryRun" | "noValidate">;
+type PayloadArgs = Pick<CreateArgs, "payload" | "dryRun" | "noValidate">;
 type WriteDeps = CreateDeps & UpdateDeps;
 
 export interface ProgramOptions {
@@ -338,21 +339,27 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       );
       return "listed";
     }
+    // Exactly one route produces the document, and it is settled here so the
+    // command itself only ever receives a finished payload.
     const fields = parseFieldArgs(input.tokens);
     if (options.data !== undefined && fields.length > 0) {
       throw new ValidationError(
         "--data and field parameters are mutually exclusive; use one or the other",
       );
     }
+    if (options.data === undefined && fields.length === 0) {
+      throw new ValidationError("provide either --data or field parameters (--<field> <value>)");
+    }
     let cached: unknown;
     const schema = async () =>
       (cached ??= await loadOrFetchSchema(ctx, input.schemaTarget, input.operation));
 
-    const args: PayloadArgs = {};
-    if (options.data !== undefined) args.dataArg = options.data;
-    if (fields.length > 0) {
+    let payload: unknown;
+    if (options.data !== undefined) {
+      payload = await readDataArg(options.data);
+    } else {
       input.guard?.();
-      args.payload = buildPayloadFromParameters({
+      payload = buildPayloadFromParameters({
         schema: await schema(),
         parameters: fields,
         operation: input.operation,
@@ -360,6 +367,8 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
         resourceType: input.resourceType,
       });
     }
+
+    const args: PayloadArgs = { payload };
     if (options.dryRun !== undefined) args.dryRun = options.dryRun;
     if (options.validate === false) args.noValidate = true;
 

@@ -862,3 +862,76 @@ describe("schema --fields", () => {
     expect(errs.join("")).toMatch(/--fields needs a target/);
   });
 });
+
+describe("payload resolution happens before the command runs", () => {
+  it("rejects giving neither --data nor field parameters", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    let code: number | undefined;
+    const errs: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: () => {},
+      stderr: (s) => errs.push(s),
+      setExitCode: (n) => {
+        code = n;
+      },
+    });
+    await p.parseAsync(["node", "dropsh", "create", "node", "--bundle", "article"]);
+    expect(code).toBe(4);
+    expect(errs.join("")).toMatch(/either --data or field parameters/);
+    expect(c.post).not.toHaveBeenCalled();
+  });
+
+  it("reads --data from a file before the command runs", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    const file = join(cwd, "payload.json");
+    writeFileSync(
+      file,
+      JSON.stringify({ data: { type: "node--article", attributes: { title: "FromFile" } } }),
+      "utf8",
+    );
+    const c = fakeClient();
+    const p = buildProgram({ contextFactory: async () => paramContext(cwd, c), stdout: () => {} });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "create",
+      "node",
+      "--bundle",
+      "article",
+      "--no-validate",
+      "--data",
+      `@${file}`,
+    ]);
+    expect(c.post).toHaveBeenCalledWith("node/article", {
+      data: { type: "node--article", attributes: { title: "FromFile" } },
+    });
+  });
+
+  it("update rejects neither --data nor field parameters", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "update");
+    const c = fakeClient();
+    let code: number | undefined;
+    const errs: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: () => {},
+      stderr: (s) => errs.push(s),
+      setExitCode: (n) => {
+        code = n;
+      },
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "update",
+      "node/article/11111111-2222-3333-4444-555555555555",
+    ]);
+    expect(code).toBe(4);
+    expect(errs.join("")).toMatch(/either --data or field parameters/);
+    expect(c.patch).not.toHaveBeenCalled();
+  });
+});
