@@ -69,9 +69,7 @@ describe("Collection query building", () => {
   it("fields uses the resolved resource type for the sparse fieldset", async () => {
     const { client, calls } = stubClient({ data: [] });
     await createCollection(client, "gaia_run").fields(["title", "status"]).list();
-    expect(decodeURIComponent(calls[0]!.qs)).toContain(
-      "fields[gaia_run--gaia_run]=title,status",
-    );
+    expect(decodeURIComponent(calls[0]!.qs)).toContain("fields[gaia_run--gaia_run]=title,status");
   });
 
   it("sort and page produce expected query parameters", async () => {

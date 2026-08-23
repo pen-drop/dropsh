@@ -54,7 +54,12 @@ describe("toOperationVariant", () => {
   });
 
   it("is tolerant of schemas without attributes/relationships blocks", () => {
-    const thin = { type: "object", properties: { data: { type: "object", properties: { type: { const: "x--y" } }, required: ["type"] } } };
+    const thin = {
+      type: "object",
+      properties: {
+        data: { type: "object", properties: { type: { const: "x--y" } }, required: ["type"] },
+      },
+    };
     const out = toOperationVariant(thin, "update") as any;
     expect(out.properties.data.required).toEqual(["type", "id"]);
   });

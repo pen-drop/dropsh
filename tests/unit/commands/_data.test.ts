@@ -1,9 +1,9 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readDataArg } from "../../../src/commands/_data.js";
 import { ValidationError } from "../../../src/errors.js";
-import { writeFile, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 describe("readDataArg", () => {
   it("parses inline JSON", async () => {

@@ -38,7 +38,7 @@ import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
 import { buildPayloadFromParameters } from "./core/params/from-parameters.js";
-import { describeFields, FIELD_PARAMETER_HELP } from "./core/params/help.js";
+import { describeFields, FIELD_PARAMETER_HELP, renderFieldsTable } from "./core/params/help.js";
 import { parseFieldArgs } from "./core/params/parse-args.js";
 import type { DropSHPlugin, PluginContext } from "./core/plugin.js";
 import { composeRequestHooks } from "./core/request-hooks.js";
@@ -315,9 +315,16 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     const { ctx, options } = input;
     // --fields is a discovery request, not a write: resolve the schema through
     // the normal fetch-and-cache pipeline, print the parameters, send nothing.
+    // It reads as a table because a human asked what the fields are; an explicit
+    // --format json hands back the same data verbatim for a caller to consume.
     if (options.fields === true) {
       const schema = await loadOrFetchSchema(ctx, input.schemaTarget, input.operation);
-      output.emit(describeFields(schema), input.rctx);
+      const described = describeFields(schema);
+      if (program.getOptionValueSource("format") === "default") {
+        stdout(`${renderFieldsTable(described)}\n`);
+      } else {
+        output.emit(described, input.rctx);
+      }
       return "listed";
     }
     const fields = parseFieldArgs(input.tokens);

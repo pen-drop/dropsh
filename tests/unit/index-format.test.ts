@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildProgram, type CommandContext } from "../../src/index.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 import type { DropSHPlugin } from "../../src/core/plugin.js";
+import { buildProgram, type CommandContext } from "../../src/index.js";
 
 function fakeClient(): JsonApiClient {
   return {
-    get: vi.fn(async () => ({ data: { type: "node--article", id: "u1", attributes: { title: "Hi" } } })),
+    get: vi.fn(async () => ({
+      data: { type: "node--article", id: "u1", attributes: { title: "Hi" } },
+    })),
     post: vi.fn(async () => ({ data: { type: "node--article", id: "u2" } })),
     patch: vi.fn(async () => ({ data: { type: "node--article", id: "u1" } })),
     delete: vi.fn(async () => ({ ok: true as const })),
@@ -22,8 +24,15 @@ function fakeClient(): JsonApiClient {
 const mdPlugin: DropSHPlugin = {
   id: "md-test",
   requiredModules: [],
-  async extendSchema(_e, _b, s) { return s; },
-  renderers: [{ id: "md", render: (doc) => `# ${(Array.isArray(doc.data) ? doc.data[0] : doc.data)?.id ?? ""}` }],
+  async extendSchema(_e, _b, s) {
+    return s;
+  },
+  renderers: [
+    {
+      id: "md",
+      render: (doc) => `# ${(Array.isArray(doc.data) ? doc.data[0] : doc.data)?.id ?? ""}`,
+    },
+  ],
 };
 
 function harness(plugins: DropSHPlugin[] = [], client: JsonApiClient = fakeClient()) {
@@ -32,7 +41,7 @@ function harness(plugins: DropSHPlugin[] = [], client: JsonApiClient = fakeClien
   const codes: number[] = [];
   const program = buildProgram({
     plugins,
-    contextFactory: async () => ({ client, plugins } as unknown as CommandContext),
+    contextFactory: async () => ({ client, plugins }) as unknown as CommandContext,
     stdout: (s) => out.push(s),
     stderr: (s) => err.push(s),
     setExitCode: (c) => codes.push(c),
@@ -63,20 +72,41 @@ function macrotaskDelayedClient(): JsonApiClient {
 describe("--format", () => {
   it("read defaults to JSON", async () => {
     const h = harness();
-    await h.program.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
-    expect(JSON.parse(h.out.join(""))).toEqual({ data: { type: "node--article", id: "u1", attributes: { title: "Hi" } } });
+    await h.program.parseAsync([
+      "node",
+      "dropsh",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+    ]);
+    expect(JSON.parse(h.out.join(""))).toEqual({
+      data: { type: "node--article", id: "u1", attributes: { title: "Hi" } },
+    });
   });
 
   it("read with --format md uses the renderer", async () => {
     const h = harness([mdPlugin]);
-    await h.program.parseAsync(["node", "dropsh", "--format", "md", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
+    await h.program.parseAsync([
+      "node",
+      "dropsh",
+      "--format",
+      "md",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+    ]);
     expect(h.out.join("")).toBe("# u1\n");
   });
 
   it("unknown format exits 2 before HTTP", async () => {
     const h = harness();
     const c = h.program;
-    await c.parseAsync(["node", "dropsh", "--format", "md", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
+    await c.parseAsync([
+      "node",
+      "dropsh",
+      "--format",
+      "md",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+    ]);
     expect(JSON.parse(h.err.join("")).error.code).toBe("E_CONFIG");
     expect(h.codes).toContain(2);
   });
@@ -108,7 +138,9 @@ describe("--format", () => {
     const tuiPluginStub: DropSHPlugin = {
       id: "tui-test",
       requiredModules: [],
-      async extendSchema(_e, _b, s) { return s; },
+      async extendSchema(_e, _b, s) {
+        return s;
+      },
       renderers: [{ id: "tui", interactive: true, run }],
     };
     const client = fakeClient();
@@ -116,18 +148,34 @@ describe("--format", () => {
     const program = buildProgram({
       plugins: [tuiPluginStub],
       contextFactory: async () =>
-        ({ client, baseUrl: "https://x.test", plugins: [tuiPluginStub] } as unknown as CommandContext),
+        ({
+          client,
+          baseUrl: "https://x.test",
+          plugins: [tuiPluginStub],
+        }) as unknown as CommandContext,
       stdout: (s) => out.push(s),
       stderr: () => {},
       setExitCode: () => {},
     });
-    await program.parseAsync(
-      ["node", "dropsh", "--format", "tui", "--view-mode", "teaser", "read", "node/article/u1"],
-    );
+    await program.parseAsync([
+      "node",
+      "dropsh",
+      "--format",
+      "tui",
+      "--view-mode",
+      "teaser",
+      "read",
+      "node/article/u1",
+    ]);
     expect(run).toHaveBeenCalledTimes(1);
     const call = run.mock.calls[0] as unknown as [unknown, unknown, unknown];
     const [, ctx, services] = call;
-    expect(ctx).toMatchObject({ command: "read", entityType: "node", bundle: "article", viewMode: "teaser" });
+    expect(ctx).toMatchObject({
+      command: "read",
+      entityType: "node",
+      bundle: "article",
+      viewMode: "teaser",
+    });
     expect(services).toMatchObject({ client, baseUrl: "https://x.test" });
   });
 });

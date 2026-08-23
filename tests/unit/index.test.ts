@@ -710,7 +710,7 @@ describe("update with field parameters", () => {
 });
 
 describe("--fields lists the bundle's parameters", () => {
-  it("prints the field listing and sends nothing", async () => {
+  it("prints a readable table and sends nothing", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
     seedSchema(cwd, "create");
     const c = fakeClient();
@@ -722,6 +722,35 @@ describe("--fields lists the bundle's parameters", () => {
     await p.parseAsync(["node", "dropsh", "create", "node", "--bundle", "article", "--fields"]);
     expect(c.post).not.toHaveBeenCalled();
     expect(c.patch).not.toHaveBeenCalled();
+    const text = out.join("");
+    expect(text).toMatch(/node--article — field parameters/);
+    expect(text).toMatch(/--title <value>\s+string\s+required/);
+    expect(text).toMatch(/--body\.value <value>/);
+    expect(text).toMatch(/--uid <uuid>\s+user--user/);
+    expect(text).not.toMatch(/^\{/);
+  });
+
+  it("hands back JSON on an explicit --format json", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "--format",
+      "json",
+      "create",
+      "node",
+      "--bundle",
+      "article",
+      "--fields",
+    ]);
+    expect(c.post).not.toHaveBeenCalled();
     const listed = JSON.parse(out.join("")) as {
       type: string;
       attributes: Array<{ path: string }>;
@@ -729,12 +758,7 @@ describe("--fields lists the bundle's parameters", () => {
     };
     expect(listed.type).toBe("node--article");
     expect(listed.attributes.map((a) => a.path)).toContain("body.value");
-    expect(listed.relationships).toContainEqual({
-      parameter: "--uid <uuid>",
-      path: "uid",
-      targets: ["user--user"],
-      multiple: false,
-    });
+    expect(listed.relationships.find((r) => r.path === "uid")?.targets).toEqual(["user--user"]);
   });
 
   it("works on update too, without patching", async () => {
@@ -754,6 +778,6 @@ describe("--fields lists the bundle's parameters", () => {
       "--fields",
     ]);
     expect(c.patch).not.toHaveBeenCalled();
-    expect((JSON.parse(out.join("")) as { type: string }).type).toBe("node--article");
+    expect(out.join("")).toMatch(/node--article — field parameters/);
   });
 });

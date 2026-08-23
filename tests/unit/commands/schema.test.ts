@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { runSchema } from "../../../src/commands/schema.js";
-import type { HttpClient } from "../../../src/core/http.js";
 import type { AuthAdapter } from "../../../src/core/auth/types.js";
+import type { HttpClient } from "../../../src/core/http.js";
 import { ValidationError } from "../../../src/errors.js";
 
 const auth: AuthAdapter = { apply: async (req) => req };
@@ -41,7 +41,15 @@ describe("runSchema", () => {
     const http = seqHttp([{ status: 200, body: rootIndexBody() }]);
     await runSchema(
       { operation: "create", refresh: false },
-      { http, auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", cwd: tempDir(), emit: (v) => emitted.push(v), warn: (m) => warnings.push(m) },
+      {
+        http,
+        auth,
+        baseUrl: "https://ex",
+        jsonapiPrefix: "/jsonapi",
+        cwd: tempDir(),
+        emit: (v) => emitted.push(v),
+        warn: (m) => warnings.push(m),
+      },
     );
     expect(emitted).toHaveLength(1);
     expect(emitted[0]).toEqual([
@@ -54,11 +62,24 @@ describe("runSchema", () => {
     const emitted: unknown[] = [];
     const warnings: string[] = [];
     const http = seqHttp([
-      { status: 200, body: JSON.stringify({ data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }] }) },
+      {
+        status: 200,
+        body: JSON.stringify({
+          data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }],
+        }),
+      },
     ]);
     await runSchema(
       { target: "node/article", operation: "create", refresh: false },
-      { http, auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", cwd: tempDir(), emit: (v) => emitted.push(v), warn: (m) => warnings.push(m) },
+      {
+        http,
+        auth,
+        baseUrl: "https://ex",
+        jsonapiPrefix: "/jsonapi",
+        cwd: tempDir(),
+        emit: (v) => emitted.push(v),
+        warn: (m) => warnings.push(m),
+      },
     );
     const out = emitted[0] as any;
     expect(out["x-dropsh-source"]).toBe("heuristic");
@@ -239,23 +260,43 @@ describe("runSchema", () => {
 
   it("rejects invalid target with ValidationError", async () => {
     const http = seqHttp([]);
-    await expect(runSchema(
-      { target: "articleonly", operation: "create", refresh: false },
-      { http, auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", cwd: tempDir(), emit: () => {}, warn: () => {} },
-    )).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      runSchema(
+        { target: "articleonly", operation: "create", refresh: false },
+        {
+          http,
+          auth,
+          baseUrl: "https://ex",
+          jsonapiPrefix: "/jsonapi",
+          cwd: tempDir(),
+          emit: () => {},
+          warn: () => {},
+        },
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("--refresh bypasses the cache", async () => {
-    const body = JSON.stringify({ data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }] });
+    const body = JSON.stringify({
+      data: [{ type: "node--article", id: "x", attributes: { title: "A" }, relationships: {} }],
+    });
     const http = seqHttp([
       { status: 200, body },
       { status: 200, body },
     ]);
     const dir = tempDir();
-    const deps = { http, auth, baseUrl: "https://ex", jsonapiPrefix: "/jsonapi", cwd: dir, emit: () => {}, warn: () => {} };
+    const deps = {
+      http,
+      auth,
+      baseUrl: "https://ex",
+      jsonapiPrefix: "/jsonapi",
+      cwd: dir,
+      emit: () => {},
+      warn: () => {},
+    };
     await runSchema({ target: "node/article", operation: "create", refresh: false }, deps); // first — fetch + cache
     await runSchema({ target: "node/article", operation: "create", refresh: false }, deps); // cache hit — no HTTP
-    await runSchema({ target: "node/article", operation: "create", refresh: true  }, deps); // --refresh — HTTP again
+    await runSchema({ target: "node/article", operation: "create", refresh: true }, deps); // --refresh — HTTP again
     expect((http.send as any).mock.calls.length).toBe(2);
   });
 });

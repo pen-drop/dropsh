@@ -5,7 +5,10 @@ import { ValidationError } from "../../../src/errors.js";
 
 function client(): JsonApiClient {
   return {
-    get: vi.fn(), post: vi.fn(), delete: vi.fn(), upload: vi.fn(),
+    get: vi.fn(),
+    post: vi.fn(),
+    delete: vi.fn(),
+    upload: vi.fn(),
     patch: vi.fn(async () => ({
       data: { type: "node--article", id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
     })),
@@ -23,35 +26,71 @@ describe("runUpdate", () => {
     const c = client();
     const emitted: unknown[] = [];
     await runUpdate(
-      { target: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", dataArg: '{"data":{"type":"node--article","id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","attributes":{"title":"X"}}}' },
-      { client: c, emit: (v) => { emitted.push(v); } },
+      {
+        target: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        dataArg:
+          '{"data":{"type":"node--article","id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","attributes":{"title":"X"}}}',
+      },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+      },
     );
     expect(c.patch).toHaveBeenCalledWith("node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", {
-      data: { type: "node--article", id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", attributes: { title: "X" } },
+      data: {
+        type: "node--article",
+        id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        attributes: { title: "X" },
+      },
     });
   });
 
   it("validates target shape", async () => {
-    await expect(runUpdate({ target: "bad", dataArg: "{}" }, { client: client(), emit: () => {} }))
-      .rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      runUpdate({ target: "bad", dataArg: "{}" }, { client: client(), emit: () => {} }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("dry-run emits payload without sending", async () => {
     const c = client();
     const emitted: unknown[] = [];
     await runUpdate(
-      { target: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", dataArg: '{"data":{}}', dryRun: true },
-      { client: c, emit: (v) => { emitted.push(v); } },
+      {
+        target: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        dataArg: '{"data":{}}',
+        dryRun: true,
+      },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+      },
     );
     expect(c.patch).not.toHaveBeenCalled();
-    expect(emitted[0]).toMatchObject({ dry_run: true, method: "PATCH", path: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });
+    expect(emitted[0]).toMatchObject({
+      dry_run: true,
+      method: "PATCH",
+      path: "node/article/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    });
   });
 
   it("validates payload against schema before patching", async () => {
     const validate = vi.fn();
     const c = client();
     await runUpdate(
-      { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: JSON.stringify({ data: { type: "node--article", id: "00000000-0000-0000-0000-000000000001", attributes: { title: "new" } } }) },
+      {
+        target: "node/article/00000000-0000-0000-0000-000000000001",
+        dataArg: JSON.stringify({
+          data: {
+            type: "node--article",
+            id: "00000000-0000-0000-0000-000000000001",
+            attributes: { title: "new" },
+          },
+        }),
+      },
       { client: c, emit: () => {}, validate },
     );
     expect(validate).toHaveBeenCalledWith(expect.anything(), "node/article");
@@ -59,20 +98,30 @@ describe("runUpdate", () => {
   });
 
   it("throws ValidationError without patching when validator fails", async () => {
-    const validate = vi.fn(() => { throw new ValidationError("bad"); });
+    const validate = vi.fn(() => {
+      throw new ValidationError("bad");
+    });
     const c = client();
-    await expect(runUpdate(
-      { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: "{}" },
-      { client: c, emit: () => {}, validate },
-    )).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      runUpdate(
+        { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: "{}" },
+        { client: c, emit: () => {}, validate },
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
     expect(c.patch).not.toHaveBeenCalled();
   });
 
   it("skips validation when noValidate=true", async () => {
-    const validate = vi.fn(() => { throw new ValidationError("would fail"); });
+    const validate = vi.fn(() => {
+      throw new ValidationError("would fail");
+    });
     const c = client();
     await runUpdate(
-      { target: "node/article/00000000-0000-0000-0000-000000000001", dataArg: "{}", noValidate: true },
+      {
+        target: "node/article/00000000-0000-0000-0000-000000000001",
+        dataArg: "{}",
+        noValidate: true,
+      },
       { client: c, emit: () => {}, validate },
     );
     expect(validate).not.toHaveBeenCalled();
@@ -108,8 +157,8 @@ describe("runUpdate with a pre-built payload", () => {
   });
 
   it("requires either a payload or dataArg", async () => {
-    await expect(
-      runUpdate({ target }, { client: client(), emit: () => {} }),
-    ).rejects.toThrow(/either --data or field parameters/);
+    await expect(runUpdate({ target }, { client: client(), emit: () => {} })).rejects.toThrow(
+      /either --data or field parameters/,
+    );
   });
 });

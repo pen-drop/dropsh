@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { collectProviders, defaultProvider, loginCapableProviders, providerById, sessionlessProvider } from "../../../../src/core/auth/registry.js";
+import {
+  collectProviders,
+  defaultProvider,
+  loginCapableProviders,
+  providerById,
+  sessionlessProvider,
+} from "../../../../src/core/auth/registry.js";
 import type { AuthProvider } from "../../../../src/core/auth/types.js";
 import type { DropSHPlugin } from "../../../../src/core/plugin.js";
 
@@ -8,10 +14,20 @@ function fakeProvider(id: string, login: boolean): AuthProvider {
     id,
     displayName: id.toUpperCase(),
     capabilities: { login, logout: true, status: true },
-    async login() { return {}; },
+    async login() {
+      return {};
+    },
     async logout() {},
-    async status() { return { loggedIn: false }; },
-    createAdapter() { return { async apply(r) { return r; } }; },
+    async status() {
+      return { loggedIn: false };
+    },
+    createAdapter() {
+      return {
+        async apply(r) {
+          return r;
+        },
+      };
+    },
   };
 }
 
@@ -20,7 +36,9 @@ function pluginWith(provider?: AuthProvider): DropSHPlugin {
     id: provider?.id ?? "noauth",
     requiredModules: [],
     ...(provider ? { authProvider: provider } : {}),
-    async extendSchema(_e, _b, s) { return s; },
+    async extendSchema(_e, _b, s) {
+      return s;
+    },
   };
 }
 
@@ -44,9 +62,9 @@ describe("provider registry", () => {
 
   it("collectProviders throws on duplicate provider ids", () => {
     const dup = fakeProvider("session", true);
-    expect(() => collectProviders([pluginWith(dup), pluginWith(fakeProvider("session", true))])).toThrow(
-      /duplicate auth profile id 'session'/,
-    );
+    expect(() =>
+      collectProviders([pluginWith(dup), pluginWith(fakeProvider("session", true))]),
+    ).toThrow(/duplicate auth profile id 'session'/);
   });
 });
 

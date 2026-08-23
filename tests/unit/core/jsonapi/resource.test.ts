@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  type JsonApiResourceObject,
-  toResource,
-} from "../../../../src/core/jsonapi/resource.js";
+import { type JsonApiResourceObject, toResource } from "../../../../src/core/jsonapi/resource.js";
 
 describe("toResource", () => {
   const obj: JsonApiResourceObject = {

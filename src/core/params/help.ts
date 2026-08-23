@@ -27,11 +27,15 @@ Example:
   dropsh create node --bundle article --title "Hello" --body.value "Text" --dry-run`;
 
 export interface AttributeDescription {
-  /** How to pass it on the command line. */
+  /** The complete command-line spelling, value placeholder included. */
   parameter: string;
   /** Dotted path into `data.attributes`. */
   path: string;
   type?: string;
+  /** The field's human label, from the schema's `title`. */
+  label?: string;
+  /** Present only when the schema requires the field. */
+  required?: true;
   /** Present only when the field can be given as a bare `--flag`. */
   bare_flag?: true;
 }
@@ -41,6 +45,8 @@ export interface RelationshipDescription {
   path: string;
   targets: string[];
   multiple: boolean;
+  /** The relationship's human label, from the schema's `title`. */
+  label?: string;
   /** Present only when several target types make `<type>:<uuid>` mandatory. */
   requires_type_prefix?: true;
 }
@@ -63,35 +69,57 @@ function schemaTypeOf(node: unknown): string | undefined {
   return undefined;
 }
 
-function describeAttribute(path: string, node: unknown): AttributeDescription {
+function labelOf(node: unknown): string | undefined {
+  if (!isRecord(node)) return undefined;
+  return typeof node.title === "string" ? node.title : undefined;
+}
+
+/** The command-line spelling, including how the value is written. */
+function spell(path: string, type: string | undefined): string {
+  if (type === "array") return `--json ${path}=<json>`;
+  if (type === "boolean") return `--${path} [true|false]`;
+  return `--${path} <value>`;
+}
+
+function describeAttribute(path: string, node: unknown, required: boolean): AttributeDescription {
   const type = schemaTypeOf(node);
-  // An array is unreachable through a scalar flag; --json is the only way in.
-  const parameter = type === "array" ? `--json ${path}=<json>` : `--${path}`;
+  const label = labelOf(node);
   return {
-    parameter,
+    parameter: spell(path, type),
     path,
     ...(type !== undefined ? { type } : {}),
+    ...(label !== undefined ? { label } : {}),
+    ...(required ? { required: true as const } : {}),
     ...(type === "boolean" ? { bare_flag: true as const } : {}),
   };
 }
 
 /** An object attribute is settable only through its leaves, so recurse into them. */
-function describeAttributeTree(path: string, node: unknown): AttributeDescription[] {
+function describeAttributeTree(
+  path: string,
+  node: unknown,
+  required: boolean,
+): AttributeDescription[] {
   const props = schemaTypeOf(node) === "array" ? undefined : propertiesOf(node);
-  if (!props || Object.keys(props).length === 0) return [describeAttribute(path, node)];
+  if (!props || Object.keys(props).length === 0) {
+    return [describeAttribute(path, node, required)];
+  }
+  const req = isRecord(node) && Array.isArray(node.required) ? node.required : [];
   return Object.entries(props).flatMap(([sub, subNode]) =>
-    describeAttributeTree(`${path}.${sub}`, subNode),
+    describeAttributeTree(`${path}.${sub}`, subNode, required && req.includes(sub)),
   );
 }
 
 function describeRelationship(field: FieldDescriptor): RelationshipDescription {
   const targets = field.targetTypes ?? [];
   const ambiguous = targets.length !== 1;
+  const label = labelOf(field.node);
   return {
     parameter: `--${field.name} ${ambiguous ? "<type>:<uuid>" : "<uuid>"}`,
     path: field.name,
     targets,
     multiple: field.multiple === true,
+    ...(label !== undefined ? { label } : {}),
     ...(ambiguous ? { requires_type_prefix: true as const } : {}),
   };
 }
@@ -102,17 +130,64 @@ function describeRelationship(field: FieldDescriptor): RelationshipDescription {
  */
 export function describeFields(schema: unknown): FieldsDescription {
   const index = indexSchemaFields(schema);
+  const attributeNode = propertiesOf(propertiesOf(schema)?.data)?.attributes;
+  const requiredNames =
+    isRecord(attributeNode) && Array.isArray(attributeNode.required) ? attributeNode.required : [];
   const attributes: AttributeDescription[] = [];
   const relationships: RelationshipDescription[] = [];
   for (const name of index.order) {
     const field = index.fields.get(name);
     if (!field) continue;
-    if (field.kind === "attribute") attributes.push(...describeAttributeTree(name, field.node));
-    else relationships.push(describeRelationship(field));
+    if (field.kind === "attribute") {
+      attributes.push(...describeAttributeTree(name, field.node, requiredNames.includes(name)));
+    } else relationships.push(describeRelationship(field));
   }
   return {
     ...(index.resourceType !== undefined ? { type: index.resourceType } : {}),
     attributes,
     relationships,
   };
+}
+
+/**
+ * Render the field listing as an aligned, human-readable table — what `--fields`
+ * prints by default. `--format json` yields `describeFields` verbatim instead,
+ * for a caller that wants to consume it.
+ */
+export function renderFieldsTable(described: FieldsDescription): string {
+  const { attributes, relationships } = described;
+  const head = `${described.type ?? "this bundle"} — field parameters`;
+  if (attributes.length === 0 && relationships.length === 0) {
+    return `${head}\n\nThe schema declares no field parameters for this bundle.`;
+  }
+
+  const rows: Array<[string, string]> = [];
+  for (const a of attributes) {
+    const notes = [a.type ?? "", a.required ? "required" : "", a.label ?? ""].filter(
+      (n) => n !== "",
+    );
+    rows.push([a.parameter, notes.join("  ")]);
+  }
+  const attributeRows = rows.length;
+  for (const r of relationships) {
+    const notes = [
+      r.targets.join(" | ") || "(no target type declared)",
+      r.multiple ? "repeatable" : "",
+      r.label ?? "",
+    ].filter((n) => n !== "");
+    rows.push([r.parameter, notes.join("  ")]);
+  }
+
+  const width = Math.max(...rows.map(([p]) => p.length)) + 2;
+  const line = ([p, notes]: [string, string]) =>
+    notes === "" ? `  ${p}` : `  ${p.padEnd(width)}${notes}`;
+
+  const out = [head];
+  if (attributeRows > 0) {
+    out.push("", "Attributes:", ...rows.slice(0, attributeRows).map(line));
+  }
+  if (relationships.length > 0) {
+    out.push("", "Relationships (take a UUID):", ...rows.slice(attributeRows).map(line));
+  }
+  return out.join("\n");
 }

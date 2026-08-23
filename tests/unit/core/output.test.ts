@@ -11,7 +11,11 @@ const mdRenderer: Renderer = {
 function collect() {
   const out: string[] = [];
   const err: string[] = [];
-  return { out, err, push: { stdout: (s: string) => out.push(s), stderr: (s: string) => err.push(s) } };
+  return {
+    out,
+    err,
+    push: { stdout: (s: string) => out.push(s), stderr: (s: string) => err.push(s) },
+  };
 }
 
 describe("createOutput", () => {
@@ -19,7 +23,9 @@ describe("createOutput", () => {
     const c = collect();
     const o = createOutput({ ...c.push });
     o.emit({ data: { type: "node--article", id: "u1" } });
-    expect(c.out.join("")).toBe(`${JSON.stringify({ data: { type: "node--article", id: "u1" } })}\n`);
+    expect(c.out.join("")).toBe(
+      `${JSON.stringify({ data: { type: "node--article", id: "u1" } })}\n`,
+    );
   });
 
   it("routes a document through the selected renderer", () => {
@@ -33,7 +39,9 @@ describe("createOutput", () => {
     const c = collect();
     const o = createOutput({ ...c.push, renderers: [mdRenderer], getFormat: () => "md" });
     o.emit({ dry_run: true, method: "POST", path: "node/article" }, { command: "create" });
-    expect(c.out.join("")).toBe(`${JSON.stringify({ dry_run: true, method: "POST", path: "node/article" })}\n`);
+    expect(c.out.join("")).toBe(
+      `${JSON.stringify({ dry_run: true, method: "POST", path: "node/article" })}\n`,
+    );
   });
 
   it("hasFormat knows json and registered renderer ids", () => {
@@ -44,8 +52,9 @@ describe("createOutput", () => {
   });
 
   it("throws ConfigError on duplicate renderer ids", () => {
-    expect(() => createOutput({ ...collect().push, renderers: [mdRenderer, mdRenderer] }))
-      .toThrow(ConfigError);
+    expect(() => createOutput({ ...collect().push, renderers: [mdRenderer, mdRenderer] })).toThrow(
+      ConfigError,
+    );
   });
 
   it("invokes an interactive renderer's run() and writes nothing to stdout", async () => {
@@ -79,7 +88,11 @@ describe("createOutput", () => {
     const tuiRenderer: InteractiveRenderer = { id: "tui", interactive: true, run };
     const o = createOutput({ ...c.push, renderers: [tuiRenderer], getFormat: () => "tui" });
     const services = { client: {} as never, baseUrl: "https://x.test" };
-    await o.emit({ data: { type: "node--article", id: "u1" } }, { command: "read", viewMode: "teaser" }, services);
+    await o.emit(
+      { data: { type: "node--article", id: "u1" } },
+      { command: "read", viewMode: "teaser" },
+      services,
+    );
     expect(run).toHaveBeenCalledWith(
       { data: { type: "node--article", id: "u1" } },
       { command: "read", viewMode: "teaser" },

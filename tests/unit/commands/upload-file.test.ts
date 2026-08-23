@@ -1,14 +1,17 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { runUploadFile } from "../../../src/commands/upload-file.js";
 import type { JsonApiClient } from "../../../src/core/jsonapi/client.js";
 import { ValidationError } from "../../../src/errors.js";
-import { writeFile, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 function client(): JsonApiClient {
   return {
-    get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(),
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
     upload: vi.fn(async () => ({ data: { type: "file--file", id: "file-uuid" } })),
     collection: vi.fn(),
     resource: vi.fn(),
@@ -39,14 +42,18 @@ describe("runUploadFile", () => {
   });
 
   it("validates target shape", async () => {
-    await expect(runUploadFile({ target: "bad", file: "/x" }, { client: client(), emit: () => {} }))
-      .rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      runUploadFile({ target: "bad", file: "/x" }, { client: client(), emit: () => {} }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("validates missing files", async () => {
     await expect(
       runUploadFile(
-        { target: "node/article/abcdef01-abcd-abcd-abcd-abcdef012345/field_image", file: "/does/not/exist.png" },
+        {
+          target: "node/article/abcdef01-abcd-abcd-abcd-abcdef012345/field_image",
+          file: "/does/not/exist.png",
+        },
         { client: client(), emit: () => {} },
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -59,7 +66,11 @@ describe("runUploadFile", () => {
     const c = client();
     const emitted: unknown[] = [];
     await runUploadFile(
-      { target: "node/article/abcdef01-abcd-abcd-abcd-abcdef012345/field_image", file: p, dryRun: true },
+      {
+        target: "node/article/abcdef01-abcd-abcd-abcd-abcdef012345/field_image",
+        file: p,
+        dryRun: true,
+      },
       { client: c, emit: (v) => emitted.push(v) },
     );
     expect(c.upload).not.toHaveBeenCalled();

@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { describeFields, FIELD_PARAMETER_HELP } from "../../../../src/core/params/help.js";
+import {
+  describeFields,
+  FIELD_PARAMETER_HELP,
+  renderFieldsTable,
+} from "../../../../src/core/params/help.js";
 import { toOperationVariant } from "../../../../src/core/schema/to-jsonschema.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,9 +39,11 @@ describe("describeFields", () => {
 
   it("lists a scalar attribute with its parameter and schema type", () => {
     expect(described.attributes).toContainEqual({
-      parameter: "--title",
+      parameter: "--title <value>",
       path: "title",
       type: "string",
+      label: "Title",
+      required: true,
     });
   });
 
@@ -51,16 +57,22 @@ describe("describeFields", () => {
 
   it("marks a boolean attribute as usable as a bare flag", () => {
     expect(described.attributes).toContainEqual({
-      parameter: "--status",
+      parameter: "--status [true|false]",
       path: "status",
       type: "boolean",
+      label: "Published",
       bare_flag: true,
     });
   });
 
   it("tells an array attribute to use --json", () => {
     const links = described.attributes.find((a) => a.path === "links");
-    expect(links).toEqual({ parameter: "--json links=<json>", path: "links", type: "array" });
+    expect(links).toEqual({
+      parameter: "--json links=<json>",
+      path: "links",
+      type: "array",
+      label: "Links",
+    });
   });
 
   it("keeps attributes in schema declaration order", () => {
@@ -77,6 +89,7 @@ describe("describeFields", () => {
       path: "uid",
       targets: ["user--user"],
       multiple: false,
+      label: "Authored by",
     });
   });
 
@@ -92,6 +105,7 @@ describe("describeFields", () => {
       path: "field_ref",
       targets: ["node--article", "node--page"],
       multiple: false,
+      label: "Reference",
       requires_type_prefix: true,
     });
   });
@@ -101,5 +115,97 @@ describe("describeFields", () => {
     expect(empty.attributes).toEqual([]);
     expect(empty.relationships).toEqual([]);
     expect(empty.type).toBeUndefined();
+  });
+});
+
+describe("describeFields — labels and required", () => {
+  it("carries a field's human label from the schema title", () => {
+    const withLabel = describeFields({
+      properties: {
+        data: {
+          properties: {
+            type: { const: "node--x" },
+            attributes: {
+              properties: {
+                body: {
+                  type: "object",
+                  title: "Body",
+                  properties: { value: { type: "string", title: "Text" } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(withLabel.attributes[0]).toEqual({
+      parameter: "--body.value <value>",
+      path: "body.value",
+      type: "string",
+      label: "Text",
+    });
+  });
+
+  it("marks a required attribute", () => {
+    const d = describeFields({
+      properties: {
+        data: {
+          properties: {
+            type: { const: "node--x" },
+            attributes: {
+              required: ["title"],
+              properties: { title: { type: "string" }, other: { type: "string" } },
+            },
+          },
+        },
+      },
+    });
+    expect(d.attributes.find((a) => a.path === "title")?.required).toBe(true);
+    expect(d.attributes.find((a) => a.path === "other")?.required).toBeUndefined();
+  });
+});
+
+describe("renderFieldsTable", () => {
+  const table = renderFieldsTable(describeFields(createSchema));
+
+  it("heads the table with the resource type", () => {
+    expect(table).toMatch(/node--article/);
+  });
+
+  it("lists each parameter on its own line", () => {
+    expect(table).toMatch(/--title <value>/);
+    expect(table).toMatch(/--body\.value <value>/);
+    expect(table).toMatch(/--uid <uuid>/);
+  });
+
+  it("shows a boolean as a bare-able flag", () => {
+    expect(table).toMatch(/--status \[true\|false\]/);
+  });
+
+  it("marks the required attribute", () => {
+    expect(table).toMatch(/--title <value>.*required/);
+  });
+
+  it("names a relationship's target type", () => {
+    expect(table).toMatch(/--uid <uuid>\s+user--user/);
+  });
+
+  it("marks a repeatable relationship", () => {
+    expect(table).toMatch(/--field_tags .*repeatable/);
+  });
+
+  it("keeps hints in one aligned column", () => {
+    // The column where the notes start must be identical on every row that has
+    // notes — attributes and relationships alike.
+    const cols = table
+      .split("\n")
+      .map((l) => l.match(/^ {2}\S.*?\s{2,}(?=\S)/)?.[0].length)
+      .filter((n): n is number => n !== undefined);
+    expect(cols.length).toBeGreaterThan(5);
+    expect(new Set(cols).size).toBe(1);
+  });
+
+  it("says so for a schema with no fields", () => {
+    expect(renderFieldsTable(describeFields({ type: "object" }))).toMatch(/no field parameters/);
   });
 });

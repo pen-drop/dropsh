@@ -7,7 +7,10 @@ const UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 function client(): JsonApiClient {
   return {
-    get: vi.fn(), post: vi.fn(), patch: vi.fn(), upload: vi.fn(),
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    upload: vi.fn(),
     delete: vi.fn(async () => ({ ok: true as const })),
     collection: vi.fn(),
     resource: vi.fn(),
@@ -22,21 +25,32 @@ describe("runDelete", () => {
   it("DELETEs entity_type/bundle/uuid", async () => {
     const c = client();
     const emitted: unknown[] = [];
-    await runDelete({ target: `node/article/${UUID}` }, { client: c, emit: (v) => emitted.push(v) });
+    await runDelete(
+      { target: `node/article/${UUID}` },
+      { client: c, emit: (v) => emitted.push(v) },
+    );
     expect(c.delete).toHaveBeenCalledWith(`node/article/${UUID}`);
     expect(emitted).toEqual([{ ok: true }]);
   });
 
   it("validates target", async () => {
-    await expect(runDelete({ target: "bad" }, { client: client(), emit: () => {} }))
-      .rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      runDelete({ target: "bad" }, { client: client(), emit: () => {} }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("dry-run does not delete", async () => {
     const c = client();
     const emitted: unknown[] = [];
-    await runDelete({ target: `node/article/${UUID}`, dryRun: true }, { client: c, emit: (v) => emitted.push(v) });
+    await runDelete(
+      { target: `node/article/${UUID}`, dryRun: true },
+      { client: c, emit: (v) => emitted.push(v) },
+    );
     expect(c.delete).not.toHaveBeenCalled();
-    expect(emitted[0]).toMatchObject({ dry_run: true, method: "DELETE", path: `node/article/${UUID}` });
+    expect(emitted[0]).toMatchObject({
+      dry_run: true,
+      method: "DELETE",
+      path: `node/article/${UUID}`,
+    });
   });
 });

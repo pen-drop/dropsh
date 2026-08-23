@@ -5,7 +5,10 @@ import { ValidationError } from "../../../src/errors.js";
 
 function client(): JsonApiClient {
   return {
-    get: vi.fn(), patch: vi.fn(), delete: vi.fn(), upload: vi.fn(),
+    get: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    upload: vi.fn(),
     post: vi.fn(async () => ({ data: { type: "node--article", id: "new-uuid" } })),
     collection: vi.fn(),
     resource: vi.fn(),
@@ -21,8 +24,17 @@ describe("runCreate", () => {
     const c = client();
     const emitted: unknown[] = [];
     await runCreate(
-      { entityType: "node", bundle: "article", dataArg: '{"data":{"type":"node--article","attributes":{"title":"Hi"}}}' },
-      { client: c, emit: (v) => { emitted.push(v); } },
+      {
+        entityType: "node",
+        bundle: "article",
+        dataArg: '{"data":{"type":"node--article","attributes":{"title":"Hi"}}}',
+      },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+      },
     );
     expect(c.post).toHaveBeenCalledWith("node/article", {
       data: { type: "node--article", attributes: { title: "Hi" } },
@@ -34,16 +46,28 @@ describe("runCreate", () => {
     const c = client();
     const emitted: unknown[] = [];
     await runCreate(
-      { entityType: "node", bundle: "article", dataArg: '{"data":{"type":"node--article"}}', dryRun: true },
-      { client: c, emit: (v) => { emitted.push(v); } },
+      {
+        entityType: "node",
+        bundle: "article",
+        dataArg: '{"data":{"type":"node--article"}}',
+        dryRun: true,
+      },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+      },
     );
     expect(c.post).not.toHaveBeenCalled();
-    expect(emitted).toEqual([{
-      dry_run: true,
-      method: "POST",
-      path: "node/article",
-      payload: { data: { type: "node--article" } },
-    }]);
+    expect(emitted).toEqual([
+      {
+        dry_run: true,
+        method: "POST",
+        path: "node/article",
+        payload: { data: { type: "node--article" } },
+      },
+    ]);
   });
 
   it("validates payload against schema before posting", async () => {
@@ -51,25 +75,41 @@ describe("runCreate", () => {
     const c = client();
     const emitted: unknown[] = [];
     await runCreate(
-      { entityType: "node", bundle: "article", dataArg: JSON.stringify({ data: { type: "node--article", attributes: { title: "ok" } } }) },
-      { client: c, emit: (v) => { emitted.push(v); }, validate },
+      {
+        entityType: "node",
+        bundle: "article",
+        dataArg: JSON.stringify({ data: { type: "node--article", attributes: { title: "ok" } } }),
+      },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+        validate,
+      },
     );
     expect(validate).toHaveBeenCalledWith(expect.anything(), "node/article");
     expect(c.post).toHaveBeenCalled();
   });
 
   it("throws ValidationError without posting when validator fails", async () => {
-    const validate = vi.fn(() => { throw new ValidationError("bad", { errors: [{ message: "nope" }] }); });
+    const validate = vi.fn(() => {
+      throw new ValidationError("bad", { errors: [{ message: "nope" }] });
+    });
     const c = client();
-    await expect(runCreate(
-      { entityType: "node", bundle: "article", dataArg: "{}" },
-      { client: c, emit: () => {}, validate },
-    )).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      runCreate(
+        { entityType: "node", bundle: "article", dataArg: "{}" },
+        { client: c, emit: () => {}, validate },
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
     expect(c.post).not.toHaveBeenCalled();
   });
 
   it("skips validation when noValidate=true", async () => {
-    const validate = vi.fn(() => { throw new ValidationError("would fail"); });
+    const validate = vi.fn(() => {
+      throw new ValidationError("would fail");
+    });
     const c = client();
     await runCreate(
       { entityType: "node", bundle: "article", dataArg: "{}", noValidate: true },
@@ -90,7 +130,12 @@ describe("runCreate with a pre-built payload", () => {
         bundle: "article",
         payload: { data: { type: "node--article", attributes: { title: "Built" } } },
       },
-      { client: c, emit: (v) => { emitted.push(v); } },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+      },
     );
     expect(c.post).toHaveBeenCalledWith("node/article", {
       data: { type: "node--article", attributes: { title: "Built" } },
@@ -117,15 +162,22 @@ describe("runCreate with a pre-built payload", () => {
         payload: { data: { type: "node--article", attributes: { title: "Built" } } },
         dryRun: true,
       },
-      { client: c, emit: (v) => { emitted.push(v); } },
+      {
+        client: c,
+        emit: (v) => {
+          emitted.push(v);
+        },
+      },
     );
     expect(c.post).not.toHaveBeenCalled();
-    expect(emitted).toEqual([{
-      dry_run: true,
-      method: "POST",
-      path: "node/article",
-      payload: { data: { type: "node--article", attributes: { title: "Built" } } },
-    }]);
+    expect(emitted).toEqual([
+      {
+        dry_run: true,
+        method: "POST",
+        path: "node/article",
+        payload: { data: { type: "node--article", attributes: { title: "Built" } } },
+      },
+    ]);
   });
 
   it("requires either a payload or dataArg", async () => {

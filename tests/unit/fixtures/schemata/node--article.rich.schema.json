@@ -7,34 +7,65 @@
       "type": "object",
       "required": ["type", "attributes"],
       "properties": {
-        "type": { "const": "node--article" },
-        "id": { "type": "string", "format": "uuid" },
+        "type": {
+          "const": "node--article"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
         "attributes": {
           "type": "object",
           "additionalProperties": false,
           "required": ["title"],
           "properties": {
-            "title": { "type": "string", "maxLength": 255 },
-            "status": { "type": "boolean" },
-            "weight": { "type": "integer" },
+            "title": {
+              "type": "string",
+              "maxLength": 255,
+              "title": "Title"
+            },
+            "status": {
+              "type": "boolean",
+              "title": "Published"
+            },
+            "weight": {
+              "type": "integer",
+              "title": "Weight"
+            },
             "body": {
               "type": "object",
               "required": ["value"],
               "properties": {
-                "value": { "type": "string" },
-                "format": { "type": "string" },
-                "summary": { "type": "string" }
-              }
+                "value": {
+                  "type": "string",
+                  "title": "Text"
+                },
+                "format": {
+                  "type": "string",
+                  "title": "Text format"
+                },
+                "summary": {
+                  "type": "string",
+                  "title": "Summary"
+                }
+              },
+              "title": "Body"
             },
             "links": {
               "type": "array",
               "items": {
                 "type": "object",
                 "properties": {
-                  "uri": { "type": "string", "format": "uri" },
-                  "title": { "type": "string" }
+                  "uri": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
                 }
-              }
+              },
+              "title": "Links"
             }
           }
         },
@@ -49,11 +80,18 @@
                   "type": "object",
                   "required": ["type", "id"],
                   "properties": {
-                    "type": { "type": "string", "enum": ["user--user"] },
-                    "id": { "type": "string", "format": "uuid" }
+                    "type": {
+                      "type": "string",
+                      "enum": ["user--user"]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
                   }
                 }
-              }
+              },
+              "title": "Authored by"
             },
             "field_tags": {
               "type": "object",
@@ -64,12 +102,19 @@
                     "type": "object",
                     "required": ["type", "id"],
                     "properties": {
-                      "type": { "type": "string", "enum": ["taxonomy_term--tags"] },
-                      "id": { "type": "string", "format": "uuid" }
+                      "type": {
+                        "type": "string",
+                        "enum": ["taxonomy_term--tags"]
+                      },
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
                     }
                   }
                 }
-              }
+              },
+              "title": "Tags"
             },
             "field_ref": {
               "type": "object",
@@ -78,11 +123,18 @@
                   "type": "object",
                   "required": ["type", "id"],
                   "properties": {
-                    "type": { "type": "string", "enum": ["node--article", "node--page"] },
-                    "id": { "type": "string", "format": "uuid" }
+                    "type": {
+                      "type": "string",
+                      "enum": ["node--article", "node--page"]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
                   }
                 }
-              }
+              },
+              "title": "Reference"
             }
           }
         }

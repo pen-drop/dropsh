@@ -2,7 +2,12 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "../../../src/commands/auth.js";
+import {
+  runAuthLogin,
+  runAuthLogout,
+  runAuthStatus,
+  runAuthUse,
+} from "../../../src/commands/auth.js";
 import { readProfile, readProfiles, readSession } from "../../../src/core/auth/session-store.js";
 import type { AuthProvider } from "../../../src/core/auth/types.js";
 
@@ -11,10 +16,20 @@ function provider(id: string, login = true): AuthProvider {
     id,
     displayName: id,
     capabilities: { login, logout: true, status: true },
-    async login() { return { access_token: "tok", expires_at: 10 }; },
+    async login() {
+      return { access_token: "tok", expires_at: 10 };
+    },
     async logout() {},
-    async status(s) { return { loggedIn: s !== null, provider: id }; },
-    createAdapter() { return { async apply(r) { return r; } }; },
+    async status(s) {
+      return { loggedIn: s !== null, provider: id };
+    },
+    createAdapter() {
+      return {
+        async apply(r) {
+          return r;
+        },
+      };
+    },
   };
 }
 
@@ -30,7 +45,11 @@ function deps(over: Record<string, unknown> = {}) {
     stderr: vi.fn(),
     prompt: vi.fn(async () => "1"),
     openBrowser: vi.fn(async () => {}),
-    http: { async send() { throw new Error("unused"); } },
+    http: {
+      async send() {
+        throw new Error("unused");
+      },
+    },
     now: () => 0,
     isTTY: true,
     ...over,
@@ -49,13 +68,17 @@ describe("auth login", () => {
   it("with an unknown --provider errors and writes nothing", async () => {
     const stateDir = await tmp();
     const stderr = vi.fn();
-    await expect(runAuthLogin({ provider: "zzz" }, { ...deps({ stateDir, stderr }) })).rejects.toThrow(/zzz/);
+    await expect(
+      runAuthLogin({ provider: "zzz" }, { ...deps({ stateDir, stderr }) }),
+    ).rejects.toThrow(/zzz/);
     expect(await readSession("https://example.com", stateDir)).toBeNull();
   });
 
   it("non-TTY without --provider errors", async () => {
     const stateDir = await tmp();
-    await expect(runAuthLogin({}, { ...deps({ stateDir, isTTY: false }) })).rejects.toThrow(/non-interactive/);
+    await expect(runAuthLogin({}, { ...deps({ stateDir, isTTY: false }) })).rejects.toThrow(
+      /non-interactive/,
+    );
   });
 
   it("non-TTY with a single provider and no --provider uses that provider", async () => {
@@ -76,7 +99,10 @@ describe("auth login", () => {
     const stateDir = await tmp();
     const stdout = vi.fn();
     const prompt = vi.fn(async () => "1");
-    await runAuthLogin({}, { ...deps({ stateDir, stdout, prompt, providers: [provider("only")] }) });
+    await runAuthLogin(
+      {},
+      { ...deps({ stateDir, stdout, prompt, providers: [provider("only")] }) },
+    );
     expect(stdout.mock.calls.flat().join("")).not.toContain("Select an auth provider");
     expect(prompt).not.toHaveBeenCalled();
     const rec = await readSession("https://example.com", stateDir);

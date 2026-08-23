@@ -325,32 +325,38 @@ Any number of fields goes into a single invocation; the `--<field>=<value>` pair
 form and the spaced form are interchangeable and produce identical output.
 
 **`--fields` lists the bundle's actual fields.** `--help` documents the forms;
-`--fields` resolves the bundle's schema and prints every settable parameter as
-JSON, then exits without sending anything:
+`--fields` resolves the bundle's schema and prints every settable parameter,
+then exits without sending anything:
 
 ```bash
 dropsh create node --bundle=article_test --fields
 ```
 
-```json
-{
-  "type": "node--article_test",
-  "attributes": [
-    { "parameter": "--title", "path": "title", "type": "string" },
-    { "parameter": "--status", "path": "status", "type": "boolean", "bare_flag": true },
-    { "parameter": "--body.value", "path": "body.value", "type": "string" }
-  ],
-  "relationships": [
-    { "parameter": "--uid <uuid>", "path": "uid", "targets": ["user--user"], "multiple": false }
-  ]
-}
+```
+node--article_test — field parameters
+
+Attributes:
+  --status [true|false]       boolean  Published
+  --title <value>             string  required  Title
+  --body.value <value>        string  Text
+  --field_test_text <value>   string  Test Text
+
+Relationships (take a UUID):
+  --uid <uuid>                user--user  Authored by
+  --field_image <uuid>        file--file  Image
 ```
 
-Object attributes appear as their dotted leaves (`--body.value`, never `--body`),
-array attributes as their `--json` form, and each relationship carries its
-allowed target types plus whether it is repeatable. `requires_type_prefix` marks
-one that needs `<type>:<uuid>`. It works on `update` the same way and goes
-through the normal fetch-and-cache path, so it needs no warm cache.
+Each row carries the schema type, whether the field is required, and the field's
+human label. Object attributes appear as their dotted leaves (`--body.value`,
+never `--body`), array attributes as their `--json` form, and a relationship that
+allows several target types is spelled `<type>:<uuid>`. `--fields` works on
+`update` the same way and goes through the normal fetch-and-cache path, so it
+needs no warm cache.
+
+Add an explicit `--format json` to get the same listing as JSON — `parameter`,
+`path`, `type`, `label`, `required`, `bare_flag` per attribute, and `targets`,
+`multiple`, `requires_type_prefix` per relationship — for a caller that wants to
+consume it rather than read it.
 
 Rules worth knowing:
 

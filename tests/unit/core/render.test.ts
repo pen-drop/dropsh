@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { indexIncluded, isInteractive } from "../../../src/core/cli/render.js";
 import type { AnyRenderer } from "../../../src/core/cli/render.js";
+import { indexIncluded, isInteractive } from "../../../src/core/cli/render.js";
 
 describe("indexIncluded", () => {
   it("indexes included resources by type/id", () => {

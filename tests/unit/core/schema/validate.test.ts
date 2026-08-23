@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 import { validatePayload } from "../../../../src/core/schema/validate.js";
 import { ValidationError } from "../../../../src/errors.js";
 
@@ -52,7 +52,9 @@ describe("validatePayload", () => {
     const e = caught as ValidationError;
     expect(e.message).toContain("node/article");
     const errs = e.details.errors as Array<{ instancePath: string; message: string }>;
-    expect(errs.some((x) => x.instancePath === "/data/attributes" && /required/i.test(x.message))).toBe(true);
+    expect(
+      errs.some((x) => x.instancePath === "/data/attributes" && /required/i.test(x.message)),
+    ).toBe(true);
   });
 
   it("rejects a value that violates a declared string format (uri)", () => {
