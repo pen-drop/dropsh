@@ -14,7 +14,12 @@ import {
   siteCacheRoot,
 } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
-import { runUpdate } from "./commands/update.js";
+import {
+  assertUpdateTarget,
+  runUpdate,
+  type UpdateArgs,
+  type UpdateDeps,
+} from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
 import {
   collectProviders,
@@ -516,37 +521,59 @@ Example:
   program
     .command("update <target>")
     .description("Update an existing entity")
-    .requiredOption("--data <json>", "inline JSON or @path")
+    .option("--data <json>", "inline JSON or @path")
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
-    .action((target: string, o: { data: string; dryRun?: boolean; validate?: boolean }) => {
-      const args: {
-        target: string;
-        dataArg: string;
-        dryRun?: boolean;
-        noValidate?: boolean;
-      } = { target, dataArg: o.data };
-      if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      if (o.validate === false) args.noValidate = true;
-      return run(async (ctx) => {
-        const [entityType, bundle] = target.split("/") as [string?, string?];
-        const rctx: RenderContext = { command: "update", target };
-        if (entityType !== undefined) rctx.entityType = entityType;
-        if (bundle !== undefined) rctx.bundle = bundle;
-        const deps: {
-          client: JsonApiClient;
-          emit: (v: unknown) => void;
-          validate?: (payload: unknown, target: string) => void | Promise<void>;
-        } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
-        if (!args.noValidate) {
-          deps.validate = async (payload: unknown, t: string) => {
-            const schema = await loadOrFetchSchema(ctx, t, "update");
-            validatePayload(schema, payload, t);
-          };
-        }
-        await runUpdate(args, deps);
-      }, assertRenderable);
-    });
+    .allowUnknownOption()
+    .addHelpText("after", FIELD_PARAMETER_HELP)
+    .action(
+      (
+        target: string,
+        o: { data?: string; dryRun?: boolean; validate?: boolean },
+        cmd: Command,
+      ) => {
+        return run(async (ctx) => {
+          const fields = parseFieldArgs(cmd.args.slice(1));
+          if (o.data !== undefined && fields.length > 0) {
+            throw new ValidationError(
+              "--data and field parameters are mutually exclusive; use one or the other",
+            );
+          }
+          const [entityType, bundle, id] = target.split("/") as [string?, string?, string?];
+          const rctx: RenderContext = { command: "update", target };
+          if (entityType !== undefined) rctx.entityType = entityType;
+          if (bundle !== undefined) rctx.bundle = bundle;
+          const schemaTarget = `${entityType}/${bundle}`;
+          let cached: unknown;
+          const schema = async () =>
+            (cached ??= await loadOrFetchSchema(ctx, schemaTarget, "update"));
+
+          const args: UpdateArgs = { target };
+          if (o.data !== undefined) args.dataArg = o.data;
+          if (fields.length > 0) {
+            // Guard the target before building, so a malformed one is reported by
+            // its own message rather than as a missing data.id.
+            assertUpdateTarget(target);
+            args.payload = buildPayloadFromParameters({
+              schema: await schema(),
+              parameters: fields,
+              operation: "update",
+              ...(id !== undefined ? { id } : {}),
+              resourceType: `${entityType}--${bundle}`,
+            });
+          }
+          if (o.dryRun !== undefined) args.dryRun = o.dryRun;
+          if (o.validate === false) args.noValidate = true;
+
+          const deps: UpdateDeps = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
+          if (!args.noValidate) {
+            deps.validate = async (payload: unknown, t: string) =>
+              validatePayload(await schema(), payload, t);
+          }
+          await runUpdate(args, deps);
+        }, assertRenderable);
+      },
+    );
 
   program
     .command("delete <target>")

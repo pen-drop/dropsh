@@ -546,3 +546,49 @@ describe("create with field parameters", () => {
     });
   });
 });
+
+describe("update with field parameters", () => {
+  const uuid = "11111111-2222-3333-4444-555555555555";
+
+  it("AC 8: builds a PATCH document with data.id and only the supplied fields", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "update");
+    const c = fakeClient();
+    const p = buildProgram({ contextFactory: async () => paramContext(cwd, c), stdout: () => {} });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "update",
+      `node/article/${uuid}`,
+      "--title",
+      "New title",
+    ]);
+    expect(c.patch).toHaveBeenCalledWith(`node/article/${uuid}`, {
+      data: { type: "node--article", id: uuid, attributes: { title: "New title" } },
+    });
+  });
+
+  it("AC 4: takes a relationship as a bare UUID on update", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "update");
+    const c = fakeClient();
+    const p = buildProgram({ contextFactory: async () => paramContext(cwd, c), stdout: () => {} });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "update",
+      `node/article/${uuid}`,
+      "--uid",
+      "123e4567-e89b-12d3-a456-426614174000",
+    ]);
+    expect(c.patch).toHaveBeenCalledWith(`node/article/${uuid}`, {
+      data: {
+        type: "node--article",
+        id: uuid,
+        relationships: {
+          uid: { data: { type: "user--user", id: "123e4567-e89b-12d3-a456-426614174000" } },
+        },
+      },
+    });
+  });
+});

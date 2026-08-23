@@ -4,7 +4,10 @@ import { readDataArg } from "./_data.js";
 
 export interface UpdateArgs {
   target: string;
-  dataArg: string;
+  /** Raw `--data` argument (inline JSON or @path). Absent in parameter mode. */
+  dataArg?: string;
+  /** Document already built from field parameters. Absent in `--data` mode. */
+  payload?: unknown;
   dryRun?: boolean;
   noValidate?: boolean;
 }
@@ -16,11 +19,25 @@ export interface UpdateDeps {
 
 const TARGET_RE = /^[a-z0-9_]+\/[a-z0-9_]+\/[a-f0-9-]{8,}$/;
 
-export async function runUpdate(args: UpdateArgs, deps: UpdateDeps): Promise<void> {
-  if (!TARGET_RE.test(args.target)) {
-    throw new ValidationError(`target must be <entity_type>/<bundle>/<uuid>, got "${args.target}"`);
+/**
+ * Reject a malformed target. Exported so the CLI can run this guard *before* it
+ * builds a payload from field parameters: without it, a bad target would surface
+ * as the builder's "update requires the entity id" instead of this clearer
+ * message.
+ */
+export function assertUpdateTarget(target: string): void {
+  if (!TARGET_RE.test(target)) {
+    throw new ValidationError(`target must be <entity_type>/<bundle>/<uuid>, got "${target}"`);
   }
-  const payload = await readDataArg(args.dataArg);
+}
+
+export async function runUpdate(args: UpdateArgs, deps: UpdateDeps): Promise<void> {
+  assertUpdateTarget(args.target);
+  if (args.payload === undefined && args.dataArg === undefined) {
+    throw new ValidationError("provide either --data or field parameters (--<field> <value>)");
+  }
+  const payload =
+    args.payload !== undefined ? args.payload : await readDataArg(args.dataArg as string);
   const [entity, bundle] = args.target.split("/", 3) as [string, string, string];
   const schemaTarget = `${entity}/${bundle}`;
   if (!args.noValidate && deps.validate) {

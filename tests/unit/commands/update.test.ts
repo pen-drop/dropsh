@@ -79,3 +79,37 @@ describe("runUpdate", () => {
     expect(c.patch).toHaveBeenCalled();
   });
 });
+
+describe("runUpdate with a pre-built payload", () => {
+  const target = "node/article/11111111-2222-3333-4444-555555555555";
+
+  it("PATCHes the given payload", async () => {
+    const c = client();
+    await runUpdate(
+      {
+        target,
+        payload: {
+          data: {
+            type: "node--article",
+            id: "11111111-2222-3333-4444-555555555555",
+            attributes: { title: "New" },
+          },
+        },
+      },
+      { client: c, emit: () => {} },
+    );
+    expect(c.patch).toHaveBeenCalledWith(target, {
+      data: {
+        type: "node--article",
+        id: "11111111-2222-3333-4444-555555555555",
+        attributes: { title: "New" },
+      },
+    });
+  });
+
+  it("requires either a payload or dataArg", async () => {
+    await expect(
+      runUpdate({ target }, { client: client(), emit: () => {} }),
+    ).rejects.toThrow(/either --data or field parameters/);
+  });
+});
