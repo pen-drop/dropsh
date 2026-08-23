@@ -57,6 +57,13 @@ export interface CommandContext {
   plugins: DropSHPlugin[];
 }
 
+/**
+ * The payload-carrying half of `CreateArgs`/`UpdateArgs` — everything both write
+ * commands share once their own target identification is set aside.
+ */
+type PayloadArgs = Pick<CreateArgs, "dataArg" | "payload" | "dryRun" | "noValidate">;
+type WriteDeps = CreateDeps & UpdateDeps;
+
 export interface ProgramOptions {
   contextFactory?: () => Promise<CommandContext>;
   stdout?: (s: string) => void;
@@ -299,6 +306,63 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       );
     }
   }
+  /**
+   * The write-command wiring `create` and `update` share: decide `--data` vs
+   * field parameters, fetch the operation schema at most once, build the payload
+   * from the parameters, and hand back the args/deps both `runCreate` and
+   * `runUpdate` accept. The two commands differ only in how they identify their
+   * target, which is why that part stays in each action.
+   */
+  async function writeWiring(input: {
+    ctx: CommandContext;
+    operation: Operation;
+    /** `<entity_type>/<bundle>` — what the schema is keyed by. */
+    schemaTarget: string;
+    /** Fallback resource type when the schema declares none. */
+    resourceType: string;
+    /** Leftover argv after the positional: the candidate field parameters. */
+    tokens: string[];
+    rctx: RenderContext;
+    options: { data?: string; dryRun?: boolean; validate?: boolean };
+    /** `data.id`, for `update`. */
+    id?: string;
+    /** Runs before the payload is built, e.g. to reject a malformed target. */
+    guard?: () => void;
+  }): Promise<{ args: PayloadArgs; deps: WriteDeps }> {
+    const { ctx, options } = input;
+    const fields = parseFieldArgs(input.tokens);
+    if (options.data !== undefined && fields.length > 0) {
+      throw new ValidationError(
+        "--data and field parameters are mutually exclusive; use one or the other",
+      );
+    }
+    let cached: unknown;
+    const schema = async () =>
+      (cached ??= await loadOrFetchSchema(ctx, input.schemaTarget, input.operation));
+
+    const args: PayloadArgs = {};
+    if (options.data !== undefined) args.dataArg = options.data;
+    if (fields.length > 0) {
+      input.guard?.();
+      args.payload = buildPayloadFromParameters({
+        schema: await schema(),
+        parameters: fields,
+        operation: input.operation,
+        ...(input.id !== undefined ? { id: input.id } : {}),
+        resourceType: input.resourceType,
+      });
+    }
+    if (options.dryRun !== undefined) args.dryRun = options.dryRun;
+    if (options.validate === false) args.noValidate = true;
+
+    const deps: WriteDeps = { client: ctx.client, emit: (v) => output.emit(v, input.rctx) };
+    if (!args.noValidate) {
+      deps.validate = async (payload: unknown, t: string) =>
+        validatePayload(await schema(), payload, t);
+    }
+    return { args, deps };
+  }
+
   function assertJsonOnly(command: string): void {
     const f = currentFormat();
     if (f !== "json") {
@@ -483,37 +547,17 @@ Example:
         o: { bundle: string; data?: string; dryRun?: boolean; validate?: boolean },
         cmd: Command,
       ) => {
-        const target = `${entityType}/${o.bundle}`;
         return run(async (ctx) => {
-          const fields = parseFieldArgs(cmd.args.slice(1));
-          if (o.data !== undefined && fields.length > 0) {
-            throw new ValidationError(
-              "--data and field parameters are mutually exclusive; use one or the other",
-            );
-          }
-          const rctx: RenderContext = { command: "create", entityType, bundle: o.bundle };
-          let cached: unknown;
-          const schema = async () => (cached ??= await loadOrFetchSchema(ctx, target, "create"));
-
-          const args: CreateArgs = { entityType, bundle: o.bundle };
-          if (o.data !== undefined) args.dataArg = o.data;
-          if (fields.length > 0) {
-            args.payload = buildPayloadFromParameters({
-              schema: await schema(),
-              parameters: fields,
-              operation: "create",
-              resourceType: `${entityType}--${o.bundle}`,
-            });
-          }
-          if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-          if (o.validate === false) args.noValidate = true;
-
-          const deps: CreateDeps = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
-          if (!args.noValidate) {
-            deps.validate = async (payload: unknown, t: string) =>
-              validatePayload(await schema(), payload, t);
-          }
-          await runCreate(args, deps);
+          const { args, deps } = await writeWiring({
+            ctx,
+            operation: "create",
+            schemaTarget: `${entityType}/${o.bundle}`,
+            resourceType: `${entityType}--${o.bundle}`,
+            tokens: cmd.args.slice(1),
+            rctx: { command: "create", entityType, bundle: o.bundle },
+            options: o,
+          });
+          await runCreate({ entityType, bundle: o.bundle, ...args }, deps);
         }, assertRenderable);
       },
     );
@@ -533,44 +577,24 @@ Example:
         cmd: Command,
       ) => {
         return run(async (ctx) => {
-          const fields = parseFieldArgs(cmd.args.slice(1));
-          if (o.data !== undefined && fields.length > 0) {
-            throw new ValidationError(
-              "--data and field parameters are mutually exclusive; use one or the other",
-            );
-          }
           const [entityType, bundle, id] = target.split("/") as [string?, string?, string?];
           const rctx: RenderContext = { command: "update", target };
           if (entityType !== undefined) rctx.entityType = entityType;
           if (bundle !== undefined) rctx.bundle = bundle;
-          const schemaTarget = `${entityType}/${bundle}`;
-          let cached: unknown;
-          const schema = async () =>
-            (cached ??= await loadOrFetchSchema(ctx, schemaTarget, "update"));
-
-          const args: UpdateArgs = { target };
-          if (o.data !== undefined) args.dataArg = o.data;
-          if (fields.length > 0) {
+          const { args, deps } = await writeWiring({
+            ctx,
+            operation: "update",
+            schemaTarget: `${entityType}/${bundle}`,
+            resourceType: `${entityType}--${bundle}`,
+            tokens: cmd.args.slice(1),
+            rctx,
+            options: o,
+            ...(id !== undefined ? { id } : {}),
             // Guard the target before building, so a malformed one is reported by
             // its own message rather than as a missing data.id.
-            assertUpdateTarget(target);
-            args.payload = buildPayloadFromParameters({
-              schema: await schema(),
-              parameters: fields,
-              operation: "update",
-              ...(id !== undefined ? { id } : {}),
-              resourceType: `${entityType}--${bundle}`,
-            });
-          }
-          if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-          if (o.validate === false) args.noValidate = true;
-
-          const deps: UpdateDeps = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
-          if (!args.noValidate) {
-            deps.validate = async (payload: unknown, t: string) =>
-              validatePayload(await schema(), payload, t);
-          }
-          await runUpdate(args, deps);
+            guard: () => assertUpdateTarget(target),
+          });
+          await runUpdate({ target, ...args }, deps);
         }, assertRenderable);
       },
     );
