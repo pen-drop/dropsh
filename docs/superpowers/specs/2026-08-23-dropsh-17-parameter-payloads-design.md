@@ -185,13 +185,16 @@ export interface BuildPayloadInput {
   parameters: RawParameter[];
   operation: "create" | "update";
   id?: string;              // update: data.id
+  resourceType?: string;    // fallback when the schema carries no type const
 }
 
 export function buildPayloadFromParameters(input: BuildPayloadInput): unknown;
 ```
 
-Emits `data.type` from the index (falling back to `<entity>--<bundle>` when the
-schema carries no `const`), `data.id` for `update`, and omits `attributes` or
+Emits `data.type` from the index, falling back to the caller-supplied
+`resourceType` (the CLI passes `<entity>--<bundle>`) when the schema carries no
+`const`, and erroring when neither is available. Emits `data.id` for `update`,
+and omits `attributes` or
 `relationships` entirely when no parameter targets them — so an `update`
 document carries only the supplied fields (AC 8).
 
@@ -270,9 +273,13 @@ time; the unknown-parameter error and `--help` therefore both point at
 
 ## Testing
 
-Unit (`pnpm test`), no network, with the real cached schemas
-(`gaia_comment--gaia_comment.create`, `gaia_ticket--gaia_ticket.update`) copied
-into `tests/unit/fixtures/`:
+Unit (`pnpm test`), no network. One new fixture,
+`tests/unit/fixtures/schemata/node--article.rich.schema.json`, holds a raw
+schemata-shaped schema modelled on the real cached ones (scalar, boolean,
+integer, nested-object and array-of-object attributes; single-valued,
+multi-valued and ambiguous-target relationships). Both operation variants are
+derived from it in the tests with the real `toOperationVariant()`, so the
+fixture cannot drift from the pipeline:
 
 | File | Covers |
 |---|---|
