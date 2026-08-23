@@ -38,9 +38,8 @@ import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
 import { buildPayloadFromParameters } from "./core/params/from-parameters.js";
-import { findCachedSchema, renderFieldHelp } from "./core/params/help.js";
+import { describeFields, FIELD_PARAMETER_HELP } from "./core/params/help.js";
 import { parseFieldArgs } from "./core/params/parse-args.js";
-import { indexSchemaFields } from "./core/params/schema-fields.js";
 import type { DropSHPlugin, PluginContext } from "./core/plugin.js";
 import { composeRequestHooks } from "./core/request-hooks.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
@@ -220,28 +219,6 @@ async function defaultContext(configPath: string, profile?: string): Promise<Com
   };
 }
 
-/**
- * Field-parameter help for one write command. Commander renders help
- * synchronously, so the bundle's fields can only come from the on-disk schema
- * cache — `findCachedSchema` says which host's cache answered, and the generic
- * forms stand in when nothing is cached yet.
- *
- * `resolve` reads the target off the partially parsed command: at help time
- * Commander has populated the options and left the positional in `args[0]`.
- */
-function fieldParameterHelp(
-  op: "create" | "update",
-  resolve: (cmd: Command) => { entity?: string; bundle?: string },
-): (ctx: { command: Command }) => string {
-  return (ctx) => {
-    const { entity, bundle } = resolve(ctx.command);
-    if (entity === undefined || bundle === undefined) return renderFieldHelp();
-    const hit = findCachedSchema(process.cwd(), entity, bundle, op);
-    if (!hit) return renderFieldHelp();
-    return renderFieldHelp({ index: indexSchemaFields(hit.schema), host: hit.host });
-  };
-}
-
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
   program
@@ -329,13 +306,20 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     /** Leftover argv after the positional: the candidate field parameters. */
     tokens: string[];
     rctx: RenderContext;
-    options: { data?: string; dryRun?: boolean; validate?: boolean };
+    options: { data?: string; dryRun?: boolean; validate?: boolean; fields?: boolean };
     /** `data.id`, for `update`. */
     id?: string;
     /** Runs before the payload is built, e.g. to reject a malformed target. */
     guard?: () => void;
-  }): Promise<{ args: PayloadArgs; deps: WriteDeps }> {
+  }): Promise<{ args: PayloadArgs; deps: WriteDeps } | "listed"> {
     const { ctx, options } = input;
+    // --fields is a discovery request, not a write: resolve the schema through
+    // the normal fetch-and-cache pipeline, print the parameters, send nothing.
+    if (options.fields === true) {
+      const schema = await loadOrFetchSchema(ctx, input.schemaTarget, input.operation);
+      output.emit(describeFields(schema), input.rctx);
+      return "listed";
+    }
     const fields = parseFieldArgs(input.tokens);
     if (options.data !== undefined && fields.length > 0) {
       throw new ValidationError(
@@ -545,23 +529,23 @@ Example:
     .option("--data <json>", "inline JSON or @path")
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
+    .option("--fields", "list this bundle's field parameters and exit")
     .allowUnknownOption()
-    .addHelpText(
-      "after",
-      fieldParameterHelp("create", (cmd) => {
-        const entity = cmd.args[0];
-        const { bundle } = cmd.opts() as { bundle?: string };
-        return { ...(entity ? { entity } : {}), ...(bundle ? { bundle } : {}) };
-      }),
-    )
+    .addHelpText("after", FIELD_PARAMETER_HELP)
     .action(
       (
         entityType: string,
-        o: { bundle: string; data?: string; dryRun?: boolean; validate?: boolean },
+        o: {
+          bundle: string;
+          data?: string;
+          dryRun?: boolean;
+          validate?: boolean;
+          fields?: boolean;
+        },
         cmd: Command,
       ) => {
         return run(async (ctx) => {
-          const { args, deps } = await writeWiring({
+          const wiring = await writeWiring({
             ctx,
             operation: "create",
             schemaTarget: `${entityType}/${o.bundle}`,
@@ -570,7 +554,8 @@ Example:
             rctx: { command: "create", entityType, bundle: o.bundle },
             options: o,
           });
-          await runCreate({ entityType, bundle: o.bundle, ...args }, deps);
+          if (wiring === "listed") return;
+          await runCreate({ entityType, bundle: o.bundle, ...wiring.args }, wiring.deps);
         }, assertRenderable);
       },
     );
@@ -581,18 +566,13 @@ Example:
     .option("--data <json>", "inline JSON or @path")
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
+    .option("--fields", "list this bundle's field parameters and exit")
     .allowUnknownOption()
-    .addHelpText(
-      "after",
-      fieldParameterHelp("update", (cmd) => {
-        const [entity, bundle] = (cmd.args[0] ?? "").split("/");
-        return { ...(entity ? { entity } : {}), ...(bundle ? { bundle } : {}) };
-      }),
-    )
+    .addHelpText("after", FIELD_PARAMETER_HELP)
     .action(
       (
         target: string,
-        o: { data?: string; dryRun?: boolean; validate?: boolean },
+        o: { data?: string; dryRun?: boolean; validate?: boolean; fields?: boolean },
         cmd: Command,
       ) => {
         return run(async (ctx) => {
@@ -600,7 +580,7 @@ Example:
           const rctx: RenderContext = { command: "update", target };
           if (entityType !== undefined) rctx.entityType = entityType;
           if (bundle !== undefined) rctx.bundle = bundle;
-          const { args, deps } = await writeWiring({
+          const wiring = await writeWiring({
             ctx,
             operation: "update",
             schemaTarget: `${entityType}/${bundle}`,
@@ -613,7 +593,8 @@ Example:
             // its own message rather than as a missing data.id.
             guard: () => assertUpdateTarget(target),
           });
-          await runUpdate({ target, ...args }, deps);
+          if (wiring === "listed") return;
+          await runUpdate({ target, ...wiring.args }, wiring.deps);
         }, assertRenderable);
       },
     );

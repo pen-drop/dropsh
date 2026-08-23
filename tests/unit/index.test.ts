@@ -60,9 +60,21 @@ describe("normalizeInclude", () => {
 
 describe("buildProgram", () => {
   it("registers all subcommands", () => {
-    const p = buildProgram({ contextFactory: async () => ({ client: fakeClient(), plugins: [] } as unknown as CommandContext) });
+    const p = buildProgram({
+      contextFactory: async () =>
+        ({ client: fakeClient(), plugins: [] }) as unknown as CommandContext,
+    });
     const names = p.commands.map((c) => c.name()).sort();
-    expect(names).toEqual(["auth", "create", "delete", "read", "schema", "search", "update", "upload-file"]);
+    expect(names).toEqual([
+      "auth",
+      "create",
+      "delete",
+      "read",
+      "schema",
+      "search",
+      "update",
+      "upload-file",
+    ]);
   });
 
   it("read subcommand runs via parseAsync and writes JSON to stdout", async () => {
@@ -70,11 +82,16 @@ describe("buildProgram", () => {
     const out: string[] = [];
     const err: string[] = [];
     const p = buildProgram({
-      contextFactory: async () => ({ client: c, plugins: [] } as unknown as CommandContext),
+      contextFactory: async () => ({ client: c, plugins: [] }) as unknown as CommandContext,
       stdout: (s) => out.push(s),
       stderr: (s) => err.push(s),
     });
-    await p.parseAsync(["node", "dropsh", "read", "node/article/abcdef01-abcd-abcd-abcd-abcdef012345"]);
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+    ]);
     expect(c.get).toHaveBeenCalledWith("node/article/abcdef01-abcd-abcd-abcd-abcdef012345");
     expect(JSON.parse(out.join(""))).toEqual({ data: { type: "node--article", id: "u1" } });
   });
@@ -82,7 +99,7 @@ describe("buildProgram", () => {
   it("read subcommand forwards --include as JSON:API params", async () => {
     const c = fakeClient();
     const p = buildProgram({
-      contextFactory: async () => ({ client: c, plugins: [] } as unknown as CommandContext),
+      contextFactory: async () => ({ client: c, plugins: [] }) as unknown as CommandContext,
       stdout: () => {},
       stderr: () => {},
     });
@@ -96,15 +113,13 @@ describe("buildProgram", () => {
     ]);
     const [target, params] = (c.get as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(target).toBe("node/article/abcdef01-abcd-abcd-abcd-abcdef012345");
-    expect(params.getQueryString({ encode: false })).toBe(
-      "include=field_related,field_image",
-    );
+    expect(params.getQueryString({ encode: false })).toBe("include=field_related,field_image");
   });
 
   it("search subcommand forwards --include alongside filters and limit", async () => {
     const c = fakeClient();
     const p = buildProgram({
-      contextFactory: async () => ({ client: c, plugins: [] } as unknown as CommandContext),
+      contextFactory: async () => ({ client: c, plugins: [] }) as unknown as CommandContext,
       stdout: () => {},
       stderr: () => {},
     });
@@ -130,7 +145,8 @@ describe("buildProgram", () => {
     const err: string[] = [];
     const exitCodes: number[] = [];
     const p = buildProgram({
-      contextFactory: async () => ({ client: fakeClient(), plugins: [] } as unknown as CommandContext),
+      contextFactory: async () =>
+        ({ client: fakeClient(), plugins: [] }) as unknown as CommandContext,
       stdout: () => {},
       stderr: (s) => err.push(s),
       setExitCode: (code) => exitCodes.push(code),
@@ -147,10 +163,15 @@ describe("buildProgram", () => {
       id: "test-cmd",
       requiredModules: [],
       registerCommands(program) {
-        program.command("test-plugin-cmd").description("test").action(() => {});
+        program
+          .command("test-plugin-cmd")
+          .description("test")
+          .action(() => {});
         registeredCommands.push("test-plugin-cmd");
       },
-      async extendSchema(_e, _b, s) { return s; },
+      async extendSchema(_e, _b, s) {
+        return s;
+      },
     };
     const p = buildProgram({ plugins: [plugin] });
     const names = p.commands.map((c) => c.name());
@@ -165,7 +186,11 @@ describe("buildProgram", () => {
     const adapter = await resolveAuth({
       baseUrl: "https://example.com",
       plugins: [basicAuthPlugin()],
-      http: { async send() { throw new Error("unused"); } },
+      http: {
+        async send() {
+          throw new Error("unused");
+        },
+      },
       now: () => 0,
       stateDir: dir,
     });
@@ -179,7 +204,11 @@ describe("buildProgram", () => {
       resolveAuth({
         baseUrl: "https://example.com",
         plugins: [basicAuthPlugin()],
-        http: { async send() { throw new Error("unused"); } },
+        http: {
+          async send() {
+            throw new Error("unused");
+          },
+        },
         now: () => 0,
         stateDir: dir,
       }),
@@ -196,9 +225,13 @@ describe("buildProgram", () => {
         id: "static-basic",
         displayName: "Static Basic",
         capabilities: { login: false, logout: false, status: false },
-        async login() { return {}; },
+        async login() {
+          return {};
+        },
         async logout() {},
-        async status() { return { loggedIn: true }; },
+        async status() {
+          return { loggedIn: true };
+        },
         createAdapter(_session: unknown) {
           return {
             async apply(req: { method: string; url: string; headers: Record<string, string> }) {
@@ -214,7 +247,7 @@ describe("buildProgram", () => {
       plugins: [sessionlessPlugin as any],
       http: { send: vi.fn() },
       now: () => 0,
-      stateDir: dir,                     // empty dir → no session record
+      stateDir: dir, // empty dir → no session record
     });
     const out = await adapter.apply({ method: "GET", url: "/x", headers: {} });
     expect(out.headers?.Authorization).toBe(`Basic ${b64}`);
@@ -229,10 +262,20 @@ describe("buildProgram", () => {
         id: "oauth",
         displayName: "OAuth",
         capabilities: { login: true, logout: true, status: true },
-        async login() { return {}; },
+        async login() {
+          return {};
+        },
         async logout() {},
-        async status() { return { loggedIn: false }; },
-        createAdapter() { return { async apply(r: unknown) { return r; } }; },
+        async status() {
+          return { loggedIn: false };
+        },
+        createAdapter() {
+          return {
+            async apply(r: unknown) {
+              return r;
+            },
+          };
+        },
       },
     };
     await expect(
@@ -260,40 +303,84 @@ describe("resolveAuth — named profiles", () => {
         displayName: id,
         ...(isDefault ? { default: true } : {}),
         capabilities: { login: true, logout: true, status: true },
-        async login() { return { access_token: `${id}-tok` }; },
+        async login() {
+          return { access_token: `${id}-tok` };
+        },
         async logout() {},
-        async status(s: unknown) { return { loggedIn: s !== null, provider: id }; },
-        createAdapter(session: { access_token?: string } | undefined, rt: { save: (s: unknown) => Promise<void> }) {
+        async status(s: unknown) {
+          return { loggedIn: s !== null, provider: id };
+        },
+        createAdapter(
+          session: { access_token?: string } | undefined,
+          rt: { save: (s: unknown) => Promise<void> },
+        ) {
           return {
             async apply(req: { headers?: Record<string, string> }) {
               await rt.save({ access_token: `${id}-renewed` });
-              return { ...req, headers: { ...(req.headers ?? {}), Authorization: `Bearer ${session?.access_token}` } };
+              return {
+                ...req,
+                headers: {
+                  ...(req.headers ?? {}),
+                  Authorization: `Bearer ${session?.access_token}`,
+                },
+              };
             },
           };
         },
       },
-      async extendSchema(_e: unknown, _b: unknown, s: unknown) { return s; },
+      async extendSchema(_e: unknown, _b: unknown, s: unknown) {
+        return s;
+      },
     } as unknown as Plugin;
   }
 
-  const base = { baseUrl: "https://example.com", http: { async send() { throw new Error("unused"); } }, now: () => 0 };
+  const base = {
+    baseUrl: "https://example.com",
+    http: {
+      async send() {
+        throw new Error("unused");
+      },
+    },
+    now: () => 0,
+  };
 
   it("explicit profile wins over the stored active pointer", async () => {
     const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
-    await writeProfile("https://example.com", "session", "session", { access_token: "session-tok" }, dir);
+    await writeProfile(
+      "https://example.com",
+      "session",
+      "session",
+      { access_token: "session-tok" },
+      dir,
+    );
     await writeProfile("https://example.com", "pm", "pm", { access_token: "pm-tok" }, dir);
     const { setActive } = await import("../../src/core/auth/session-store.js");
     await setActive("https://example.com", "session", dir);
-    const adapter = await resolveAuth({ ...base, plugins: [echoPlugin("session"), echoPlugin("pm")], stateDir: dir, profile: "pm" });
+    const adapter = await resolveAuth({
+      ...base,
+      plugins: [echoPlugin("session"), echoPlugin("pm")],
+      stateDir: dir,
+      profile: "pm",
+    });
     const req = await adapter.apply({ method: "GET", url: "/x" });
     expect(req.headers?.Authorization).toBe("Bearer pm-tok");
   });
 
   it("falls back to config default:true when nothing is active", async () => {
     const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
-    await writeProfile("https://example.com", "session", "session", { access_token: "session-tok" }, dir);
+    await writeProfile(
+      "https://example.com",
+      "session",
+      "session",
+      { access_token: "session-tok" },
+      dir,
+    );
     await writeProfile("https://example.com", "pm", "pm", { access_token: "pm-tok" }, dir);
-    const adapter = await resolveAuth({ ...base, plugins: [echoPlugin("session", true), echoPlugin("pm")], stateDir: dir });
+    const adapter = await resolveAuth({
+      ...base,
+      plugins: [echoPlugin("session", true), echoPlugin("pm")],
+      stateDir: dir,
+    });
     const req = await adapter.apply({ method: "GET", url: "/x" });
     expect(req.headers?.Authorization).toBe("Bearer session-tok");
   });
@@ -307,12 +394,27 @@ describe("resolveAuth — named profiles", () => {
 
   it("renews only the resolved profile's slot", async () => {
     const dir = await mkdtemp(join(tmpdir(), "dropsh-test-"));
-    await writeProfile("https://example.com", "session", "session", { access_token: "session-tok" }, dir);
+    await writeProfile(
+      "https://example.com",
+      "session",
+      "session",
+      { access_token: "session-tok" },
+      dir,
+    );
     await writeProfile("https://example.com", "pm", "pm", { access_token: "pm-tok" }, dir);
-    const adapter = await resolveAuth({ ...base, plugins: [echoPlugin("session"), echoPlugin("pm")], stateDir: dir, profile: "pm" });
+    const adapter = await resolveAuth({
+      ...base,
+      plugins: [echoPlugin("session"), echoPlugin("pm")],
+      stateDir: dir,
+      profile: "pm",
+    });
     await adapter.apply({ method: "GET", url: "/x" });
-    expect((await readProfile("https://example.com", "pm", dir))?.session.access_token).toBe("pm-renewed");
-    expect((await readProfile("https://example.com", "session", dir))?.session.access_token).toBe("session-tok");
+    expect((await readProfile("https://example.com", "pm", dir))?.session.access_token).toBe(
+      "pm-renewed",
+    );
+    expect((await readProfile("https://example.com", "session", dir))?.session.access_token).toBe(
+      "session-tok",
+    );
   });
 });
 
@@ -327,9 +429,13 @@ describe("authStatus", () => {
         id: "static-basic",
         displayName: "Static Basic",
         capabilities: { login: false, logout: false, status: false },
-        async login() { return {}; },
+        async login() {
+          return {};
+        },
         async logout() {},
-        async status() { return { loggedIn: true }; },
+        async status() {
+          return { loggedIn: true };
+        },
         createAdapter() {
           return {
             async apply(req: { method: string; url: string; headers: Record<string, string> }) {
@@ -358,10 +464,20 @@ describe("authStatus", () => {
         id: "oauth",
         displayName: "OAuth",
         capabilities: { login: true, logout: true, status: true },
-        async login() { return {}; },
+        async login() {
+          return {};
+        },
         async logout() {},
-        async status() { return { loggedIn: false }; },
-        createAdapter() { return { async apply(r: unknown) { return r; } }; },
+        async status() {
+          return { loggedIn: false };
+        },
+        createAdapter() {
+          return {
+            async apply(r: unknown) {
+              return r;
+            },
+          };
+        },
       },
     };
     const st = await authStatus({
@@ -590,5 +706,54 @@ describe("update with field parameters", () => {
         },
       },
     });
+  });
+});
+
+describe("--fields lists the bundle's parameters", () => {
+  it("prints the field listing and sends nothing", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync(["node", "dropsh", "create", "node", "--bundle", "article", "--fields"]);
+    expect(c.post).not.toHaveBeenCalled();
+    expect(c.patch).not.toHaveBeenCalled();
+    const listed = JSON.parse(out.join("")) as {
+      type: string;
+      attributes: Array<{ path: string }>;
+      relationships: Array<{ path: string; targets: string[] }>;
+    };
+    expect(listed.type).toBe("node--article");
+    expect(listed.attributes.map((a) => a.path)).toContain("body.value");
+    expect(listed.relationships).toContainEqual({
+      parameter: "--uid <uuid>",
+      path: "uid",
+      targets: ["user--user"],
+      multiple: false,
+    });
+  });
+
+  it("works on update too, without patching", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "update");
+    const c = fakeClient();
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "update",
+      "node/article/11111111-2222-3333-4444-555555555555",
+      "--fields",
+    ]);
+    expect(c.patch).not.toHaveBeenCalled();
+    expect((JSON.parse(out.join("")) as { type: string }).type).toBe("node--article");
   });
 });

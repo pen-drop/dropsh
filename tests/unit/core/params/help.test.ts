@@ -1,11 +1,8 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { findCachedSchema, renderFieldHelp } from "../../../../src/core/params/help.js";
-import { indexSchemaFields } from "../../../../src/core/params/schema-fields.js";
+import { describeFields, FIELD_PARAMETER_HELP } from "../../../../src/core/params/help.js";
 import { toOperationVariant } from "../../../../src/core/schema/to-jsonschema.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -14,123 +11,95 @@ const RAW = JSON.parse(
 ) as unknown;
 const createSchema = toOperationVariant(RAW, "create");
 
-describe("renderFieldHelp", () => {
-  it("falls back to the generic forms when no schema is cached", () => {
-    const text = renderFieldHelp(undefined);
-    expect(text).toMatch(/--<field> <value>/);
-    expect(text).toMatch(/--json <field>=<json>/);
-    expect(text).toMatch(/dropsh schema <entity>\/<bundle>/);
-    // It must not pretend to name this bundle's fields.
-    expect(text).not.toMatch(/Field parameters for/);
-    expect(text).not.toMatch(/Attributes:/);
-    expect(text).not.toMatch(/Relationships/);
+describe("FIELD_PARAMETER_HELP", () => {
+  it("documents the surface forms", () => {
+    expect(FIELD_PARAMETER_HELP).toMatch(/--<field> <value>/);
+    expect(FIELD_PARAMETER_HELP).toMatch(/--json <field>=<json>/);
   });
 
-  it("lists the bundle's scalar attributes by name", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex.ddev.site" });
-    expect(text).toMatch(/--title/);
-    expect(text).toMatch(/--status/);
-    expect(text).toMatch(/--weight/);
+  it("points at --fields for the bundle's actual field names", () => {
+    expect(FIELD_PARAMETER_HELP).toMatch(/--fields/);
   });
 
-  it("expands an object attribute into its dotted sub-paths", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex.ddev.site" });
-    expect(text).toMatch(/--body\.value/);
-    expect(text).toMatch(/--body\.format/);
-    expect(text).toMatch(/--body\.summary/);
-  });
-
-  it("names a relationship's single target type", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex.ddev.site" });
-    expect(text).toMatch(/--uid <uuid>\s+user--user/);
-  });
-
-  it("marks a multi-valued relationship as repeatable", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex.ddev.site" });
-    expect(text).toMatch(/--field_tags .*taxonomy_term--tags.*repeatable/);
-  });
-
-  it("shows the <type>:<uuid> form for an ambiguous relationship", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex.ddev.site" });
-    expect(text).toMatch(/--field_ref <type>:<uuid>/);
-    expect(text).toMatch(/node--article \| node--page/);
-  });
-
-  it("names the host the cached schema came from", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex.ddev.site" });
-    expect(text).toMatch(/ex\.ddev\.site/);
-  });
-
-  it("keeps a separator when a field name overflows the flag column", () => {
-    const long = "revision_translation_affected";
-    const schema = {
-      properties: {
-        data: {
-          properties: {
-            type: { const: "node--article" },
-            attributes: { properties: { [long]: { type: "boolean" } } },
-          },
-        },
-      },
-    };
-    const text = renderFieldHelp({ index: indexSchemaFields(schema), host: "ex" });
-    expect(text).not.toMatch(new RegExp(`--${long} <value>true`));
-    expect(text).toMatch(new RegExp(`--${long} <value>\\s+true\\|false`));
-  });
-
-  it("aligns every hint in one column", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields(createSchema), host: "ex" });
-    const columns = text
-      .split("\n")
-      .filter((l) => /^ {2}--\S+ <value>\s+\S/.test(l))
-      .map((l) => l.indexOf(l.trimStart().split(/\s{2,}/)[1] as string));
-    expect(new Set(columns).size).toBe(1);
-  });
-
-  it("says so when the cached schema declares no fields at all", () => {
-    const text = renderFieldHelp({ index: indexSchemaFields({ type: "object" }), host: "ex" });
-    expect(text).toMatch(/declares no fields/);
+  it("names --fields among the reserved options", () => {
+    expect(FIELD_PARAMETER_HELP).toMatch(/reserved option[\s\S]*--fields/);
   });
 });
 
-describe("findCachedSchema", () => {
-  function seed(cwd: string, host: string, file: string): void {
-    const abs = join(cwd, ".dropsh/cache", host, "schema", file);
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, JSON.stringify(createSchema), "utf8");
-  }
+describe("describeFields", () => {
+  const described = describeFields(createSchema);
 
-  it("finds a cached operation schema and reports its host", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "dropsh-help-"));
-    seed(cwd, "ex.ddev.site", "node--article.create.json");
-    const hit = findCachedSchema(cwd, "node", "article", "create");
-    expect(hit?.host).toBe("ex.ddev.site");
-    expect(indexSchemaFields(hit?.schema).fields.has("title")).toBe(true);
+  it("reports the resource type", () => {
+    expect(described.type).toBe("node--article");
   });
 
-  it("returns undefined when nothing is cached", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "dropsh-help-"));
-    expect(findCachedSchema(cwd, "node", "article", "create")).toBeUndefined();
+  it("lists a scalar attribute with its parameter and schema type", () => {
+    expect(described.attributes).toContainEqual({
+      parameter: "--title",
+      path: "title",
+      type: "string",
+    });
   });
 
-  it("does not confuse another bundle's cache entry", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "dropsh-help-"));
-    seed(cwd, "ex.ddev.site", "node--page.create.json");
-    expect(findCachedSchema(cwd, "node", "article", "create")).toBeUndefined();
+  it("expands an object attribute into its dotted sub-paths", () => {
+    const paths = described.attributes.map((a) => a.path);
+    expect(paths).toContain("body.value");
+    expect(paths).toContain("body.format");
+    expect(paths).toContain("body.summary");
+    expect(paths).not.toContain("body");
   });
 
-  it("distinguishes the create and update variants", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "dropsh-help-"));
-    seed(cwd, "ex.ddev.site", "node--article.update.json");
-    expect(findCachedSchema(cwd, "node", "article", "create")).toBeUndefined();
-    expect(findCachedSchema(cwd, "node", "article", "update")?.host).toBe("ex.ddev.site");
+  it("marks a boolean attribute as usable as a bare flag", () => {
+    expect(described.attributes).toContainEqual({
+      parameter: "--status",
+      path: "status",
+      type: "boolean",
+      bare_flag: true,
+    });
   });
 
-  it("survives an unreadable cache file instead of throwing", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "dropsh-help-"));
-    const abs = join(cwd, ".dropsh/cache/ex/schema/node--article.create.json");
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, "{ not json", "utf8");
-    expect(findCachedSchema(cwd, "node", "article", "create")).toBeUndefined();
+  it("tells an array attribute to use --json", () => {
+    const links = described.attributes.find((a) => a.path === "links");
+    expect(links).toEqual({ parameter: "--json links=<json>", path: "links", type: "array" });
+  });
+
+  it("keeps attributes in schema declaration order", () => {
+    expect(described.attributes.map((a) => a.path).slice(0, 3)).toEqual([
+      "title",
+      "status",
+      "weight",
+    ]);
+  });
+
+  it("describes a single-valued relationship", () => {
+    expect(described.relationships).toContainEqual({
+      parameter: "--uid <uuid>",
+      path: "uid",
+      targets: ["user--user"],
+      multiple: false,
+    });
+  });
+
+  it("marks a multi-valued relationship", () => {
+    const tags = described.relationships.find((r) => r.path === "field_tags");
+    expect(tags?.multiple).toBe(true);
+    expect(tags?.targets).toEqual(["taxonomy_term--tags"]);
+  });
+
+  it("requires the <type>:<uuid> form for an ambiguous relationship", () => {
+    expect(described.relationships).toContainEqual({
+      parameter: "--field_ref <type>:<uuid>",
+      path: "field_ref",
+      targets: ["node--article", "node--page"],
+      multiple: false,
+      requires_type_prefix: true,
+    });
+  });
+
+  it("returns empty lists for a schema that declares no fields", () => {
+    const empty = describeFields({ type: "object" });
+    expect(empty.attributes).toEqual([]);
+    expect(empty.relationships).toEqual([]);
+    expect(empty.type).toBeUndefined();
   });
 });
