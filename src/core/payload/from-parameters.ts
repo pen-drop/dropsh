@@ -145,8 +145,7 @@ function unknownParameter(name: string, index: SchemaFieldIndex): never {
   }
   throw new ValidationError(
     `unknown parameter '${name}'. Known attributes: ${attributes.join(", ") || "(none)"}. ` +
-      `Known relationships: ${relationships.join(", ") || "(none)"}. ` +
-      "A field whose name is a reserved option is reachable as --set <field>=<value>.",
+      `Known relationships: ${relationships.join(", ") || "(none)"}.`,
   );
 }
 

@@ -5,7 +5,7 @@ export interface RawParameter {
   path: string;
   value: string;
   /** Which surface syntax produced it; "json" means `value` is raw JSON. */
-  form: "flag" | "set" | "json";
+  form: "flag" | "json";
   /**
    * False for a bare `--field` with no following value. Whether that is legal
    * depends on the field's schema type, so the decision belongs to the builder.
@@ -14,10 +14,12 @@ export interface RawParameter {
 }
 
 /**
- * `--set` and `--json` are the two collectors; a field of the same name is
- * reachable only through them (`--set set=…`).
+ * `--json` is the one collector: it takes `<field>=<json>` pairs rather than a
+ * value of its own, because a raw JSON value cannot be coerced from the leaf
+ * schema type. A field actually named `json` is therefore only reachable through
+ * `--data`.
  */
-const COLLECTORS = new Set(["set", "json"]);
+const COLLECTORS = new Set(["json"]);
 
 function splitPair(pair: string, collector: string): { path: string; value: string } {
   const eq = pair.indexOf("=");
@@ -50,7 +52,6 @@ export function parseFieldArgs(tokens: string[]): RawParameter[] {
     const name = eq === -1 ? body : body.slice(0, eq);
 
     if (COLLECTORS.has(name)) {
-      const form = name === "set" ? "set" : "json";
       const pairs: string[] = [];
       if (eq !== -1) {
         pairs.push(body.slice(eq + 1));
@@ -67,7 +68,7 @@ export function parseFieldArgs(tokens: string[]): RawParameter[] {
       }
       for (const pair of pairs) {
         const { path, value } = splitPair(pair, name);
-        out.push({ path, value, form, hasValue: true });
+        out.push({ path, value, form: "json", hasValue: true });
       }
       continue;
     }

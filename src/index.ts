@@ -214,16 +214,16 @@ async function defaultContext(configPath: string, profile?: string): Promise<Com
 const FIELD_PARAMETER_HELP = `
 Field parameters (instead of --data):
   --<field> <value>          set a field, e.g. --title "Hello"
+  --<field>=<value>          same; also the form for many fields in one call
   --<field>.<sub> <value>    set a sub-property, e.g. --body.value "Text"
   --<relationship> <uuid>    reference by UUID; repeat for a multi-valued field
-  --set <f>=<v> [<f>=<v>...] many fields in one flag
   --json <field>=<json>      raw JSON value, for arrays of objects
 
 Field names come from the bundle's schema (see 'dropsh schema <entity>/<bundle>'),
-so an unknown name is rejected instead of ignored. A field whose name collides
-with a reserved option (--bundle, --data, --dry-run, --no-validate, --format,
---auth-profile, --config, --view-mode, --set, --json) is reachable only as
---set <field>=<value>. A value starting with -- needs the --<field>=<value> form.
+so an unknown name is rejected instead of ignored. A value starting with --
+needs the --<field>=<value> form. A field whose name collides with a reserved
+option (--bundle, --data, --dry-run, --no-validate, --format, --auth-profile,
+--config, --view-mode, --json) can only be set through --data.
 
 Example:
   dropsh create node --bundle article --title "Hello" --body.value "Text" \\

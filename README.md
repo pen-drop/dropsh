@@ -319,8 +319,10 @@ relationship:
 | `--<field>=<value>` | same; required when the value itself starts with `--` |
 | `--<field>.<sub> <value>` | set a sub-property, e.g. `--body.value "Text"` |
 | `--<relationship> <uuid>` | reference by UUID; repeat for a multi-valued field |
-| `--set <f>=<v> [<f>=<v>…]` | many fields in one flag |
 | `--json <field>=<json>` | raw JSON value, for arrays of objects |
+
+Any number of fields goes into a single invocation; the `--<field>=<value>` pair
+form and the spaced form are interchangeable and produce identical output.
 
 Rules worth knowing:
 
@@ -344,7 +346,8 @@ Rules worth knowing:
   always loaded — attribute/relationship placement is impossible without it.
 - A field whose name collides with a reserved option (`--bundle`, `--data`,
   `--dry-run`, `--no-validate`, `--format`, `--auth-profile`, `--config`,
-  `--view-mode`, `--set`, `--json`) is reachable only as `--set <field>=<value>`.
+  `--view-mode`, `--json`) can only be set through `--data`. No Drupal base field
+  name collides with that list in practice.
 - Fields contributed by a plugin's `extendOperationSchema` hook are usable as
   parameters like any native field.
 

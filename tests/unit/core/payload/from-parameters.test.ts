@@ -58,10 +58,19 @@ describe("buildPayloadFromParameters — attributes", () => {
     });
   });
 
-  it("AC 2: --set is byte-identical to the per-field form", () => {
-    const viaSet = build(["--set", "title=T", "body.value=X", "weight=3"]);
-    const viaFlags = build(["--title", "T", "--body.value", "X", "--weight", "3"]);
-    expect(JSON.stringify(viaSet)).toBe(JSON.stringify(viaFlags));
+  it("AC 2: the key=value list form is byte-identical to the spaced form", () => {
+    const viaPairs = build(["--title=T", "--body.value=X", "--weight=3"]);
+    const viaSpaced = build(["--title", "T", "--body.value", "X", "--weight", "3"]);
+    expect(JSON.stringify(viaPairs)).toBe(JSON.stringify(viaSpaced));
+  });
+
+  it("AC 2: sets an arbitrary number of scalar fields in one invocation", () => {
+    expect(build(["--title=T", "--status=true", "--weight=3", "--body.value=X"])).toEqual({
+      data: {
+        type: "node--article",
+        attributes: { title: "T", status: true, weight: 3, body: { value: "X" } },
+      },
+    });
   });
 
   it("emits keys in schema order regardless of flag order", () => {

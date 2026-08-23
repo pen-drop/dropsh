@@ -39,17 +39,24 @@ describe("parseFieldArgs", () => {
     ]);
   });
 
-  it("expands --set variadically until the next option", () => {
-    expect(parseFieldArgs(["--set", "title=T", "body.value=X", "--status", "true"])).toEqual([
-      { path: "title", value: "T", form: "set", hasValue: true },
-      { path: "body.value", value: "X", form: "set", hasValue: true },
+  it("keeps everything after the first = in a --field=value pair", () => {
+    expect(parseFieldArgs(["--title=a=b"])).toEqual([
+      { path: "title", value: "a=b", form: "flag", hasValue: true },
+    ]);
+  });
+
+  it("takes an arbitrary number of key=value pairs in one invocation", () => {
+    expect(parseFieldArgs(["--title=T", "--body.value=X", "--weight=3", "--status=true"])).toEqual([
+      { path: "title", value: "T", form: "flag", hasValue: true },
+      { path: "body.value", value: "X", form: "flag", hasValue: true },
+      { path: "weight", value: "3", form: "flag", hasValue: true },
       { path: "status", value: "true", form: "flag", hasValue: true },
     ]);
   });
 
-  it("keeps everything after the first = in a --set pair", () => {
-    expect(parseFieldArgs(["--set", "title=a=b"])).toEqual([
-      { path: "title", value: "a=b", form: "set", hasValue: true },
+  it("no longer treats --set as a collector; it is an ordinary field name", () => {
+    expect(parseFieldArgs(["--set", "title=T"])).toEqual([
+      { path: "set", value: "title=T", form: "flag", hasValue: true },
     ]);
   });
 
@@ -71,13 +78,13 @@ describe("parseFieldArgs", () => {
     expect(() => parseFieldArgs(["oops"])).toThrow(/unexpected argument "oops"/);
   });
 
-  it("rejects a --set pair without =", () => {
-    expect(() => parseFieldArgs(["--set", "title"])).toThrow(/--set expects <field>=<value>/);
+  it("rejects a --json pair without =", () => {
+    expect(() => parseFieldArgs(["--json", "links"])).toThrow(/--json expects <field>=<value>/);
   });
 
-  it("rejects --set with no pair at all", () => {
-    expect(() => parseFieldArgs(["--set", "--title", "T"])).toThrow(
-      /--set expects at least one <field>=<value>/,
+  it("rejects --json with no pair at all", () => {
+    expect(() => parseFieldArgs(["--json", "--title", "T"])).toThrow(
+      /--json expects at least one <field>=<value>/,
     );
   });
 
