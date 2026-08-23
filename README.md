@@ -295,8 +295,8 @@ exit codes.
 ```bash
 dropsh read <entity_type>/<bundle>/<uuid> [--include=<field>,…]
 dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N] [--include=<field>,…]
-dropsh create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
-dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
+dropsh create <entity_type> --bundle=<b> (--data=<json|@file> | <field parameters>) [--dry-run] [--no-validate]
+dropsh update <entity_type>/<bundle>/<uuid> (--data=<json|@file> | <field parameters>) [--dry-run] [--no-validate]
 dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
 dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
 dropsh schema [--refresh]
@@ -305,6 +305,95 @@ dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
 
 `create` and `update` validate payloads against the current schema by default.
 Pass `--no-validate` when you intentionally want to skip local validation.
+
+### Field parameters on `create` / `update`
+
+Instead of handing `create`/`update` a finished JSON:API document via `--data`,
+you can name the fields directly. The CLI reads the bundle's operation schema and
+builds the document itself, so it knows which name is an attribute and which is a
+relationship:
+
+| Form | Meaning |
+|---|---|
+| `--<field> <value>` | set a field |
+| `--<field>=<value>` | same; required when the value itself starts with `--` |
+| `--<field>.<sub> <value>` | set a sub-property, e.g. `--body.value "Text"` |
+| `--<relationship> <uuid>` | reference by UUID; repeat for a multi-valued field |
+| `--set <f>=<v> [<f>=<v>…]` | many fields in one flag |
+| `--json <field>=<json>` | raw JSON value, for arrays of objects |
+
+Rules worth knowing:
+
+- **Field names come from the schema** (`dropsh schema <entity>/<bundle>`), so an
+  unknown name is **rejected** with exit code `4` instead of being ignored. The
+  error names the rejected parameter and lists the known attributes and
+  relationships.
+- **Relationships take a bare UUID**; the resource type comes from the schema.
+  When a relationship allows several target types, pass `<type>:<uuid>`.
+  Repeating the flag accumulates values on a multi-valued relationship; a second
+  value on a single-valued one is an error.
+- **Values are typed by the schema** — `boolean`, `integer`/`number`, else
+  string. A bare `--flag` means `true` only on a boolean field. Values are never
+  comma-split, so `--title "a, b"` survives intact.
+- **`--data` and field parameters are mutually exclusive**; giving neither is an
+  error.
+- **`--dry-run` prints the generated document** and sends nothing. Output keys are
+  emitted in schema declaration order, so two dry-runs of the same fields are
+  byte-identical and diffable.
+- **`--no-validate` skips Ajv, not the schema.** In parameter mode the schema is
+  always loaded — attribute/relationship placement is impossible without it.
+- A field whose name collides with a reserved option (`--bundle`, `--data`,
+  `--dry-run`, `--no-validate`, `--format`, `--auth-profile`, `--config`,
+  `--view-mode`, `--set`, `--json`) is reachable only as `--set <field>=<value>`.
+- Fields contributed by a plugin's `extendOperationSchema` hook are usable as
+  parameters like any native field.
+
+Worked example:
+
+```bash
+dropsh create node --bundle=article_test \
+  --title "Hello" --body.value "Text" \
+  --uid c8e0b5d2-9e66-4caf-ac43-337f3b3af62d --dry-run
+```
+
+```json
+{
+  "dry_run": true,
+  "method": "POST",
+  "path": "node/article_test",
+  "payload": {
+    "data": {
+      "type": "node--article_test",
+      "attributes": {
+        "title": "Hello",
+        "body": {
+          "value": "Text"
+        }
+      },
+      "relationships": {
+        "uid": {
+          "data": {
+            "type": "user--user",
+            "id": "c8e0b5d2-9e66-4caf-ac43-337f3b3af62d"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+`update` works the same way and puts the target UUID into `data.id`, sending a
+PATCH with only the fields you named:
+
+```bash
+dropsh update node/article_test/<uuid> --title "changed title"
+```
+
+The builder is also available programmatically — `buildPayloadFromParameters`,
+`indexSchemaFields` and `propertiesOf` are exported from `dropsh/plugin`, so a
+plugin can turn (schema, parameters) into the same document without invoking the
+CLI.
 
 ### `--include` on `read` / `search`
 
