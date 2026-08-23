@@ -1,11 +1,14 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { basicAuthPlugin } from "../../src/core/auth/basic.js";
 import { readProfile, writeProfile, writeSession } from "../../src/core/auth/session-store.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 import type { DropSHPlugin, DropSHPlugin as Plugin } from "../../src/core/plugin.js";
+import { toOperationVariant } from "../../src/core/schema/to-jsonschema.js";
 import {
   authStatus,
   buildProgram,
@@ -380,5 +383,166 @@ describe("authStatus", () => {
       stateDir: dir,
     });
     expect(st.loggedIn).toBe(true);
+  });
+});
+
+const here = dirname(fileURLToPath(import.meta.url));
+const RICH_RAW = JSON.parse(
+  readFileSync(join(here, "fixtures/schemata/node--article.rich.schema.json"), "utf8"),
+) as unknown;
+
+/** Mirrors siteCacheRoot()/loadOrFetchSchema() for baseUrl "https://ex". */
+function seedSchema(cwd: string, op: "create" | "update", hookPlugins: string[] = []): void {
+  const abs = join(cwd, ".dropsh/cache", "ex", "schema", `node--article.${op}.json`);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(
+    abs,
+    JSON.stringify({
+      ...(toOperationVariant(RICH_RAW, op) as Record<string, unknown>),
+      "x-dropsh-schema-pipeline-version": 2,
+      "x-dropsh-operation-hook-plugins": hookPlugins,
+    }),
+    "utf8",
+  );
+}
+
+function paramContext(cwd: string, client: JsonApiClient, plugins: DropSHPlugin[] = []) {
+  return {
+    client,
+    http: {
+      send: vi.fn(async () => {
+        throw new Error("no HTTP expected");
+      }),
+    },
+    auth: { apply: async (req: unknown) => req },
+    baseUrl: "https://ex",
+    jsonapiPrefix: "/jsonapi",
+    cwd,
+    plugins,
+  } as unknown as CommandContext;
+}
+
+describe("create with field parameters", () => {
+  it("AC 1: builds and POSTs a document from named parameters", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    const p = buildProgram({ contextFactory: async () => paramContext(cwd, c), stdout: () => {} });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "create",
+      "node",
+      "--bundle",
+      "article",
+      "--title",
+      "Test",
+      "--body.value",
+      "Text",
+    ]);
+    expect(c.post).toHaveBeenCalledWith("node/article", {
+      data: { type: "node--article", attributes: { title: "Test", body: { value: "Text" } } },
+    });
+  });
+
+  it("AC 6: --dry-run prints the built document and sends nothing", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    const out: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: (s) => out.push(s),
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "create",
+      "node",
+      "--bundle",
+      "article",
+      "--title",
+      "T",
+      "--dry-run",
+    ]);
+    expect(c.post).not.toHaveBeenCalled();
+    expect(c.patch).not.toHaveBeenCalled();
+    expect(JSON.parse(out.join(""))).toEqual({
+      dry_run: true,
+      method: "POST",
+      path: "node/article",
+      payload: { data: { type: "node--article", attributes: { title: "T" } } },
+    });
+  });
+
+  it("AC 3: exits 4 on an unknown parameter and sends nothing", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    let code: number | undefined;
+    const errs: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: () => {},
+      stderr: (s) => errs.push(s),
+      setExitCode: (n) => {
+        code = n;
+      },
+    });
+    await p.parseAsync(["node", "dropsh", "create", "node", "--bundle", "article", "--titel", "T"]);
+    expect(code).toBe(4);
+    expect(errs.join("")).toMatch(/unknown parameter 'titel'/);
+    expect(c.post).not.toHaveBeenCalled();
+  });
+
+  it("rejects --data together with field parameters", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    seedSchema(cwd, "create");
+    const c = fakeClient();
+    let code: number | undefined;
+    const errs: string[] = [];
+    const p = buildProgram({
+      contextFactory: async () => paramContext(cwd, c),
+      stdout: () => {},
+      stderr: (s) => errs.push(s),
+      setExitCode: (n) => {
+        code = n;
+      },
+    });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "create",
+      "node",
+      "--bundle",
+      "article",
+      "--data",
+      "{}",
+      "--title",
+      "T",
+    ]);
+    expect(code).toBe(4);
+    expect(errs.join("")).toMatch(/mutually exclusive/);
+    expect(c.post).not.toHaveBeenCalled();
+  });
+
+  it("AC 9: --data alone still sends the identical payload", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "dropsh-params-"));
+    const c = fakeClient();
+    const p = buildProgram({ contextFactory: async () => paramContext(cwd, c), stdout: () => {} });
+    await p.parseAsync([
+      "node",
+      "dropsh",
+      "create",
+      "node",
+      "--bundle",
+      "article",
+      "--no-validate",
+      "--data",
+      '{"data":{"type":"node--article","attributes":{"title":"Raw"}}}',
+    ]);
+    expect(c.post).toHaveBeenCalledWith("node/article", {
+      data: { type: "node--article", attributes: { title: "Raw" } },
+    });
   });
 });

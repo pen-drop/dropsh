@@ -1,10 +1,14 @@
 import type { JsonApiClient } from "../core/jsonapi/client.js";
+import { ValidationError } from "../errors.js";
 import { readDataArg } from "./_data.js";
 
 export interface CreateArgs {
   entityType: string;
   bundle: string;
-  dataArg: string;
+  /** Raw `--data` argument (inline JSON or @path). Absent in parameter mode. */
+  dataArg?: string;
+  /** Document already built from field parameters. Absent in `--data` mode. */
+  payload?: unknown;
   dryRun?: boolean;
   noValidate?: boolean;
 }
@@ -15,7 +19,11 @@ export interface CreateDeps {
 }
 
 export async function runCreate(args: CreateArgs, deps: CreateDeps): Promise<void> {
-  const payload = await readDataArg(args.dataArg);
+  if (args.payload === undefined && args.dataArg === undefined) {
+    throw new ValidationError("provide either --data or field parameters (--<field> <value>)");
+  }
+  const payload =
+    args.payload !== undefined ? args.payload : await readDataArg(args.dataArg as string);
   const target = `${args.entityType}/${args.bundle}`;
   if (!args.noValidate && deps.validate) {
     await deps.validate(payload, target);

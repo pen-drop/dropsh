@@ -2,7 +2,7 @@
 import { parseArgs } from "node:util";
 import { Command } from "commander";
 import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "./commands/auth.js";
-import { runCreate } from "./commands/create.js";
+import { type CreateArgs, type CreateDeps, runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
 import {
@@ -32,13 +32,15 @@ import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
+import { parseFieldArgs } from "./core/params/parse-args.js";
+import { buildPayloadFromParameters } from "./core/payload/from-parameters.js";
 import type { DropSHPlugin, PluginContext } from "./core/plugin.js";
 import { composeRequestHooks } from "./core/request-hooks.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
-import { AuthError, ConfigError, exitCodeFor } from "./errors.js";
+import { AuthError, ConfigError, exitCodeFor, ValidationError } from "./errors.js";
 
 export interface CommandContext {
   client: JsonApiClient;
@@ -203,6 +205,24 @@ async function defaultContext(configPath: string, profile?: string): Promise<Com
     plugins: cfg.plugins,
   };
 }
+
+const FIELD_PARAMETER_HELP = `
+Field parameters (instead of --data):
+  --<field> <value>          set a field, e.g. --title "Hello"
+  --<field>.<sub> <value>    set a sub-property, e.g. --body.value "Text"
+  --<relationship> <uuid>    reference by UUID; repeat for a multi-valued field
+  --set <f>=<v> [<f>=<v>...] many fields in one flag
+  --json <field>=<json>      raw JSON value, for arrays of objects
+
+Field names come from the bundle's schema (see 'dropsh schema <entity>/<bundle>'),
+so an unknown name is rejected instead of ignored. A field whose name collides
+with a reserved option (--bundle, --data, --dry-run, --no-validate, --format,
+--auth-profile, --config, --view-mode, --set, --json) is reachable only as
+--set <field>=<value>. A value starting with -- needs the --<field>=<value> form.
+
+Example:
+  dropsh create node --bundle article --title "Hello" --body.value "Text" \\
+    --uid 123e4567-e89b-12d3-a456-426614174000 --dry-run`;
 
 export function buildProgram(opts: ProgramOptions = {}): Command {
   const program = new Command();
@@ -447,35 +467,46 @@ Example:
     .command("create <entity_type>")
     .description("Create an entity of given type/bundle")
     .requiredOption("--bundle <bundle>")
-    .requiredOption("--data <json>", "inline JSON or @path")
+    .option("--data <json>", "inline JSON or @path")
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
+    .allowUnknownOption()
+    .addHelpText("after", FIELD_PARAMETER_HELP)
     .action(
       (
         entityType: string,
-        o: { bundle: string; data: string; dryRun?: boolean; validate?: boolean },
+        o: { bundle: string; data?: string; dryRun?: boolean; validate?: boolean },
+        cmd: Command,
       ) => {
-        const args: {
-          entityType: string;
-          bundle: string;
-          dataArg: string;
-          dryRun?: boolean;
-          noValidate?: boolean;
-        } = { entityType, bundle: o.bundle, dataArg: o.data };
-        if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-        if (o.validate === false) args.noValidate = true;
+        const target = `${entityType}/${o.bundle}`;
         return run(async (ctx) => {
+          const fields = parseFieldArgs(cmd.args.slice(1));
+          if (o.data !== undefined && fields.length > 0) {
+            throw new ValidationError(
+              "--data and field parameters are mutually exclusive; use one or the other",
+            );
+          }
           const rctx: RenderContext = { command: "create", entityType, bundle: o.bundle };
-          const deps: {
-            client: JsonApiClient;
-            emit: (v: unknown) => void;
-            validate?: (payload: unknown, target: string) => void | Promise<void>;
-          } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
+          let cached: unknown;
+          const schema = async () => (cached ??= await loadOrFetchSchema(ctx, target, "create"));
+
+          const args: CreateArgs = { entityType, bundle: o.bundle };
+          if (o.data !== undefined) args.dataArg = o.data;
+          if (fields.length > 0) {
+            args.payload = buildPayloadFromParameters({
+              schema: await schema(),
+              parameters: fields,
+              operation: "create",
+              resourceType: `${entityType}--${o.bundle}`,
+            });
+          }
+          if (o.dryRun !== undefined) args.dryRun = o.dryRun;
+          if (o.validate === false) args.noValidate = true;
+
+          const deps: CreateDeps = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
           if (!args.noValidate) {
-            deps.validate = async (payload: unknown, target: string) => {
-              const schema = await loadOrFetchSchema(ctx, target, "create");
-              validatePayload(schema, payload, target);
-            };
+            deps.validate = async (payload: unknown, t: string) =>
+              validatePayload(await schema(), payload, t);
           }
           await runCreate(args, deps);
         }, assertRenderable);

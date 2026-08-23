@@ -79,3 +79,58 @@ describe("runCreate", () => {
     expect(c.post).toHaveBeenCalled();
   });
 });
+
+describe("runCreate with a pre-built payload", () => {
+  it("POSTs the given payload without touching dataArg", async () => {
+    const c = client();
+    const emitted: unknown[] = [];
+    await runCreate(
+      {
+        entityType: "node",
+        bundle: "article",
+        payload: { data: { type: "node--article", attributes: { title: "Built" } } },
+      },
+      { client: c, emit: (v) => { emitted.push(v); } },
+    );
+    expect(c.post).toHaveBeenCalledWith("node/article", {
+      data: { type: "node--article", attributes: { title: "Built" } },
+    });
+  });
+
+  it("validates a pre-built payload like any other", async () => {
+    const validate = vi.fn();
+    const c = client();
+    await runCreate(
+      { entityType: "node", bundle: "article", payload: { data: { type: "node--article" } } },
+      { client: c, emit: () => {}, validate },
+    );
+    expect(validate).toHaveBeenCalledWith({ data: { type: "node--article" } }, "node/article");
+  });
+
+  it("dry-runs a pre-built payload without posting", async () => {
+    const c = client();
+    const emitted: unknown[] = [];
+    await runCreate(
+      {
+        entityType: "node",
+        bundle: "article",
+        payload: { data: { type: "node--article", attributes: { title: "Built" } } },
+        dryRun: true,
+      },
+      { client: c, emit: (v) => { emitted.push(v); } },
+    );
+    expect(c.post).not.toHaveBeenCalled();
+    expect(emitted).toEqual([{
+      dry_run: true,
+      method: "POST",
+      path: "node/article",
+      payload: { data: { type: "node--article", attributes: { title: "Built" } } },
+    }]);
+  });
+
+  it("requires either a payload or dataArg", async () => {
+    await expect(
+      runCreate({ entityType: "node", bundle: "article" }, { client: client(), emit: () => {} }),
+    ).rejects.toThrow(/either --data or field parameters/);
+  });
+});
