@@ -66,6 +66,17 @@ describe("parseFieldArgs", () => {
     ]);
   });
 
+  it("reaches a field whose name collides with a reserved option", () => {
+    // The collector name is routed before any reserved-name handling, so
+    // --json is a second route to such a field besides --data.
+    expect(parseFieldArgs(["--json", 'bundle="article"'])).toEqual([
+      { path: "bundle", value: '"article"', form: "json", hasValue: true },
+    ]);
+    expect(parseFieldArgs(["--json", 'json="raw"'])).toEqual([
+      { path: "json", value: '"raw"', form: "json", hasValue: true },
+    ]);
+  });
+
   it("repeats a path when the flag repeats", () => {
     expect(parseFieldArgs(["--field_tags", "u1", "--field_tags", "u2"])).toEqual([
       { path: "field_tags", value: "u1", form: "flag", hasValue: true },

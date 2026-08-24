@@ -16,8 +16,11 @@ export interface RawParameter {
 /**
  * `--json` is the one collector: it takes `<field>=<json>` pairs rather than a
  * value of its own, because a raw JSON value cannot be coerced from the leaf
- * schema type. A field actually named `json` is therefore only reachable through
- * `--data`.
+ * schema type. The collector name is matched before any other handling, so the
+ * pair's left-hand side is an arbitrary field path — including one that collides
+ * with a reserved option, or `json` itself. That makes `--json <field>=<json>` a
+ * second route to such a field besides `--data`; only the bare `--<field>` form
+ * is out of reach.
  */
 const COLLECTORS = new Set(["json"]);
 

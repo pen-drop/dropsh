@@ -28,6 +28,13 @@ describe("FIELD_PARAMETER_HELP", () => {
   it("names --fields among the reserved options", () => {
     expect(FIELD_PARAMETER_HELP).toMatch(/reserved option[\s\S]*--fields/);
   });
+
+  it("offers --json as a route to a colliding field name, not --data alone", () => {
+    expect(FIELD_PARAMETER_HELP).toMatch(
+      /reserved option[\s\S]*through --json <field>=<json> or --data/,
+    );
+    expect(FIELD_PARAMETER_HELP).not.toMatch(/only be set through --data/);
+  });
 });
 
 describe("describeFields", () => {

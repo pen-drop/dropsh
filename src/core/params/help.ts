@@ -19,8 +19,8 @@ sending anything. An unknown field name is rejected, never ignored.
 
 A value starting with -- needs the --<field>=<value> form. A field whose name
 collides with a reserved option (--bundle, --data, --dry-run, --no-validate,
---fields, --format, --auth-profile, --config, --view-mode, --json) can only be
-set through --data.
+--fields, --format, --auth-profile, --config, --view-mode, --json) is reachable
+through --json <field>=<json> or --data, never as a bare --<field>.
 
 Example:
   dropsh create node --bundle article --fields
