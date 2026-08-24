@@ -352,3 +352,60 @@ Numbering follows the qualification handoff.
    `data.id` from the target, only supplied fields emitted.
 9. **Existing `--data` path unchanged** — `--data` mode takes the same branch it
    takes today; the existing unit and integration suites stay green.
+
+---
+
+## Amendments
+
+Recorded after the fact, during the second `coding` run, because the review of
+commit `9618a7e` found two deviations from this document that had shipped
+without an amendment. The body above is left exactly as it was confirmed; what
+changed is stated here.
+
+### A1 — `--set` was dropped (commit `3c8692c`)
+
+**Confirmed above:** four surface forms, with `--set <path>=<value> …` as AC 2's
+vehicle and as the only route to a field whose name collides with a reserved
+option.
+
+**Shipped:** three forms. `--set` is gone; it is an ordinary field name again
+(`parseFieldArgs(["--set", "title=T"])` yields the field `set`).
+
+**Why:** `--set <path>=<value>` and `--<path>=<value>` differ only in a prefix
+token. The pair form already puts an arbitrary number of fields into one
+invocation, so `--set` bought a second spelling of AC 2 and nothing else, at the
+cost of a reserved word that then had to be escaped from itself
+(`--set set=…`).
+
+**Effect on acceptance:** none. AC 2 is carried by the `--<field>=<value>` pair
+form and proved by `from-parameters.test.ts` — *"AC 2: the key=value list form is
+byte-identical to the spaced form"*.
+
+**Effect on the reserved-name escape:** the escape is `--json <field>=<json>`,
+not `--data` alone. The collector name is matched before any other handling
+(`src/core/params/parse-args.ts`), so the pair's left-hand side is an arbitrary
+field path — including one that collides with a reserved option, or `json`
+itself. Only the bare `--<field>` form is out of reach. The claim in *Surface*
+above that `--set` is "the only route", and the `--data`-only wording that
+initially shipped in `README.md` and `FIELD_PARAMETER_HELP`, are both superseded
+by this paragraph.
+
+### A2 — `--fields` was added (commits `75f5b98`, `892b8e1`, `8cf2533`, `9c6568e`)
+
+**Not in this document at all.** `create`, `update` and `schema` gained a
+`--fields` flag that resolves the bundle's operation schema and prints every
+settable parameter as an aligned table (`--format json` yields the same listing
+as data), then exits without sending. `src/core/params/help.ts` holds
+`describeFields`, `renderFieldsTable` and `FIELD_PARAMETER_HELP`.
+
+**Why:** the design leans on "the schema is authoritative about which field
+names exist" for AC 3, but gave the caller no way to *read* that list. Commander
+renders `--help` synchronously and so cannot resolve a schema, which is why the
+listing is an action-time flag rather than help text.
+
+**Effect on acceptance:** none — it adds no criterion and weakens none. It is
+unit-covered (`tests/unit/core/params/help.test.ts`) and reachable three ways,
+all from the schema alone with no extra request.
+
+**Consequence for the reserved list:** `--fields` joins the reserved options, so
+it is named in the list `FIELD_PARAMETER_HELP` and `README.md` print.

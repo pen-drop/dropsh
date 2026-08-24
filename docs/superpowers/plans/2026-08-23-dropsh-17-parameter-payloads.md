@@ -2293,3 +2293,40 @@ git commit -m "docs: document field parameters on create and update (DROPSH-17)"
 | 7 Programmatic API | Task 5 (`AC 7: a plugin can build a payload without the CLI`) |
 | 8 `update` builds PATCH the same way | Task 3 Step 1 (`AC 8: update emits data.id`), Task 7 Step 1 (`AC 8: builds a PATCH document`), Task 9 Step 3 |
 | 9 Existing `--data` path unchanged | Task 6 Step 5 (`AC 9: --data alone still sends the identical payload`) plus the pre-existing suites, which must stay green at every commit |
+
+---
+
+## Amendments
+
+Recorded during the second `coding` run, after the review of commit `9618a7e`
+found work that had shipped outside these ten tasks. The task list above is left
+as confirmed; the deltas are stated here. The corresponding design amendments
+are in the spec's `## Amendments` section.
+
+### A1 — `--set` dropped from Tasks 2, 3 and 10 (commit `3c8692c`)
+
+The parser no longer treats `--set` as a collector, so its cases in Task 2 and
+Task 3 became cases for the `--<field>=<value>` pair form instead, and Task 10's
+README table lists three forms rather than four. The coverage row for AC 2 above
+reads "Task 3 Step 1 (`AC 2: --set is byte-identical`)"; the test that carries it
+is now named *"AC 2: the key=value list form is byte-identical to the spaced
+form"* and asserts the same `JSON.stringify` equality. Rationale: design
+amendment A1.
+
+### A2 — an eleventh task, `--fields` (commits `75f5b98`, `892b8e1`, `8cf2533`, `9c6568e`)
+
+Not in the ten tasks. `src/core/params/help.ts` (field listing + the `--help`
+block) plus the `--fields` flag on `create`, `update` and `schema`, covered by
+`tests/unit/core/params/help.test.ts`. Built the same way as every task above —
+test-first, its own commits, the full gate green at each. Rationale: design
+amendment A2.
+
+### A3 — Task 10's worked example was not the produced output
+
+Task 10 required "a worked example whose output was actually produced".
+The `--fields` block that shipped in `README.md` showed 4 attributes and 2
+relationships; the command actually prints 22 attributes and 4 relationships,
+because Drupal's base fields are settable parameters too. Corrected in this run
+against the live `schemata` subsite (`node/article_test`), and the dry-run
+example now shows the `| jq` that produces its indented form — dropsh writes
+compact JSON.

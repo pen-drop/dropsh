@@ -337,15 +337,40 @@ dropsh create node --bundle=article_test --fields  # same listing, on the comman
 node--article_test — field parameters
 
 Attributes:
-  --status [true|false]       boolean  Published
-  --title <value>             string  required  Title
-  --body.value <value>        string  Text
-  --field_test_text <value>   string  Test Text
+  --drupal_internal__nid <value>                integer  ID
+  --drupal_internal__vid <value>                integer  Revision ID
+  --langcode.value <value>                      string  Language code
+  --langcode.language <value>                   Language object
+  --revision_timestamp <value>                  number  Revision create time
+  --revision_log <value>                        string  Revision log message
+  --status [true|false]                         boolean  Published
+  --title <value>                               string  required  Title
+  --created <value>                             number  Authored on
+  --changed <value>                             number  Changed
+  --promote [true|false]                        boolean  Promoted to front page
+  --sticky [true|false]                         boolean  Sticky at top of lists
+  --default_langcode [true|false]               boolean  Default translation
+  --revision_default [true|false]               boolean  Default revision
+  --revision_translation_affected [true|false]  boolean  Revision translation affected
+  --path.alias <value>                          string  Path alias
+  --path.pid <value>                            integer  Path id
+  --path.langcode <value>                       string  Language Code
+  --body.value <value>                          string  Text
+  --body.format <value>                         string  Text format
+  --body.summary <value>                        string  Summary
+  --field_test_text <value>                     string  Test Text
 
 Relationships (take a UUID):
-  --uid <uuid>                user--user  Authored by
-  --field_image <uuid>        file--file  Image
+  --node_type <uuid>                            node_type--node_type  Content type
+  --revision_uid <uuid>                         user--user  Revision user
+  --uid <uuid>                                  user--user  Authored by
+  --field_image <uuid>                          file--file  Image
 ```
+
+The listing is the schema's, not a curated subset: Drupal's base fields
+(`--drupal_internal__nid`, `--langcode.*`, `--path.*`, `--node_type`,
+`--revision_uid`, …) are settable parameters and appear alongside the
+bundle's own fields.
 
 Each row carries the schema type, whether the field is required, and the field's
 human label. Object attributes appear as their dotted leaves (`--body.value`,
@@ -380,9 +405,10 @@ Rules worth knowing:
 - **`--no-validate` skips Ajv, not the schema.** In parameter mode the schema is
   always loaded — attribute/relationship placement is impossible without it.
 - A field whose name collides with a reserved option (`--bundle`, `--data`,
-  `--dry-run`, `--no-validate`, `--format`, `--auth-profile`, `--config`,
-  `--view-mode`, `--json`) can only be set through `--data`. No Drupal base field
-  name collides with that list in practice.
+  `--dry-run`, `--no-validate`, `--fields`, `--format`, `--auth-profile`,
+  `--config`, `--view-mode`, `--json`) is out of reach as a bare `--<field>`, but
+  `--json <field>=<json>` still sets it (write the value as JSON), and so does
+  `--data`. No Drupal base field name collides with that list in practice.
 - Fields contributed by a plugin's `extendOperationSchema` hook are usable as
   parameters like any native field.
 
@@ -391,7 +417,7 @@ Worked example:
 ```bash
 dropsh create node --bundle=article_test \
   --title "Hello" --body.value "Text" \
-  --uid c8e0b5d2-9e66-4caf-ac43-337f3b3af62d --dry-run
+  --uid c8e0b5d2-9e66-4caf-ac43-337f3b3af62d --dry-run | jq
 ```
 
 ```json
