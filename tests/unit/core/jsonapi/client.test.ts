@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
 import { DrupalJsonApiParams } from "drupal-jsonapi-params";
-import { createJsonApiClient } from "../../../../src/core/jsonapi/client.js";
-import type { HttpClient, HttpRequest } from "../../../../src/core/http.js";
+import { describe, expect, it, vi } from "vitest";
 import type { AuthAdapter } from "../../../../src/core/auth/types.js";
+import type { HttpClient, HttpRequest } from "../../../../src/core/http.js";
+import { createJsonApiClient } from "../../../../src/core/jsonapi/client.js";
 import { HttpError } from "../../../../src/errors.js";
 
 function httpStub(respond: (req: HttpRequest) => { status: number; body: string }): HttpClient {
@@ -75,26 +75,30 @@ describe("JsonApiClient", () => {
       invoke: (client: ReturnType<typeof createJsonApiClient>) =>
         client.upload("node/article/u1/field_image", "hero.jpg", Buffer.from("image")),
     },
-  ])(
-    "classifies $name requests and exposes their transport shape",
-    async ({ operation, entityType, bundle, method, body, invoke }) => {
-      const seen: unknown[][] = [];
-      const client = createJsonApiClient({
-        baseUrl: "https://site",
-        prefix: "/jsonapi",
-        http: httpStub(() => ({ status: method === "DELETE" ? 204 : 200, body: "{}" })),
-        auth: passthroughAuth,
-        alterRequest: async (req, actualOperation, actualEntityType, actualBundle) => {
-          seen.push([actualOperation, actualEntityType, actualBundle, req.method, req.body]);
-          return req;
-        },
-      });
+  ])("classifies $name requests and exposes their transport shape", async ({
+    operation,
+    entityType,
+    bundle,
+    method,
+    body,
+    invoke,
+  }) => {
+    const seen: unknown[][] = [];
+    const client = createJsonApiClient({
+      baseUrl: "https://site",
+      prefix: "/jsonapi",
+      http: httpStub(() => ({ status: method === "DELETE" ? 204 : 200, body: "{}" })),
+      auth: passthroughAuth,
+      alterRequest: async (req, actualOperation, actualEntityType, actualBundle) => {
+        seen.push([actualOperation, actualEntityType, actualBundle, req.method, req.body]);
+        return req;
+      },
+    });
 
-      await invoke(client);
+    await invoke(client);
 
-      expect(seen).toEqual([[operation, entityType, bundle, method, body]]);
-    },
-  );
+    expect(seen).toEqual([[operation, entityType, bundle, method, body]]);
+  });
 
   it("classifies me() as a targetless read", async () => {
     const seen: unknown[][] = [];

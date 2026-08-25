@@ -1,10 +1,14 @@
 import type { JsonApiClient } from "../core/jsonapi/client.js";
-import { readDataArg } from "./_data.js";
 
 export interface CreateArgs {
   entityType: string;
   bundle: string;
-  dataArg: string;
+  /**
+   * The JSON:API document to send. Resolving it — from `--data` or from field
+   * parameters — happens before this command runs, so nothing here knows or
+   * cares which route produced it.
+   */
+  payload: unknown;
   dryRun?: boolean;
   noValidate?: boolean;
 }
@@ -15,7 +19,7 @@ export interface CreateDeps {
 }
 
 export async function runCreate(args: CreateArgs, deps: CreateDeps): Promise<void> {
-  const payload = await readDataArg(args.dataArg);
+  const { payload } = args;
   const target = `${args.entityType}/${args.bundle}`;
   if (!args.noValidate && deps.validate) {
     await deps.validate(payload, target);

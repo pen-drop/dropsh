@@ -2,12 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { DropSHOperation, DropSHPlugin, RequestContext } from "../../src/plugin-api.js";
 import { PluginError } from "../../src/plugin-api.js";
-import type {
-  DropSHOperation,
-  DropSHPlugin,
-  RequestContext,
-} from "../../src/plugin-api.js";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -33,7 +29,7 @@ describe("AC-1: dropsh ships type declarations via exports", () => {
   const pkg = readJson("package.json");
   const exports = pkg.exports as ExportsMap;
 
-  it('emits declarations from tsconfig (declaration: true)', () => {
+  it("emits declarations from tsconfig (declaration: true)", () => {
     const tsconfig = readJson("tsconfig.json");
     const opts = tsconfig.compilerOptions as Record<string, unknown>;
     expect(opts.declaration).toBe(true);

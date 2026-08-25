@@ -28,9 +28,17 @@ describe("session-store", () => {
 
   it("round-trips a written session", async () => {
     await withTmpDir(async (dir) => {
-      await writeSession("https://example.com", "oauth2_authcode", { access_token: "a", expires_at: 9 }, dir);
+      await writeSession(
+        "https://example.com",
+        "oauth2_authcode",
+        { access_token: "a", expires_at: 9 },
+        dir,
+      );
       const rec = await readSession("https://example.com", dir);
-      expect(rec).toEqual({ activeProvider: "oauth2_authcode", session: { access_token: "a", expires_at: 9 } });
+      expect(rec).toEqual({
+        activeProvider: "oauth2_authcode",
+        session: { access_token: "a", expires_at: 9 },
+      });
     });
   });
 
@@ -150,7 +158,10 @@ describe("session-store — multi-profile (v2)", () => {
 
   it("migrates a legacy { activeProvider, session } file on read", async () => {
     await withTmpDir(async (dir) => {
-      const legacy = { activeProvider: "oauth2_client_credentials", session: { access_token: "old" } };
+      const legacy = {
+        activeProvider: "oauth2_client_credentials",
+        session: { access_token: "old" },
+      };
       await writeFile(join(dir, "example.com.json"), JSON.stringify(legacy), "utf8");
       const file = await readProfiles(url, dir);
       expect(file?.active).toBe("oauth2_client_credentials");

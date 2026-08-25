@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 import { createFileStore } from "../../../../src/core/cache/file-store.js";
 
 function freshDir(): string {
@@ -43,13 +43,16 @@ describe("createFileStore", () => {
   });
 
   // root ignores chmod restrictions, so this test is meaningless in root-based CI containers
-  it.skipIf(process.getuid?.() === 0)("does not throw when write fails; emits warning instead", async () => {
-    const dir = freshDir();
-    chmodSync(dir, 0o500); // read+execute, no write
-    const warnings: string[] = [];
-    const store = createFileStore({ rootDir: dir, warn: (m) => warnings.push(m) });
-    await store.write("blocked.json", { a: 1 });
-    expect(warnings.some((w) => w.includes("could not update cache"))).toBe(true);
-    chmodSync(dir, 0o700); // restore for cleanup
-  });
+  it.skipIf(process.getuid?.() === 0)(
+    "does not throw when write fails; emits warning instead",
+    async () => {
+      const dir = freshDir();
+      chmodSync(dir, 0o500); // read+execute, no write
+      const warnings: string[] = [];
+      const store = createFileStore({ rootDir: dir, warn: (m) => warnings.push(m) });
+      await store.write("blocked.json", { a: 1 });
+      expect(warnings.some((w) => w.includes("could not update cache"))).toBe(true);
+      chmodSync(dir, 0o700); // restore for cleanup
+    },
+  );
 });

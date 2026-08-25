@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { Command } from "commander";
+import { readDataArg } from "./commands/_data.js";
 import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "./commands/auth.js";
-import { runCreate } from "./commands/create.js";
+import { type CreateArgs, type CreateDeps, runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
 import {
@@ -14,7 +15,12 @@ import {
   siteCacheRoot,
 } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
-import { runUpdate } from "./commands/update.js";
+import {
+  assertUpdateTarget,
+  runUpdate,
+  type UpdateArgs,
+  type UpdateDeps,
+} from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
 import {
   collectProviders,
@@ -32,13 +38,16 @@ import { loadConfig } from "./core/config.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
+import { buildPayloadFromParameters } from "./core/params/from-parameters.js";
+import { describeFields, FIELD_PARAMETER_HELP, renderFieldsTable } from "./core/params/help.js";
+import { parseFieldArgs } from "./core/params/parse-args.js";
 import type { DropSHPlugin, PluginContext } from "./core/plugin.js";
 import { composeRequestHooks } from "./core/request-hooks.js";
 import { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 import type { Operation } from "./core/schema/to-jsonschema.js";
 import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
-import { AuthError, ConfigError, exitCodeFor } from "./errors.js";
+import { AuthError, ConfigError, exitCodeFor, ValidationError } from "./errors.js";
 
 export interface CommandContext {
   client: JsonApiClient;
@@ -49,6 +58,13 @@ export interface CommandContext {
   cwd: string;
   plugins: DropSHPlugin[];
 }
+
+/**
+ * The payload-carrying half of `CreateArgs`/`UpdateArgs` — everything both write
+ * commands share once their own target identification is set aside.
+ */
+type PayloadArgs = Pick<CreateArgs, "payload" | "dryRun" | "noValidate">;
+type WriteDeps = CreateDeps & UpdateDeps;
 
 export interface ProgramOptions {
   contextFactory?: () => Promise<CommandContext>;
@@ -274,6 +290,96 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
       );
     }
   }
+  /**
+   * Print a resolved schema as its field listing: a table for a human, or the
+   * same data verbatim on an explicit `--format json`. Shared by `create`,
+   * `update` and `schema`, so the three cannot drift.
+   */
+  function emitFieldListing(schema: unknown, rctx?: RenderContext): void {
+    const described = describeFields(schema);
+    if (program.getOptionValueSource("format") === "default") {
+      stdout(`${renderFieldsTable(described)}\n`);
+    } else {
+      output.emit(described, rctx);
+    }
+  }
+
+  /**
+   * The write-command wiring `create` and `update` share: decide `--data` vs
+   * field parameters, fetch the operation schema at most once, build the payload
+   * from the parameters, and hand back the args/deps both `runCreate` and
+   * `runUpdate` accept. The two commands differ only in how they identify their
+   * target, which is why that part stays in each action.
+   */
+  async function writeWiring(input: {
+    ctx: CommandContext;
+    operation: Operation;
+    /** `<entity_type>/<bundle>` — what the schema is keyed by. */
+    schemaTarget: string;
+    /** Fallback resource type when the schema declares none. */
+    resourceType: string;
+    /** Leftover argv after the positional: the candidate field parameters. */
+    tokens: string[];
+    rctx: RenderContext;
+    options: { data?: string; dryRun?: boolean; validate?: boolean; fields?: boolean };
+    /** `data.id`, for `update`. */
+    id?: string;
+    /** Runs before the payload is built, e.g. to reject a malformed target. */
+    guard?: () => void;
+  }): Promise<{ args: PayloadArgs; deps: WriteDeps } | "listed"> {
+    const { ctx, options } = input;
+    // --fields is a discovery request, not a write: resolve the schema through
+    // the normal fetch-and-cache pipeline, print the parameters, send nothing.
+    // It reads as a table because a human asked what the fields are; an explicit
+    // --format json hands back the same data verbatim for a caller to consume.
+    if (options.fields === true) {
+      emitFieldListing(
+        await loadOrFetchSchema(ctx, input.schemaTarget, input.operation),
+        input.rctx,
+      );
+      return "listed";
+    }
+    // Exactly one route produces the document, and it is settled here so the
+    // command itself only ever receives a finished payload.
+    const fields = parseFieldArgs(input.tokens);
+    if (options.data !== undefined && fields.length > 0) {
+      throw new ValidationError(
+        "--data and field parameters are mutually exclusive; use one or the other",
+      );
+    }
+    if (options.data === undefined && fields.length === 0) {
+      throw new ValidationError("provide either --data or field parameters (--<field> <value>)");
+    }
+    let cached: unknown;
+    const schema = async () =>
+      (cached ??= await loadOrFetchSchema(ctx, input.schemaTarget, input.operation));
+
+    let payload: unknown;
+    if (options.data !== undefined) {
+      payload = await readDataArg(options.data);
+    } else {
+      input.guard?.();
+      payload = buildPayloadFromParameters({
+        schema: await schema(),
+        parameters: fields,
+        operation: input.operation,
+        ...(input.id !== undefined ? { id: input.id } : {}),
+        resourceType: input.resourceType,
+      });
+    }
+
+    const args: PayloadArgs = { payload };
+    if (options.dryRun !== undefined) args.dryRun = options.dryRun;
+    if (options.validate === false) args.noValidate = true;
+
+    const deps: WriteDeps = { client: ctx.client, emit: (v) => output.emit(v, input.rctx) };
+    if (!args.noValidate) {
+      deps.validate = async (payload: unknown, t: string) =>
+        validatePayload(await schema(), payload, t);
+    }
+    return { args, deps };
+  }
+
   function assertJsonOnly(command: string): void {
     const f = currentFormat();
     if (f !== "json") {
@@ -447,37 +553,36 @@ Example:
     .command("create <entity_type>")
     .description("Create an entity of given type/bundle")
     .requiredOption("--bundle <bundle>")
-    .requiredOption("--data <json>", "inline JSON or @path")
+    .option("--data <json>", "inline JSON or @path")
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
+    .option("--fields", "list this bundle's field parameters and exit")
+    .allowUnknownOption()
+    .addHelpText("after", FIELD_PARAMETER_HELP)
     .action(
       (
         entityType: string,
-        o: { bundle: string; data: string; dryRun?: boolean; validate?: boolean },
-      ) => {
-        const args: {
-          entityType: string;
+        o: {
           bundle: string;
-          dataArg: string;
+          data?: string;
           dryRun?: boolean;
-          noValidate?: boolean;
-        } = { entityType, bundle: o.bundle, dataArg: o.data };
-        if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-        if (o.validate === false) args.noValidate = true;
+          validate?: boolean;
+          fields?: boolean;
+        },
+        cmd: Command,
+      ) => {
         return run(async (ctx) => {
-          const rctx: RenderContext = { command: "create", entityType, bundle: o.bundle };
-          const deps: {
-            client: JsonApiClient;
-            emit: (v: unknown) => void;
-            validate?: (payload: unknown, target: string) => void | Promise<void>;
-          } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
-          if (!args.noValidate) {
-            deps.validate = async (payload: unknown, target: string) => {
-              const schema = await loadOrFetchSchema(ctx, target, "create");
-              validatePayload(schema, payload, target);
-            };
-          }
-          await runCreate(args, deps);
+          const wiring = await writeWiring({
+            ctx,
+            operation: "create",
+            schemaTarget: `${entityType}/${o.bundle}`,
+            resourceType: `${entityType}--${o.bundle}`,
+            tokens: cmd.args.slice(1),
+            rctx: { command: "create", entityType, bundle: o.bundle },
+            options: o,
+          });
+          if (wiring === "listed") return;
+          await runCreate({ entityType, bundle: o.bundle, ...wiring.args }, wiring.deps);
         }, assertRenderable);
       },
     );
@@ -485,37 +590,41 @@ Example:
   program
     .command("update <target>")
     .description("Update an existing entity")
-    .requiredOption("--data <json>", "inline JSON or @path")
+    .option("--data <json>", "inline JSON or @path")
     .option("--dry-run")
     .option("--no-validate", "skip client-side schema validation")
-    .action((target: string, o: { data: string; dryRun?: boolean; validate?: boolean }) => {
-      const args: {
-        target: string;
-        dataArg: string;
-        dryRun?: boolean;
-        noValidate?: boolean;
-      } = { target, dataArg: o.data };
-      if (o.dryRun !== undefined) args.dryRun = o.dryRun;
-      if (o.validate === false) args.noValidate = true;
-      return run(async (ctx) => {
-        const [entityType, bundle] = target.split("/") as [string?, string?];
-        const rctx: RenderContext = { command: "update", target };
-        if (entityType !== undefined) rctx.entityType = entityType;
-        if (bundle !== undefined) rctx.bundle = bundle;
-        const deps: {
-          client: JsonApiClient;
-          emit: (v: unknown) => void;
-          validate?: (payload: unknown, target: string) => void | Promise<void>;
-        } = { client: ctx.client, emit: (v) => output.emit(v, rctx) };
-        if (!args.noValidate) {
-          deps.validate = async (payload: unknown, t: string) => {
-            const schema = await loadOrFetchSchema(ctx, t, "update");
-            validatePayload(schema, payload, t);
-          };
-        }
-        await runUpdate(args, deps);
-      }, assertRenderable);
-    });
+    .option("--fields", "list this bundle's field parameters and exit")
+    .allowUnknownOption()
+    .addHelpText("after", FIELD_PARAMETER_HELP)
+    .action(
+      (
+        target: string,
+        o: { data?: string; dryRun?: boolean; validate?: boolean; fields?: boolean },
+        cmd: Command,
+      ) => {
+        return run(async (ctx) => {
+          const [entityType, bundle, id] = target.split("/") as [string?, string?, string?];
+          const rctx: RenderContext = { command: "update", target };
+          if (entityType !== undefined) rctx.entityType = entityType;
+          if (bundle !== undefined) rctx.bundle = bundle;
+          const wiring = await writeWiring({
+            ctx,
+            operation: "update",
+            schemaTarget: `${entityType}/${bundle}`,
+            resourceType: `${entityType}--${bundle}`,
+            tokens: cmd.args.slice(1),
+            rctx,
+            options: o,
+            ...(id !== undefined ? { id } : {}),
+            // Guard the target before building, so a malformed one is reported by
+            // its own message rather than as a missing data.id.
+            guard: () => assertUpdateTarget(target),
+          });
+          if (wiring === "listed") return;
+          await runUpdate({ target, ...wiring.args }, wiring.deps);
+        }, assertRenderable);
+      },
+    );
 
   program
     .command("delete <target>")
@@ -552,27 +661,38 @@ Example:
     .description("Catalog (no target) or JSON Schema for <entity>/<bundle>")
     .option("--for <op>", "create|update", "create")
     .option("--refresh", "bypass cache for this call")
-    .action((target: string | undefined, o: { for?: string; refresh?: boolean }) => {
-      const operation: Operation = o.for === "update" ? "update" : "create";
-      const schemaArgs =
-        target !== undefined
-          ? { target, operation, refresh: Boolean(o.refresh) }
-          : { operation, refresh: Boolean(o.refresh) };
-      return run(
-        (ctx) =>
-          runSchema(schemaArgs, {
-            http: ctx.http,
-            auth: ctx.auth,
-            baseUrl: ctx.baseUrl,
-            jsonapiPrefix: ctx.jsonapiPrefix,
-            cwd: ctx.cwd,
-            emit: output.emit,
-            warn: (m) => stderr(`${m}\n`),
-            plugins: ctx.plugins,
-          }),
-        () => assertJsonOnly("schema"),
-      );
-    });
+    .option("--fields", "list the target's field parameters instead of its schema")
+    .action(
+      (target: string | undefined, o: { for?: string; refresh?: boolean; fields?: boolean }) => {
+        const operation: Operation = o.for === "update" ? "update" : "create";
+        const schemaArgs =
+          target !== undefined
+            ? { target, operation, refresh: Boolean(o.refresh) }
+            : { operation, refresh: Boolean(o.refresh) };
+        return run(
+          (ctx) => {
+            if (o.fields === true && target === undefined) {
+              throw new ValidationError(
+                "--fields needs a target: dropsh schema <entity_type>/<bundle> --fields",
+              );
+            }
+            // --fields is the same schema, viewed as its parameters: swapping the
+            // emitter inherits runSchema's caching and --refresh untouched.
+            return runSchema(schemaArgs, {
+              http: ctx.http,
+              auth: ctx.auth,
+              baseUrl: ctx.baseUrl,
+              jsonapiPrefix: ctx.jsonapiPrefix,
+              cwd: ctx.cwd,
+              emit: o.fields === true ? (schema) => emitFieldListing(schema) : output.emit,
+              warn: (m) => stderr(`${m}\n`),
+              plugins: ctx.plugins,
+            });
+          },
+          () => assertJsonOnly("schema"),
+        );
+      },
+    );
 
   const auth = program.command("auth").description("Manage authentication");
   auth

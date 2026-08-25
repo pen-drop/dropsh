@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { HttpRequest } from "../../../src/core/http.js";
-import type {
-  DropSHPlugin,
-  PluginContext,
-  RequestContext,
-} from "../../../src/core/plugin.js";
+import type { DropSHPlugin, PluginContext, RequestContext } from "../../../src/core/plugin.js";
 import { composeRequestHooks } from "../../../src/core/request-hooks.js";
 
 const ctx: PluginContext = {
@@ -93,10 +89,7 @@ describe("composeRequestHooks", () => {
       },
     } as unknown as DropSHPlugin;
     const alter = composeRequestHooks(
-      [
-        invalidPlugin,
-        { id: "following", requiredModules: [], alterRequest: followingHook },
-      ],
+      [invalidPlugin, { id: "following", requiredModules: [], alterRequest: followingHook }],
       ctx,
     );
 

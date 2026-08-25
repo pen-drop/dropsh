@@ -295,16 +295,169 @@ exit codes.
 ```bash
 dropsh read <entity_type>/<bundle>/<uuid> [--include=<field>,…]
 dropsh search <entity_type> [--bundle=<b>] [--filter=key:value]… [--limit=N] [--include=<field>,…]
-dropsh create <entity_type> --bundle=<b> --data=<json|@file> [--dry-run] [--no-validate]
-dropsh update <entity_type>/<bundle>/<uuid> --data=<json|@file> [--dry-run] [--no-validate]
+dropsh create <entity_type> --bundle=<b> (--data=<json|@file> | <field parameters>) [--dry-run] [--no-validate]
+dropsh update <entity_type>/<bundle>/<uuid> (--data=<json|@file> | <field parameters>) [--dry-run] [--no-validate]
 dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
 dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
 dropsh schema [--refresh]
-dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh]
+dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh] [--fields]
 ```
 
 `create` and `update` validate payloads against the current schema by default.
 Pass `--no-validate` when you intentionally want to skip local validation.
+
+### Field parameters on `create` / `update`
+
+Instead of handing `create`/`update` a finished JSON:API document via `--data`,
+you can name the fields directly. The CLI reads the bundle's operation schema and
+builds the document itself, so it knows which name is an attribute and which is a
+relationship:
+
+| Form | Meaning |
+|---|---|
+| `--<field> <value>` | set a field |
+| `--<field>=<value>` | same; required when the value itself starts with `--` |
+| `--<field>.<sub> <value>` | set a sub-property, e.g. `--body.value "Text"` |
+| `--<relationship> <uuid>` | reference by UUID; repeat for a multi-valued field |
+| `--json <field>=<json>` | raw JSON value, for arrays of objects |
+
+Any number of fields goes into a single invocation; the `--<field>=<value>` pair
+form and the spaced form are interchangeable and produce identical output.
+
+**`--fields` lists the bundle's actual fields.** `--help` documents the forms;
+`--fields` resolves the bundle's schema and prints every settable parameter,
+then exits without sending anything:
+
+```bash
+dropsh schema node/article_test --fields          # the introspection route
+dropsh create node --bundle=article_test --fields  # same listing, on the command
+```
+
+```
+node--article_test — field parameters
+
+Attributes:
+  --drupal_internal__nid <value>                integer  ID
+  --drupal_internal__vid <value>                integer  Revision ID
+  --langcode.value <value>                      string  Language code
+  --langcode.language <value>                   Language object
+  --revision_timestamp <value>                  number  Revision create time
+  --revision_log <value>                        string  Revision log message
+  --status [true|false]                         boolean  Published
+  --title <value>                               string  required  Title
+  --created <value>                             number  Authored on
+  --changed <value>                             number  Changed
+  --promote [true|false]                        boolean  Promoted to front page
+  --sticky [true|false]                         boolean  Sticky at top of lists
+  --default_langcode [true|false]               boolean  Default translation
+  --revision_default [true|false]               boolean  Default revision
+  --revision_translation_affected [true|false]  boolean  Revision translation affected
+  --path.alias <value>                          string  Path alias
+  --path.pid <value>                            integer  Path id
+  --path.langcode <value>                       string  Language Code
+  --body.value <value>                          string  Text
+  --body.format <value>                         string  Text format
+  --body.summary <value>                        string  Summary
+  --field_test_text <value>                     string  Test Text
+
+Relationships (take a UUID):
+  --node_type <uuid>                            node_type--node_type  Content type
+  --revision_uid <uuid>                         user--user  Revision user
+  --uid <uuid>                                  user--user  Authored by
+  --field_image <uuid>                          file--file  Image
+```
+
+The listing is the schema's, not a curated subset: Drupal's base fields
+(`--drupal_internal__nid`, `--langcode.*`, `--path.*`, `--node_type`,
+`--revision_uid`, …) are settable parameters and appear alongside the
+bundle's own fields.
+
+Each row carries the schema type, whether the field is required, and the field's
+human label. Object attributes appear as their dotted leaves (`--body.value`,
+never `--body`), array attributes as their `--json` form, and a relationship that
+allows several target types is spelled `<type>:<uuid>`. The same listing is reachable three ways, all derived from the schema alone with
+no extra request: `dropsh schema <entity>/<bundle> --fields` (honouring `--for`
+and `--refresh`), and `--fields` on `create` and `update`.
+
+Add an explicit `--format json` to get the same listing as JSON — `parameter`,
+`path`, `type`, `label`, `required`, `bare_flag` per attribute, and `targets`,
+`multiple`, `requires_type_prefix` per relationship — for a caller that wants to
+consume it rather than read it.
+
+Rules worth knowing:
+
+- **Field names come from the schema** (`dropsh schema <entity>/<bundle>`), so an
+  unknown name is **rejected** with exit code `4` instead of being ignored. The
+  error names the rejected parameter and lists the known attributes and
+  relationships.
+- **Relationships take a bare UUID**; the resource type comes from the schema.
+  When a relationship allows several target types, pass `<type>:<uuid>`.
+  Repeating the flag accumulates values on a multi-valued relationship; a second
+  value on a single-valued one is an error.
+- **Values are typed by the schema** — `boolean`, `integer`/`number`, else
+  string. A bare `--flag` means `true` only on a boolean field. Values are never
+  comma-split, so `--title "a, b"` survives intact.
+- **`--data` and field parameters are mutually exclusive**; giving neither is an
+  error.
+- **`--dry-run` prints the generated document** and sends nothing. Output keys are
+  emitted in schema declaration order, so two dry-runs of the same fields are
+  byte-identical and diffable.
+- **`--no-validate` skips Ajv, not the schema.** In parameter mode the schema is
+  always loaded — attribute/relationship placement is impossible without it.
+- A field whose name collides with a reserved option (`--bundle`, `--data`,
+  `--dry-run`, `--no-validate`, `--fields`, `--format`, `--auth-profile`,
+  `--config`, `--view-mode`, `--json`) is out of reach as a bare `--<field>`, but
+  `--json <field>=<json>` still sets it (write the value as JSON), and so does
+  `--data`. No Drupal base field name collides with that list in practice.
+- Fields contributed by a plugin's `extendOperationSchema` hook are usable as
+  parameters like any native field.
+
+Worked example:
+
+```bash
+dropsh create node --bundle=article_test \
+  --title "Hello" --body.value "Text" \
+  --uid c8e0b5d2-9e66-4caf-ac43-337f3b3af62d --dry-run | jq
+```
+
+```json
+{
+  "dry_run": true,
+  "method": "POST",
+  "path": "node/article_test",
+  "payload": {
+    "data": {
+      "type": "node--article_test",
+      "attributes": {
+        "title": "Hello",
+        "body": {
+          "value": "Text"
+        }
+      },
+      "relationships": {
+        "uid": {
+          "data": {
+            "type": "user--user",
+            "id": "c8e0b5d2-9e66-4caf-ac43-337f3b3af62d"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+`update` works the same way and puts the target UUID into `data.id`, sending a
+PATCH with only the fields you named:
+
+```bash
+dropsh update node/article_test/<uuid> --title "changed title"
+```
+
+The builder is also available programmatically — `buildPayloadFromParameters`,
+`indexSchemaFields` and `propertiesOf` are exported from `dropsh/plugin`, so a
+plugin can turn (schema, parameters) into the same document without invoking the
+CLI.
 
 ### `--include` on `read` / `search`
 

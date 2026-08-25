@@ -4,6 +4,9 @@
 export default {
   site: { base_url: "https://example.com" },
   plugins: [
-    [{ plugin: "./dep-parent.mjs", export: "makeParent" }, { id: "inline", requiredModules: [] }],
+    [
+      { plugin: "./dep-parent.mjs", export: "makeParent" },
+      { id: "inline", requiredModules: [] },
+    ],
   ],
 };

@@ -5,11 +5,19 @@ import type { AuthContext } from "../../../../src/core/auth/types.js";
 function fakeCtx(answers: Record<string, string>): AuthContext {
   return {
     baseUrl: "https://example.com",
-    http: { async send() { throw new Error("unused"); } },
-    async prompt({ label }) { return answers[label] ?? ""; },
+    http: {
+      async send() {
+        throw new Error("unused");
+      },
+    },
+    async prompt({ label }) {
+      return answers[label] ?? "";
+    },
     async openBrowser() {},
     stdout() {},
-    now() { return 0; },
+    now() {
+      return 0;
+    },
   };
 }
 
@@ -23,11 +31,18 @@ describe("basic auth provider", () => {
   it("createAdapter applies the Authorization header", async () => {
     const provider = basicAuthPlugin().authProvider!;
     const b64 = Buffer.from("u:p").toString("base64");
-    const adapter = provider.createAdapter({ basic_b64: b64 }, {
-      http: { async send() { throw new Error("unused"); } },
-      now: () => 0,
-      async save() {},
-    });
+    const adapter = provider.createAdapter(
+      { basic_b64: b64 },
+      {
+        http: {
+          async send() {
+            throw new Error("unused");
+          },
+        },
+        now: () => 0,
+        async save() {},
+      },
+    );
     const req = await adapter.apply({ method: "GET", url: "https://x" });
     expect(req.headers?.Authorization).toBe(`Basic ${b64}`);
   });

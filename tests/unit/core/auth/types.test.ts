@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { AuthContext, AuthProvider, AuthSession, AuthStatusInfo } from "../../../../src/core/auth/types.js";
+import type {
+  AuthContext,
+  AuthProvider,
+  AuthSession,
+  AuthStatusInfo,
+} from "../../../../src/core/auth/types.js";
 
 describe("auth types", () => {
   it("a minimal provider satisfies AuthProvider", () => {
@@ -16,7 +21,11 @@ describe("auth types", () => {
         return { loggedIn: s !== null };
       },
       createAdapter() {
-        return { async apply(req) { return req; } };
+        return {
+          async apply(req) {
+            return req;
+          },
+        };
       },
     };
     expect(provider.id).toBe("fake");

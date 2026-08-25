@@ -12,7 +12,9 @@ describe("DropSHPlugin interface", () => {
     const plugin: DropSHPlugin = {
       id: "test",
       requiredModules: ["some_module"],
-      async extendSchema(_entity, _bundle, schema, _ctx) { return schema; },
+      async extendSchema(_entity, _bundle, schema, _ctx) {
+        return schema;
+      },
     };
     expect(plugin.id).toBe("test");
     expect(plugin.requiredModules).toEqual(["some_module"]);
@@ -93,12 +95,24 @@ describe("DropSHPlugin", () => {
         id: "x",
         displayName: "X",
         capabilities: { login: true, logout: true, status: true },
-        async login() { return {}; },
+        async login() {
+          return {};
+        },
         async logout() {},
-        async status() { return { loggedIn: false }; },
-        createAdapter() { return { async apply(r) { return r; } }; },
+        async status() {
+          return { loggedIn: false };
+        },
+        createAdapter() {
+          return {
+            async apply(r) {
+              return r;
+            },
+          };
+        },
       },
-      async extendSchema(_e, _b, s) { return s; },
+      async extendSchema(_e, _b, s) {
+        return s;
+      },
     };
     expect(plugin.authProvider?.id).toBe("x");
   });

@@ -8,7 +8,10 @@ function mockFetch(responses: Array<{ status: number; body: string } | Error>): 
     const r = responses[i++];
     if (!r) throw new Error("unexpected call");
     if (r instanceof Error) throw r;
-    return new Response(r.body, { status: r.status, headers: { "content-type": "application/json" } });
+    return new Response(r.body, {
+      status: r.status,
+      headers: { "content-type": "application/json" },
+    });
   }) as unknown as typeof fetch;
 }
 
@@ -33,7 +36,9 @@ describe("createHttpClient", () => {
       maxRetries: 3,
       retryDelayMs: 0,
     });
-    await expect(http.send({ method: "GET", url: "https://x/y" })).rejects.toBeInstanceOf(HttpError);
+    await expect(http.send({ method: "GET", url: "https://x/y" })).rejects.toBeInstanceOf(
+      HttpError,
+    );
   });
 
   it("retries on 503, then returns 200", async () => {
@@ -52,7 +57,9 @@ describe("createHttpClient", () => {
   it("does NOT retry on 4xx", async () => {
     const fetchMock = mockFetch([{ status: 422, body: '{"errors":[]}' }]);
     const http = createHttpClient({ fetch: fetchMock, maxRetries: 3, retryDelayMs: 0 });
-    await expect(http.send({ method: "POST", url: "https://x/y" })).rejects.toBeInstanceOf(HttpError);
+    await expect(http.send({ method: "POST", url: "https://x/y" })).rejects.toBeInstanceOf(
+      HttpError,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

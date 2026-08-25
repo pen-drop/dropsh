@@ -3,7 +3,13 @@
 export default {
   site: { base_url: "https://example.com" },
   plugins: [
-    [{ id: "shared", requiredModules: [] }, { id: "only-a", requiredModules: [] }],
-    [{ id: "shared", requiredModules: [] }, { id: "only-b", requiredModules: [] }],
+    [
+      { id: "shared", requiredModules: [] },
+      { id: "only-a", requiredModules: [] },
+    ],
+    [
+      { id: "shared", requiredModules: [] },
+      { id: "only-b", requiredModules: [] },
+    ],
   ],
 };

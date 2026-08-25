@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  deriveProjectName,
-  renderTemplate,
-  slugify,
-} from "../../../scripts/init-worktree.lib.mjs";
+import { deriveProjectName, renderTemplate, slugify } from "../../../scripts/init-worktree.lib.mjs";
 
 describe("slugify", () => {
   it("lowercases and collapses non-alphanumerics to single hyphens", () => {

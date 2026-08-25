@@ -5,7 +5,8 @@ import { ConfigError, HttpError } from "../../../../src/errors.js";
 
 describe("createOutput", () => {
   it("writes JSON to stdout", () => {
-    const out: string[] = []; const err: string[] = [];
+    const out: string[] = [];
+    const err: string[] = [];
     const o = createOutput({ stdout: (s) => out.push(s), stderr: (s) => err.push(s) });
     o.emit({ hello: "world" });
     expect(out.join("")).toBe('{"hello":"world"}\n');
@@ -32,7 +33,8 @@ describe("createOutput", () => {
   });
 
   it("invokes an interactive renderer instead of writing to stdout", async () => {
-    const out: string[] = []; const err: string[] = [];
+    const out: string[] = [];
+    const err: string[] = [];
     const run = vi.fn(async () => {});
     const tuiRenderer: InteractiveRenderer = { id: "tui", interactive: true, run };
     const o = createOutput({

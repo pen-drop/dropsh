@@ -33,6 +33,11 @@ export type {
   Resource,
 } from "./core/jsonapi/resource.js";
 export type { JsonApiDocument, JsonApiResource } from "./core/jsonapi/types.js";
+export type { BuildPayloadInput } from "./core/params/from-parameters.js";
+export { buildPayloadFromParameters } from "./core/params/from-parameters.js";
+export type { RawParameter } from "./core/params/parse-args.js";
+export type { FieldDescriptor, SchemaFieldIndex } from "./core/params/schema-fields.js";
+export { indexSchemaFields, propertiesOf } from "./core/params/schema-fields.js";
 export type {
   DropSHPlugin,
   PluginContext,

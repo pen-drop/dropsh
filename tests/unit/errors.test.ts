@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  AuthError,
   CliError,
   ConfigError,
-  AuthError,
+  exitCodeFor,
   HttpError,
   PluginError,
   ValidationError,
-  exitCodeFor,
 } from "../../src/errors.js";
 
 describe("errors", () => {

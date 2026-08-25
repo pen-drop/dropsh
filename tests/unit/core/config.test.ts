@@ -92,7 +92,9 @@ describe("loadConfig", () => {
     });
 
     it("constructs a shared dependency once, not per incoming edge (AC-3)", async () => {
-      (globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number }).__DROPSH_DIAMOND_D_CONSTRUCTIONS = 0;
+      (
+        globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number }
+      ).__DROPSH_DIAMOND_D_CONSTRUCTIONS = 0;
       await loadConfig(fixture("deps-diamond.js"));
       expect(
         (globalThis as { __DROPSH_DIAMOND_D_CONSTRUCTIONS?: number })
