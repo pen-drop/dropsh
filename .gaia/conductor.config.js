@@ -42,7 +42,6 @@ const composedMachineId =
 export default {
   project,
   machine_id: local.machine_id ?? composedMachineId,
-  states: ['spec', 'diagnose', 'coding', 'review'],
   max_parallel: 5,
   remote: { plugin: '@gaia-ai/addon-remote-drupal' },
   // No hard-wired diff pane for review: the review diff surface is hunk
