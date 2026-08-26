@@ -1,6 +1,6 @@
 {
   "name": "@dropsh/plugin-table",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "main": "./dist/plugins/table/src/index.js",
   "exports": {
