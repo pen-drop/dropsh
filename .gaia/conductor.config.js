@@ -18,7 +18,7 @@
 // by every project on this machine. Never committed.
 async function loadMachine() {
   try {
-    return (await import(`${process.env.HOME}/.config/conductor/conductor.config.machine.js`)).default ?? {};
+    return (await import("file:///home/cw/.gaia/machine.config.js")).default ?? {};
   } catch {}
   return {};
 }
@@ -41,8 +41,8 @@ const composedMachineId =
 
 export default {
   project,
-  machine_id: local.machine_id ?? composedMachineId,
-  max_parallel: 5,
+  conductor_id: local.machine_id ?? composedMachineId,
+  
   remote: { plugin: '@gaia-ai/addon-remote-drupal' },
   // No hard-wired diff pane for review: the review diff surface is hunk
   // (GAIA-55) — agent-driven + opt-in in the human's interactive pane, not an
