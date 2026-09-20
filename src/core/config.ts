@@ -191,7 +191,16 @@ async function resolvePlugins(raw: unknown, configPath: string): Promise<DropSHP
   return out;
 }
 
-export async function loadConfig(filePath: string): Promise<Config> {
+/**
+ * Import a config module and validate its `site` section — everything a config
+ * source has to be valid for, short of resolving `plugins[]`. Both `loadConfig`
+ * and the connection listing go through here, so the two cannot diverge on what
+ * a valid `site` is, and the listing can read many files without constructing
+ * any plugin.
+ */
+async function importConfig(
+  filePath: string,
+): Promise<{ configPath: string; raw: Record<string, unknown>; site: SiteConfig }> {
   const configPath = resolve(filePath);
   let mod: { default: unknown };
   try {
@@ -208,14 +217,29 @@ export async function loadConfig(filePath: string): Promise<Config> {
   if (typeof site.base_url !== "string" || site.base_url.length === 0)
     throw new ConfigError("site.base_url required");
 
-  const defaults = isRecord(raw.defaults) ? raw.defaults : {};
-  const plugins = await resolvePlugins(raw.plugins, configPath);
-
   return {
+    configPath,
+    raw,
     site: {
       base_url: site.base_url,
       jsonapi_prefix: typeof site.jsonapi_prefix === "string" ? site.jsonapi_prefix : "/jsonapi",
     },
+  };
+}
+
+/** The `site` section of a config file, read without resolving its plugins. */
+export async function loadConfigSite(filePath: string): Promise<SiteConfig> {
+  return (await importConfig(filePath)).site;
+}
+
+export async function loadConfig(filePath: string): Promise<Config> {
+  const { configPath, raw, site } = await importConfig(filePath);
+
+  const defaults = isRecord(raw.defaults) ? raw.defaults : {};
+  const plugins = await resolvePlugins(raw.plugins, configPath);
+
+  return {
+    site,
     defaults: {
       dry_run: defaults.dry_run === true,
       timeout_ms: typeof defaults.timeout_ms === "number" ? defaults.timeout_ms : 30000,

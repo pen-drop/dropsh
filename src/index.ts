@@ -3,6 +3,11 @@ import { parseArgs } from "node:util";
 import { Command } from "commander";
 import { readDataArg } from "./commands/_data.js";
 import { runAuthLogin, runAuthLogout, runAuthStatus, runAuthUse } from "./commands/auth.js";
+import {
+  type ConnectionsListResult,
+  renderConnectionsTable,
+  runConnectionsList,
+} from "./commands/connections.js";
 import { type CreateArgs, type CreateDeps, runCreate } from "./commands/create.js";
 import { runDelete } from "./commands/delete.js";
 import { runRead } from "./commands/read.js";
@@ -35,6 +40,12 @@ import { createOutput } from "./core/cli/output.js";
 import { createPrompt } from "./core/cli/prompt.js";
 import type { RenderContext } from "./core/cli/render.js";
 import { loadConfig } from "./core/config.js";
+import {
+  type ConfigSource,
+  listConnections,
+  resolveConfigSource,
+  resolveConnectionsDir,
+} from "./core/connections.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
 import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
@@ -72,10 +83,6 @@ export interface ProgramOptions {
   stderr?: (s: string) => void;
   setExitCode?: (code: number) => void;
   plugins?: DropSHPlugin[];
-}
-
-function resolveConfigPath(override?: string): string {
-  return override ?? process.env.DROPSH_CONFIG ?? "dropsh.config.js";
 }
 
 // Normalizes a variadic --include option into a flat, trimmed list of field
@@ -226,7 +233,15 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     .name("dropsh")
     .description("Entity-agnostic CLI for Drupal 11 JSON:API")
     .version("0.0.0")
-    .option("--config <path>", "path to config file (overrides DROPSH_CONFIG)")
+    .option("--config <path>", "path to config file (overrides every id-based selector)")
+    .option(
+      "--connection <id>",
+      "named connection to use: <connections-dir>/<id>.js (overrides $DROPSH_CONFIG)",
+    )
+    .option(
+      "--connections-dir <path>",
+      "where named connections live (overrides $DROPSH_CONNECTIONS_DIR)",
+    )
     .option(
       "--auth-profile <id>",
       "auth profile to use (overrides the active profile and $DROPSH_AUTH_PROFILE)",
@@ -241,12 +256,32 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
     ((c) => {
       process.exitCode = c;
     });
+  /** The connections directory for this invocation: `--connections-dir` > env > default. */
+  function currentConnectionsDir(): string {
+    return resolveConnectionsDir({ flag: program.opts().connectionsDir as string | undefined });
+  }
+
+  /**
+   * The config file this invocation resolves to, and why. Every caller — the
+   * command context, the auth wiring, and `connections list` — reads this one
+   * answer, so what the listing claims and what the next command does cannot
+   * disagree.
+   */
+  function currentConfigSource(): ConfigSource {
+    const o = program.opts();
+    return resolveConfigSource({
+      config: o.config as string | undefined,
+      connection: o.connection as string | undefined,
+      connectionsDir: currentConnectionsDir(),
+    });
+  }
+
   const contextFactory =
     opts.contextFactory ??
     (() => {
-      const o = program.opts();
-      const profile = (o.authProfile as string | undefined) ?? process.env.DROPSH_AUTH_PROFILE;
-      return defaultContext(resolveConfigPath(o.config as string | undefined), profile);
+      const profile =
+        (program.opts().authProfile as string | undefined) ?? process.env.DROPSH_AUTH_PROFILE;
+      return defaultContext(currentConfigSource().path, profile);
     });
   const renderers = (opts.plugins ?? []).flatMap((p) => p.renderers ?? []);
   const output = createOutput({
@@ -388,7 +423,7 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
   }
 
   async function authDeps(): Promise<import("./commands/auth.js").AuthDeps> {
-    const cfg = await loadConfig(resolveConfigPath(program.opts().config as string | undefined));
+    const cfg = await loadConfig(currentConfigSource().path);
     return {
       baseUrl: cfg.site.base_url,
       providers: collectProviders(cfg.plugins),
@@ -694,6 +729,31 @@ Example:
       },
     );
 
+  const connections = program.command("connections").description("Manage named connections");
+  connections
+    .command("list")
+    .description("List the connections in the resolved connections directory")
+    .action(() =>
+      // Builds no CommandContext, so it works with no cwd config present.
+      run2(async () => {
+        await runConnectionsList(
+          { dir: currentConnectionsDir(), resolved: currentConfigSource() },
+          {
+            list: listConnections,
+            // A table because a human asked what the connections are; an
+            // explicit --format json hands back the same data verbatim.
+            emit: (v) => {
+              if (program.getOptionValueSource("format") === "default") {
+                stdout(`${renderConnectionsTable(v as ConnectionsListResult)}\n`);
+              } else {
+                output.emit(v);
+              }
+            },
+          },
+        );
+      }),
+    );
+
   const auth = program.command("auth").description("Manage authentication");
   auth
     .command("login")
@@ -734,18 +794,53 @@ Example:
   return program;
 }
 
-function earlyConfigArg(argv: string[]): string | undefined {
+/**
+ * The config selectors as they appear in raw argv, for the pre-parse plugin
+ * bootstrap — which runs before commander sees any option. It feeds the same
+ * resolver the commands use, so the early and the late resolution cannot answer
+ * differently and load plugins from a different connection than the command
+ * being bootstrapped.
+ */
+export function earlyConfigArgs(argv: string[]): {
+  config?: string;
+  connection?: string;
+  connectionsDir?: string;
+} {
   const { values } = parseArgs({
     args: argv.slice(2),
-    options: { config: { type: "string" } },
+    options: {
+      config: { type: "string" },
+      connection: { type: "string" },
+      "connections-dir": { type: "string" },
+    },
     strict: false,
   });
-  return typeof values.config === "string" ? values.config : undefined;
+  const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+  const config = str(values.config);
+  const connection = str(values.connection);
+  const connectionsDir = str(values["connections-dir"]);
+  return {
+    ...(config !== undefined ? { config } : {}),
+    ...(connection !== undefined ? { connection } : {}),
+    ...(connectionsDir !== undefined ? { connectionsDir } : {}),
+  };
 }
 
 export async function main(): Promise<void> {
-  const configPath = resolveConfigPath(earlyConfigArg(process.argv));
-  const cfg = await loadConfig(configPath).catch(() => null);
+  const early = earlyConfigArgs(process.argv);
+  // An unresolvable selector is not reported here: the bootstrap only collects
+  // plugins, and commander's own resolution raises the error with its exit code.
+  const configPath = (() => {
+    try {
+      return resolveConfigSource({
+        ...early,
+        connectionsDir: resolveConnectionsDir({ flag: early.connectionsDir }),
+      }).path;
+    } catch {
+      return null;
+    }
+  })();
+  const cfg = configPath === null ? null : await loadConfig(configPath).catch(() => null);
   const plugins = cfg?.plugins ?? [];
   const program = buildProgram({ plugins });
   try {

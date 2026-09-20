@@ -10,9 +10,14 @@ import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 import type { DropSHPlugin, DropSHPlugin as Plugin } from "../../src/core/plugin.js";
 import { toOperationVariant } from "../../src/core/schema/to-jsonschema.js";
 import {
+  resolveConfigSource,
+  resolveConnectionsDir,
+} from "../../src/core/connections.js";
+import {
   authStatus,
   buildProgram,
   type CommandContext,
+  earlyConfigArgs,
   normalizeInclude,
   resolveAuth,
 } from "../../src/index.js";
@@ -67,6 +72,7 @@ describe("buildProgram", () => {
     const names = p.commands.map((c) => c.name()).sort();
     expect(names).toEqual([
       "auth",
+      "connections",
       "create",
       "delete",
       "read",
@@ -933,5 +939,190 @@ describe("payload resolution happens before the command runs", () => {
     expect(code).toBe(4);
     expect(errs.join("")).toMatch(/either --data or field parameters/);
     expect(c.patch).not.toHaveBeenCalled();
+  });
+});
+
+describe("named connections (CLI)", () => {
+  const connectionsDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "connections");
+
+  function programFor(argv: string[]): {
+    run: () => Promise<void>;
+    out: string[];
+    errs: string[];
+    code: () => number | undefined;
+  } {
+    const out: string[] = [];
+    const errs: string[] = [];
+    let code: number | undefined;
+    const p = buildProgram({
+      stdout: (s) => out.push(s),
+      stderr: (s) => errs.push(s),
+      setExitCode: (n) => {
+        code = n;
+      },
+    });
+    return {
+      run: async () => {
+        await p.parseAsync(["node", "dropsh", ...argv]);
+      },
+      out,
+      errs,
+      code: () => code,
+    };
+  }
+
+  it("connections list prints every id with its base_url, marking none by default", async () => {
+    const p = programFor(["--connections-dir", connectionsDir, "connections", "list"]);
+    await p.run();
+    const text = p.out.join("");
+    expect(text).toContain("production");
+    expect(text).toContain("https://production.example.com");
+    expect(text).toContain("staging");
+    expect(text).toContain("https://staging.example.com");
+    expect(text).not.toContain("*");
+    expect(p.code()).toBeUndefined();
+  });
+
+  it("connections list marks the connection the invocation would resolve to", async () => {
+    const p = programFor([
+      "--connections-dir",
+      connectionsDir,
+      "--connection",
+      "staging",
+      "connections",
+      "list",
+    ]);
+    await p.run();
+    const marked = p.out
+      .join("")
+      .split("\n")
+      .filter((line) => line.includes("*"));
+    expect(marked).toHaveLength(1);
+    expect(marked[0]).toContain("staging");
+  });
+
+  it("connections list emits the same data on --format json", async () => {
+    const p = programFor([
+      "--connections-dir",
+      connectionsDir,
+      "--connection",
+      "staging",
+      "--format",
+      "json",
+      "connections",
+      "list",
+    ]);
+    await p.run();
+    const payload = JSON.parse(p.out.join("")) as {
+      directory: string;
+      resolved: { path: string; source: string; id?: string };
+      connections: { id: string; base_url?: string; error?: string; current: boolean }[];
+    };
+    expect(payload.directory).toBe(connectionsDir);
+    expect(payload.resolved).toEqual({
+      path: join(connectionsDir, "staging.js"),
+      source: "flag-connection",
+      id: "staging",
+    });
+    expect(payload.connections.find((c) => c.id === "staging")).toEqual({
+      id: "staging",
+      base_url: "https://staging.example.com",
+      current: true,
+    });
+    expect(payload.connections.filter((c) => c.current)).toHaveLength(1);
+  });
+
+  it("connections list reports a broken connection as a row, keeping exit 0", async () => {
+    const p = programFor([
+      "--connections-dir",
+      connectionsDir,
+      "--format",
+      "json",
+      "connections",
+      "list",
+    ]);
+    await p.run();
+    const payload = JSON.parse(p.out.join("")) as {
+      connections: { id: string; base_url?: string; error?: string }[];
+    };
+    const broken = payload.connections.find((c) => c.id === "broken");
+    expect(broken?.base_url).toBeUndefined();
+    expect(broken?.error).toContain("site");
+    expect(p.code()).toBeUndefined();
+  });
+
+  it("connections list marks no row when the invocation resolves to a path", async () => {
+    const p = programFor([
+      "--connections-dir",
+      connectionsDir,
+      "--config",
+      "/tmp/somewhere.js",
+      "--format",
+      "json",
+      "connections",
+      "list",
+    ]);
+    await p.run();
+    const payload = JSON.parse(p.out.join("")) as {
+      resolved: { path: string; source: string };
+      connections: { current: boolean }[];
+    };
+    expect(payload.resolved).toEqual({ path: "/tmp/somewhere.js", source: "flag-config" });
+    expect(payload.connections.some((c) => c.current)).toBe(false);
+  });
+
+  it("an unknown connection id fails the run with a non-zero exit and the available ids", async () => {
+    const p = programFor([
+      "--connections-dir",
+      connectionsDir,
+      "--connection",
+      "stagng",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+    ]);
+    await p.run();
+    expect(p.code()).toBe(2);
+    const text = p.errs.join("");
+    expect(text).toContain("stagng");
+    expect(text).toContain("staging");
+    expect(text).toContain("production");
+  });
+
+  it("the pre-parse bootstrap resolves the same path as the parsed options", () => {
+    const argv = [
+      "node",
+      "dropsh",
+      "--connections-dir",
+      connectionsDir,
+      "--connection",
+      "staging",
+      "read",
+      "node/article/abcdef01-abcd-abcd-abcd-abcdef012345",
+    ];
+    const early = earlyConfigArgs(argv);
+    expect(
+      resolveConfigSource({
+        ...early,
+        connectionsDir: resolveConnectionsDir({ flag: early.connectionsDir, env: {} }),
+        env: {},
+      }),
+    ).toEqual({
+      path: join(connectionsDir, "staging.js"),
+      source: "flag-connection",
+      id: "staging",
+    });
+  });
+});
+
+describe("auth stays keyed on the connection's host", () => {
+  it("keeps two hosts apart and lets two connections on one host share", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dropsh-conn-auth-"));
+    const session = { access_token: "tok" };
+    await writeProfile("https://production.example.com", "basic", "basic", session, dir);
+    expect(await readProfile("https://staging.example.com", "basic", dir)).toBeNull();
+    // A second connection against the same host reads the same store.
+    expect(
+      await readProfile("https://production.example.com/other-prefix", "basic", dir),
+    ).not.toBeNull();
   });
 });

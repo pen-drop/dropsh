@@ -1,8 +1,12 @@
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { ConfigError } from "../../errors.js";
+import { defaultStateDir } from "../paths.js";
 import type { AuthSession } from "./types.js";
+
+// Re-exported so every existing importer of the auth store keeps working while
+// the path itself lives in one place (`src/core/paths.ts`).
+export { defaultStateDir };
 
 /** One stored auth identity: the provider that owns it plus its opaque session. */
 export interface ProfileRecord {
@@ -23,10 +27,6 @@ export interface ProfilesFile {
 export interface SessionRecord {
   activeProvider: string;
   session: AuthSession;
-}
-
-export function defaultStateDir(): string {
-  return join(homedir(), ".config", "dropsh");
 }
 
 function hostnameFromUrl(baseUrl: string): string {
