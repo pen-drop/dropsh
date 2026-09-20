@@ -42,7 +42,6 @@ const composedMachineId =
 export default {
   project,
   conductor_id: local.machine_id ?? composedMachineId,
-  
   remote: { plugin: '@gaia-ai/addon-remote-drupal' },
   // No hard-wired diff pane for review: the review diff surface is hunk
   // (GAIA-55) — agent-driven + opt-in in the human's interactive pane, not an
@@ -85,8 +84,10 @@ export default {
   workspace: {
     plugin: '@gaia-ai/addon-herdr',
     export: 'herdrWorkspace',
-    with: {
-      hooks: { after_create: 'pnpm install' },
-    },
   },
+  // Lifecycle hooks are executor-owned and live at the config TOP LEVEL — not on
+  // a plugin descriptor's `with.hooks` (a top-level `hooks` wins over that). A
+  // fresh git worktree shares .git but not node_modules, so after_create only
+  // installs deps.
+  hooks: { after_create: 'pnpm install' },
 };
