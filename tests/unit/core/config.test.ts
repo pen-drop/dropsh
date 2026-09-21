@@ -31,6 +31,36 @@ describe("loadConfig", () => {
     await expect(loadConfig(fixture("no-base-url.js"))).rejects.toBeInstanceOf(ConfigError);
   });
 
+  // DROPSH-13: a trailing slash on base_url used to survive config load and reach
+  // string-concatenated URLs (notably the OAuth token endpoint composed by the
+  // consumer's config), producing an opaque HTTP error instead of a clear cause.
+  describe("site.base_url shape (DROPSH-13)", () => {
+    it("rejects a trailing slash and names the corrected value", async () => {
+      await expect(loadConfig(fixture("base-url-trailing-slash.js"))).rejects.toBeInstanceOf(
+        ConfigError,
+      );
+      await expect(loadConfig(fixture("base-url-trailing-slash.js"))).rejects.toThrow(
+        /base_url.*trailing slash.*https:\/\/example\.com(?!\/)/s,
+      );
+    });
+
+    it("rejects multiple trailing slashes and shows the fully trimmed value", async () => {
+      await expect(loadConfig(fixture("base-url-trailing-slashes.js"))).rejects.toThrow(
+        /base_url.*trailing slash.*https:\/\/example\.com(?!\/)/s,
+      );
+    });
+
+    it("accepts a canonical base_url unchanged", async () => {
+      const cfg = await loadConfig(fixture("valid.js"));
+      expect(cfg.site.base_url).toBe("https://example.com");
+    });
+
+    it("preserves a non-empty sub-path segment", async () => {
+      const cfg = await loadConfig(fixture("base-url-subpath.js"));
+      expect(cfg.site.base_url).toBe("https://example.com/subdir");
+    });
+  });
+
   it("throws ConfigError on syntax error in config file", async () => {
     await expect(loadConfig(fixture("syntax-error.js"))).rejects.toBeInstanceOf(ConfigError);
   });

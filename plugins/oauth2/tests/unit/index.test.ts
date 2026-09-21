@@ -29,6 +29,44 @@ describe("oauth2Plugin", () => {
     ).toThrow();
   });
 
+  // DROPSH-13: `token_url` is composed outside dropsh as `${baseUrl}/oauth/token`,
+  // so a trailing slash on base_url yields `//oauth/token`. That URL never reaches
+  // the token endpoint, and the server's reply names no cause. Reject the shape here,
+  // before any request is issued, since token_url never passes through loadConfig.
+  describe("token_url shape (DROPSH-13)", () => {
+    it("rejects an empty path segment and names the corrected value", () => {
+      expect(() =>
+        oauth2Plugin({
+          type: "oauth2_client_credentials",
+          client_id: "c",
+          token_url: "https://example.com//oauth/token",
+        }),
+      ).toThrow(/token_url.*https:\/\/example\.com\/oauth\/token/s);
+    });
+
+    it("accepts a canonical https token_url", () => {
+      expect(() =>
+        oauth2Plugin({
+          type: "oauth2_client_credentials",
+          client_id: "c",
+          token_url: "https://example.com/oauth/token",
+        }),
+      ).not.toThrow();
+    });
+
+    // The `//` in the scheme must never be mistaken for the defect — a naive
+    // `token_url.includes("//")` would reject every well-formed URL.
+    it("accepts a canonical http token_url", () => {
+      expect(() =>
+        oauth2Plugin({
+          type: "oauth2_client_credentials",
+          client_id: "c",
+          token_url: "http://example.com/oauth/token",
+        }),
+      ).not.toThrow();
+    });
+  });
+
   it("keeps the constant plugin id when no profile id is configured", () => {
     const plugin = oauth2Plugin({
       type: "oauth2_client_credentials",

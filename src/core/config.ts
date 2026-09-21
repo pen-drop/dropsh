@@ -216,6 +216,16 @@ async function importConfig(
   if (!isRecord(site)) throw new ConfigError("site section missing");
   if (typeof site.base_url !== "string" || site.base_url.length === 0)
     throw new ConfigError("site.base_url required");
+  // Reject rather than silently trim, so the persisted config stays canonical.
+  // A trailing slash survives into every string-concatenated URL a consumer
+  // builds from base_url — notably `${base_url}/oauth/token` — where the doubled
+  // slash addresses a route that is not the token endpoint (DROPSH-13).
+  if (site.base_url.endsWith("/")) {
+    const corrected = site.base_url.replace(/\/+$/, "");
+    throw new ConfigError(
+      `site.base_url must not end with a trailing slash — set it to ${corrected}`,
+    );
+  }
 
   return {
     configPath,

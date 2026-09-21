@@ -41,9 +41,36 @@ export type OAuth2Config = OAuth2Common &
       }
   );
 
+/**
+ * `token_url` is composed by the consumer's config as `${base_url}/oauth/token`,
+ * so a trailing slash on `base_url` yields `https://host//oauth/token`. That URL
+ * never reaches the token endpoint — a proxy collapses or redirects the empty
+ * segment — and the server's reply names no cause. Reject the shape before any
+ * request is issued, since `token_url` arrives pre-composed and never passes
+ * through `loadConfig` (DROPSH-13).
+ *
+ * The check reads the *path*, never the whole string: the `//` in `https://` is
+ * the scheme separator and must not be mistaken for the defect. A `token_url`
+ * that does not parse as an absolute URL is left to the request layer.
+ */
+function assertCanonicalTokenUrl(tokenUrl: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(tokenUrl);
+  } catch {
+    return;
+  }
+  if (!parsed.pathname.includes("//")) return;
+  parsed.pathname = parsed.pathname.replace(/\/{2,}/g, "/");
+  throw new ConfigError(
+    `oauth2Plugin: token_url must not contain an empty path segment — set it to ${parsed.href}`,
+  );
+}
+
 function validate(config: OAuth2Config): OAuth2Config {
   if (!config.client_id) throw new ConfigError("oauth2Plugin: client_id required");
   if (!config.token_url) throw new ConfigError("oauth2Plugin: token_url required");
+  assertCanonicalTokenUrl(config.token_url);
   if (config.type === "oauth2_password" && !config.username)
     throw new ConfigError("oauth2Plugin: username required for oauth2_password");
   return config;
