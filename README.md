@@ -662,6 +662,31 @@ export default {
 `@dropsh/plugin-*` packages), so `import { DropSHPlugin } from "dropsh/plugin"`
 is typed with no ambient `declare module`.
 
+The connection-resolution API is available to embedders as well:
+
+```ts
+import {
+  resolveConfigSource,
+  resolveConnectionsDir,
+} from "dropsh/plugin";
+
+const connectionsDir = resolveConnectionsDir({
+  flag: "/home/me/.config/dropsh/connections",
+});
+const config = resolveConfigSource({
+  connection: "staging",
+  connectionsDir,
+});
+// config.path and config.source identify the selected config file and selector.
+```
+
+The same entry point also exports `CWD_CONFIG_FILE`, `listConnectionIds`, and
+`listConnections`, plus the `ConfigSource`, `ConfigSourceKind`,
+`ConnectionEntry`, `ResolveConfigSourceInput`, and `ResolveConnectionsDirInput`
+types. These exports use the same selector precedence and connections-directory
+semantics as the CLI; see [Named connections](#named-connections--one-config-file-per-site)
+for the full documentation.
+
 ### Composing plugins
 
 `composePlugins(...children)` bundles several plugins into one flat list, so an
