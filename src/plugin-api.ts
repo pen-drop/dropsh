@@ -18,6 +18,20 @@ export type {
 export { indexIncluded, isInteractive } from "./core/cli/render.js";
 export type { Config, SiteConfig } from "./core/config.js";
 export { loadConfig } from "./core/config.js";
+export type {
+  ConfigSource,
+  ConfigSourceKind,
+  ConnectionEntry,
+  ResolveConfigSourceInput,
+  ResolveConnectionsDirInput,
+} from "./core/connections.js";
+export {
+  CWD_CONFIG_FILE,
+  listConnectionIds,
+  listConnections,
+  resolveConfigSource,
+  resolveConnectionsDir,
+} from "./core/connections.js";
 export type { HttpClient, HttpRequest } from "./core/http.js";
 export { createHttpClient } from "./core/http.js";
 export type {
