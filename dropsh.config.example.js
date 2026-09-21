@@ -3,6 +3,11 @@
 // This file holds only NON-SECRET connection parameters. Secrets (passwords,
 // client secrets, tokens) are never stored here — they are prompted by
 // `dropsh auth login` and persisted to ~/.config/dropsh/<host>.json (mode 0600).
+//
+// The same file placed at ~/.config/dropsh/connections/<id>.js is a *named
+// connection*, selectable from anywhere as `dropsh --connection <id> …`. That
+// directory is overridable with `--connections-dir <path>` or
+// $DROPSH_CONNECTIONS_DIR; `dropsh connections list` shows what is available.
 import { basicAuthPlugin } from "dropsh";
 // import { oauth2Plugin } from '@dropsh/plugin-oauth2';
 // import { schemataPlugin } from '@dropsh/plugin-schemata';

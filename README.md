@@ -171,7 +171,8 @@ Each descriptor's `with` is passed to the plugin factory (legacy alias:
 descriptor names `dropsh/plugin` with `export: "basicAuthPlugin"`.
 
 Use `dropsh.config.example.js` as a fuller starting point. Override the config
-path with `--config <path>` or `DROPSH_CONFIG`.
+path with `--config <path>` or `DROPSH_CONFIG`, or address a config file by name
+with `--connection <id>` — see [Named connections](#named-connections--one-config-file-per-site).
 
 <details>
 <summary>Workspace variant — importing factories directly</summary>
@@ -203,6 +204,66 @@ The two forms may be mixed in one `plugins[]` array. `import` resolves relative
 to the config file, so it only works when the packages are installed there.
 
 </details>
+
+### Named connections — one config file per site
+
+A *named connection* is a config file addressed by id instead of by path. A
+connection is a file: `<connections-dir>/<id>.js`, carrying exactly the shape
+`dropsh.config.js` has (`site`, `defaults`, `plugins`), and its basename is its
+id. There is no registry, index or map — adding a connection is adding a file.
+Only `.js` files are connections.
+
+```bash
+dropsh --connection staging read node/article/<uuid>
+```
+
+**The connections directory** defaults to `~/.config/dropsh/connections/`,
+beside the per-host auth store. It is overridable, and the flag wins over the
+environment variable:
+
+| # | Selector | Kind |
+|---|----------|------|
+| 1 | `--connections-dir <path>` | flag |
+| 2 | `$DROPSH_CONNECTIONS_DIR`  | environment |
+| 3 | `~/.config/dropsh/connections` | default |
+
+**Which config file a run uses**, highest first:
+
+| # | Selector | Kind |
+|---|----------|------|
+| 1 | `--config <path>` | names a **file** |
+| 2 | `--connection <id>` | names an **entry** |
+| 3 | `$DROPSH_CONFIG` | names a **file** |
+| 4 | `$DROPSH_CONNECTION` | names an **entry** |
+| 5 | `./dropsh.config.js` | the cwd default |
+
+`--config` and `--connection` given together is not an error: `--config` names a
+file and wins.
+
+An unknown id is a hard error — non-zero exit, naming the id, the directory
+searched and the available ids. Nothing is prompted and nothing is created, so
+an unattended run fails rather than hangs:
+
+```
+Unknown connection 'stagng'. Available in /home/me/.config/dropsh/connections: production, staging.
+```
+
+**List them** with `dropsh connections list`: one row per connection with its
+`site.base_url`, a `*` on the one the current invocation would resolve to, and
+the resolved path stated instead when that is a path rather than an id. A
+connection whose file cannot be read is listed with its error in place of the
+URL and the listing still exits 0. Listing reads `site` only, so a connection
+naming an uninstalled plugin package cannot abort the listing of the others.
+
+```bash
+dropsh connections list
+dropsh connections list --format json
+```
+
+Auth is unchanged by connections: the session store keys on the host of
+`site.base_url`, so two connections against different hosts keep their tokens
+apart and two against the same host share them. `--auth-profile` keeps selecting
+the identity *within* whichever connection is in force.
 
 ## Authentication
 
@@ -301,7 +362,12 @@ dropsh delete <entity_type>/<bundle>/<uuid> [--dry-run]
 dropsh upload-file --target=<entity_type>/<bundle>/<uuid>/<field> --file=<path> [--dry-run]
 dropsh schema [--refresh]
 dropsh schema <entity_type>/<bundle> [--for=create|update] [--refresh] [--fields]
+dropsh connections list
 ```
+
+Every command accepts the global `--config <path>`, `--connection <id>` and
+`--connections-dir <path>` selectors described under
+[Named connections](#named-connections--one-config-file-per-site).
 
 `create` and `update` validate payloads against the current schema by default.
 Pass `--no-validate` when you intentionally want to skip local validation.
