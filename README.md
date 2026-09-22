@@ -235,10 +235,14 @@ environment variable:
 | 2 | `--connection <id>` | names an **entry** |
 | 3 | `$DROPSH_CONFIG` | names a **file** |
 | 4 | `$DROPSH_CONNECTION` | names an **entry** |
-| 5 | `./dropsh.config.js` | the cwd default |
+| 5 | existing default config | `./dropsh.config.js` by default |
+| 6 | sole named connection | only when the default is absent |
+| 7 | default config path | lets loading report the missing config |
 
 `--config` and `--connection` given together is not an error: `--config` names a
-file and wins.
+file and wins. When no selector is set and the default config does not exist,
+exactly one `.js` file in the connections directory is selected automatically.
+Two or more named connections remain ambiguous and require a selector.
 
 An unknown id is a hard error — non-zero exit, naming the id, the directory
 searched and the available ids. Nothing is prompted and nothing is created, so
@@ -679,6 +683,10 @@ const config = resolveConfigSource({
 });
 // config.path and config.source identify the selected config file and selector.
 ```
+
+Embedders whose default config is not `./dropsh.config.js` can pass its path as
+`defaultConfig`. An existing default wins over implicit sole-connection
+selection; when it is absent, a sole named connection is selected instead.
 
 The same entry point also exports `CWD_CONFIG_FILE`, `listConnectionIds`, and
 `listConnections`, plus the `ConfigSource`, `ConfigSourceKind`,

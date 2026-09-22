@@ -14,6 +14,8 @@ export type ConfigSourceKind =
   | "flag-connection"
   | "env-config"
   | "env-connection"
+  | "default-config"
+  | "sole-connection"
   | "cwd";
 
 /** The chosen config file plus the provenance of that choice. */
@@ -45,6 +47,8 @@ export interface ResolveConfigSourceInput {
   config?: string | undefined;
   /** `--connection <id>`. */
   connection?: string | undefined;
+  /** Embedder-owned default config, used ahead of an implicit sole connection. */
+  defaultConfig?: string | undefined;
   connectionsDir?: string;
   env?: NodeJS.ProcessEnv;
   cwd?: string;
@@ -63,8 +67,8 @@ function toIds(entries: string[]): string[] {
 
 /**
  * Sorted ids of the `.js` files in `dir`; `[]` when the directory is absent.
- * Synchronous because it is only reached on the unknown-id error path, and the
- * resolver itself has to stay synchronous for the commander option wiring.
+ * Synchronous because the resolver uses it for implicit sole-connection
+ * selection and has to stay synchronous for the commander option wiring.
  */
 function listConnectionIdsSync(dir: string): string[] {
   try {
@@ -77,8 +81,10 @@ function listConnectionIdsSync(dir: string): string[] {
 /**
  * Resolve the config file for this invocation, highest selector first:
  * `--config` > `--connection` > `$DROPSH_CONFIG` > `$DROPSH_CONNECTION` >
- * `./dropsh.config.js`. `--config` and `--connection` together is not an error:
- * `--config` names a *file* and that is its stated meaning, so it wins silently.
+ * an existing default config > the sole named connection > the default path.
+ * The default path is `./dropsh.config.js`. `--config` and `--connection`
+ * together is not an error: `--config` names a *file* and that is its stated
+ * meaning, so it wins silently.
  *
  * Returns the path *and* its provenance, so every caller — the command context,
  * the auth wiring, the pre-parse plugin bootstrap and `connections list` — reads
@@ -102,7 +108,16 @@ export function resolveConfigSource(input: ResolveConfigSourceInput = {}): Confi
     const id = env.DROPSH_CONNECTION;
     return { path: requireConnection(dir, id), source: "env-connection", id };
   }
-  return { path: join(cwd, CWD_CONFIG_FILE), source: "cwd" };
+  const defaultConfig = input.defaultConfig ?? join(cwd, CWD_CONFIG_FILE);
+  const defaultSource = input.defaultConfig === undefined ? "cwd" : "default-config";
+  if (existsSync(defaultConfig)) return { path: defaultConfig, source: defaultSource };
+
+  const available = listConnectionIdsSync(dir);
+  if (available.length === 1) {
+    const id = available[0];
+    if (id) return { path: connectionPath(dir, id), source: "sole-connection", id };
+  }
+  return { path: defaultConfig, source: defaultSource };
 }
 
 /**
