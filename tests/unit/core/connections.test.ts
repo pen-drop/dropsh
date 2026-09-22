@@ -1,7 +1,8 @@
-import { readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { defaultStateDir } from "../../../src/core/auth/session-store.js";
 import { loadConfig } from "../../../src/core/config.js";
 import {
@@ -15,6 +16,20 @@ import { ConfigError } from "../../../src/errors.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const connectionsDir = path.join(here, "..", "fixtures", "connections");
 const cwd = path.join(here, "..", "fixtures", "config");
+const temporaryRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+function connectionFixture(ids: string[]): { root: string; connections: string } {
+  const root = mkdtempSync(path.join(tmpdir(), "dropsh-connections-"));
+  temporaryRoots.push(root);
+  const connections = path.join(root, "connections");
+  mkdirSync(connections);
+  for (const id of ids) writeFileSync(path.join(connections, `${id}.js`), "export default {};\n");
+  return { root, connections };
+}
 
 describe("resolveConnectionsDir", () => {
   it("defaults to the state dir's connections folder", () => {
@@ -89,6 +104,44 @@ describe("resolveConfigSource", () => {
   it("falls back to the cwd dropsh.config.js", () => {
     expect(resolveConfigSource({ connectionsDir, cwd, env: {} })).toEqual({
       path: path.join(cwd, "dropsh.config.js"),
+      source: "cwd",
+    });
+  });
+
+  it("uses the sole named connection when the default config is absent", () => {
+    const fixture = connectionFixture(["only"]);
+
+    expect(
+      resolveConfigSource({ connectionsDir: fixture.connections, cwd: fixture.root, env: {} }),
+    ).toEqual({
+      path: path.join(fixture.connections, "only.js"),
+      source: "sole-connection",
+      id: "only",
+    });
+  });
+
+  it("keeps an existing embedder default ahead of a sole named connection", () => {
+    const fixture = connectionFixture(["only"]);
+    const defaultConfig = path.join(fixture.root, "gaia.config.js");
+    writeFileSync(defaultConfig, "export default {};\n");
+
+    expect(
+      resolveConfigSource({
+        connectionsDir: fixture.connections,
+        defaultConfig,
+        cwd: fixture.root,
+        env: {},
+      }),
+    ).toEqual({ path: defaultConfig, source: "default-config" });
+  });
+
+  it("does not guess when multiple named connections exist", () => {
+    const fixture = connectionFixture(["first", "second"]);
+
+    expect(
+      resolveConfigSource({ connectionsDir: fixture.connections, cwd: fixture.root, env: {} }),
+    ).toEqual({
+      path: path.join(fixture.root, "dropsh.config.js"),
       source: "cwd",
     });
   });
