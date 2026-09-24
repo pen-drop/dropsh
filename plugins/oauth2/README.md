@@ -74,7 +74,9 @@ Waiting for confirmation ...
 
 dropsh never opens a browser for this flow, so the URL and the code stay on screen for use on
 another device. Press Ctrl+C to cancel. The stored tokens behave like any other profile —
-`dropsh auth status`, `dropsh auth logout` and the automatic refresh all work unchanged.
+`dropsh auth status`, `dropsh auth logout` and the automatic refresh all work unchanged. If the
+server issues no `refresh_token` for the device grant, an expired session asks for a full login
+again instead of renewing.
 
 ## Named profiles
 
