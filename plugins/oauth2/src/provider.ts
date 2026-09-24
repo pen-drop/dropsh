@@ -8,6 +8,7 @@ import type {
 } from "dropsh/plugin";
 import { AuthError, HttpError } from "dropsh/plugin";
 import type { OAuth2Config } from "./index.js";
+import { acquireDeviceSession } from "./device.js";
 import { acquireAuthCodeSession } from "./login.js";
 import { parseTokenResponse, readOAuthError } from "./token.js";
 
@@ -15,6 +16,7 @@ const DISPLAY: Record<OAuth2Config["type"], string> = {
   oauth2_authcode: "OAuth 2.0 (browser login, PKCE)",
   oauth2_password: "OAuth 2.0 (resource owner password)",
   oauth2_client_credentials: "OAuth 2.0 (client credentials)",
+  oauth2_device_code: "OAuth 2.0 (device code)",
 };
 
 function bearer(req: { headers?: Record<string, string> }, token: string): Record<string, string> {
@@ -131,6 +133,17 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
           now: ctx.now,
         });
       }
+      if (cfg.type === "oauth2_device_code") {
+        return acquireDeviceSession({
+          clientId: cfg.client_id,
+          deviceAuthorizationUrl: cfg.device_authorization_url,
+          tokenUrl: cfg.token_url,
+          ...(cfg.scope !== undefined ? { scope: cfg.scope } : {}),
+          http: ctx.http,
+          stdout: ctx.stdout,
+          now: ctx.now,
+        });
+      }
       // The client_secret is config, not a runtime credential: require it up
       // front (throws before any token request if unset/empty) rather than
       // prompting for it or posting an empty secret.
@@ -206,7 +219,7 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
       }
 
       async function renewSession(): Promise<void> {
-        if (cfg.type === "oauth2_authcode") {
+        if (cfg.type === "oauth2_authcode" || cfg.type === "oauth2_device_code") {
           const refresh = current.refresh_token;
           if (typeof refresh !== "string")
             throw new AuthError("Session expired. Run 'dropsh auth login'.");
