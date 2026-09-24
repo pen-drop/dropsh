@@ -9,6 +9,7 @@ import type {
 import { AuthError, HttpError } from "dropsh/plugin";
 import type { OAuth2Config } from "./index.js";
 import { acquireAuthCodeSession } from "./login.js";
+import { parseTokenResponse, readOAuthError } from "./token.js";
 
 const DISPLAY: Record<OAuth2Config["type"], string> = {
   oauth2_authcode: "OAuth 2.0 (browser login, PKCE)",
@@ -32,28 +33,6 @@ interface TokenRequestIdentity {
   token_endpoint: string;
 }
 
-/**
- * Read the RFC 6749 `error` code from a token endpoint's error response. The
- * body may already be an object (as our tests and some clients provide) or the
- * raw JSON string the real http client carries; parse defensively and return
- * the `error` field only when it is a string.
- */
-function readOAuthError(body: unknown): string | undefined {
-  let parsed: unknown = body;
-  if (typeof body === "string") {
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      return undefined;
-    }
-  }
-  if (parsed && typeof parsed === "object" && "error" in parsed) {
-    const code = (parsed as { error?: unknown }).error;
-    if (typeof code === "string") return code;
-  }
-  return undefined;
-}
-
 async function postToken(
   http: HttpClient,
   url: string,
@@ -68,19 +47,7 @@ async function postToken(
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
     });
-    const body = JSON.parse(res.body) as {
-      access_token?: unknown;
-      refresh_token?: unknown;
-      expires_in?: unknown;
-    };
-    if (typeof body.access_token !== "string")
-      throw new AuthError("Token endpoint returned no access_token");
-    const ttlSec = typeof body.expires_in === "number" ? body.expires_in : 3600;
-    return {
-      access_token: body.access_token,
-      ...(typeof body.refresh_token === "string" ? { refresh_token: body.refresh_token } : {}),
-      expires_at: now() + ttlSec * 1000 - 5000,
-    };
+    return parseTokenResponse(res.body, now);
   } catch (err) {
     if (err instanceof AuthError) throw err;
     if (err instanceof HttpError) {
