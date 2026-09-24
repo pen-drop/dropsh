@@ -1,3 +1,4 @@
+// @gaia-schema-version 1
 // Canonical GAIA conductor config — committed. Connection + identity come from
 // your user-global machine context (~/.config/conductor/conductor.config.machine.js:
 // { machine_id, user_id, base_url, client_id, client_secret }); machine_id is
@@ -33,14 +34,17 @@ async function loadLocal() {
 
 const machine = await loadMachine();
 const local = await loadLocal();
-const project = local.project ?? 'dropsh';
+const project = 'dropsh';
 const composedMachineId =
   machine.user_id && machine.machine_id
     ? `${machine.user_id}-${machine.machine_id}-${project}`
     : undefined;
 
 export default {
-  project,
+  schema_version: 1,
+  addons: [{ use: '@gaia-ai/addon-herdr' }],
+  gaia: { project: 'dropsh' },
+  
   conductor_id: local.machine_id ?? composedMachineId,
   remote: { plugin: '@gaia-ai/addon-remote-drupal' },
   // No hard-wired diff pane for review: the review diff surface is hunk
@@ -48,32 +52,9 @@ export default {
   // executor-forced git-diff pane. Clicking a changed file in that hunk pane
   // opens it editable in a spiceedit overlay (see conductor/README.md).
   executor: { plugin: '@gaia-ai/addon-herdr' },
-  // Agent selection by static ticket assessment (GAIA-144): `agent` may be an
-  // array of `{ agent, priority?(ticket) }` candidates. The conductor calls each
-  // priority(ticket) at dispatch (ticket carries sideloaded `labels` +
-  // `environments`), sorts highest-first, and runs the top one; a candidate with
-  // no `priority` scores -Infinity. Here: codex and grok win ONLY when the ticket
-  // carries the matching label; claude is the default (baseline priority 0) for
-  // everything else.
-  agent: [
-    {
-      agent: { plugin: '@gaia-ai/addon-codex' },
-      priority: (ticket) =>
-        ticket.labels?.includes('codex') ? 100 : Number.NEGATIVE_INFINITY,
-    },
-    {
-      agent: { plugin: '@gaia-ai/addon-grok', with: { model: 'grok-4.5' } },
-      priority: (ticket) =>
-        ticket.labels?.includes('grok') ? 100 : Number.NEGATIVE_INFINITY,
-    },
-    {
-      agent: {
-        plugin: '@gaia-ai/addon-claude',
-        with: { model: local.model ?? 'claude-opus-5' },
-      },
-      priority: () => 0,
-    },
-  ],
+  // Agent selection is machine-owned: the conductor resolves the agent per
+  // ticket from ~/.gaia/machine.config.js `agents.routes` + `default_agent`.
+  // No per-project agent policy here.
   // dropsh is a Node CLI, not a Drupal app — no per-worktree DDEV. A fresh git
   // worktree shares .git but not node_modules, so after_create only installs
   // deps. The integration-test target is the shared `dropsh-test` DDEV
