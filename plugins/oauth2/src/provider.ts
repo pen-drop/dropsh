@@ -7,8 +7,8 @@ import type {
   HttpClient,
 } from "dropsh/plugin";
 import { AuthError, HttpError } from "dropsh/plugin";
-import type { OAuth2Config } from "./index.js";
 import { acquireDeviceSession } from "./device.js";
+import type { OAuth2Config } from "./index.js";
 import { acquireAuthCodeSession } from "./login.js";
 import { parseTokenResponse, readOAuthError } from "./token.js";
 

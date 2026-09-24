@@ -82,7 +82,9 @@ function validate(config: OAuth2Config): OAuth2Config {
     throw new ConfigError("oauth2Plugin: username required for oauth2_password");
   if (config.type === "oauth2_device_code") {
     if (!config.device_authorization_url)
-      throw new ConfigError("oauth2Plugin: device_authorization_url required for oauth2_device_code");
+      throw new ConfigError(
+        "oauth2Plugin: device_authorization_url required for oauth2_device_code",
+      );
     assertCanonicalUrl("device_authorization_url", config.device_authorization_url);
   }
   return config;

@@ -171,17 +171,18 @@ describe("acquireDeviceSession — polling", () => {
     expect(form.get("client_secret")).toBeNull();
   });
 
-  it.each(["access_denied", "expired_token", "invalid_client"])(
-    "stops immediately on %s and never reports success",
-    async (code) => {
-      const http = scriptedHttp(deviceBody(), [oauthError(code)]);
-      const err = await acquireDeviceSession(baseDeps(http, [], [])).catch((e: Error) => e);
-      expect(err).toBeInstanceOf(AuthError);
-      expect((err as Error).message).not.toContain("SECRET-DEVICE-CODE");
-      // one device request + exactly one poll: no retry loop
-      expect(http.requests).toHaveLength(2);
-    },
-  );
+  it.each([
+    "access_denied",
+    "expired_token",
+    "invalid_client",
+  ])("stops immediately on %s and never reports success", async (code) => {
+    const http = scriptedHttp(deviceBody(), [oauthError(code)]);
+    const err = await acquireDeviceSession(baseDeps(http, [], [])).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect((err as Error).message).not.toContain("SECRET-DEVICE-CODE");
+    // one device request + exactly one poll: no retry loop
+    expect(http.requests).toHaveLength(2);
+  });
 
   it("backs off but keeps polling on a transport failure without an OAuth code", async () => {
     const http = scriptedHttp(deviceBody(), [new Error("socket timeout"), { access_token: "tok" }]);
