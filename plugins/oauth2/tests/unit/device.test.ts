@@ -111,6 +111,19 @@ describe("acquireDeviceSession — device authorization request", () => {
     await expect(acquireDeviceSession(baseDeps(http, [], []))).rejects.toThrow(AuthError);
   });
 
+  it("rejects a non-JSON device authorization response without polling", async () => {
+    const http: HttpClient & { requests: HttpRequest[] } = {
+      requests: [],
+      async send(req: HttpRequest) {
+        http.requests.push(req);
+        return { status: 200, headers: {}, body: "<html>Bad Gateway</html>" };
+      },
+    };
+    const err = await acquireDeviceSession(baseDeps(http, [], [])).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect(http.requests).toHaveLength(1);
+  });
+
   it("names the endpoint but not the device_code when the request is rejected", async () => {
     const http = scriptedHttp(new HttpError(400, "Bad Request", { error: "invalid_client" }), []);
     const err = await acquireDeviceSession(baseDeps(http, [], [])).catch((e: Error) => e);
@@ -185,10 +198,32 @@ describe("acquireDeviceSession — polling", () => {
   });
 
   it("backs off but keeps polling on a transport failure without an OAuth code", async () => {
-    const http = scriptedHttp(deviceBody(), [new Error("socket timeout"), { access_token: "tok" }]);
+    // The real HttpClient wraps a network failure as HttpError(0, ...), carrying no `error` field.
+    const http = scriptedHttp(deviceBody(), [
+      new HttpError(0, "Network error", undefined),
+      { access_token: "tok" },
+    ]);
     const slept: number[] = [];
     await acquireDeviceSession(baseDeps(http, [], slept));
     expect(slept).toEqual([5000, 10000]);
+  });
+
+  it("clamps a server-supplied interval of 0 to 1 second instead of hot-looping", async () => {
+    const http = scriptedHttp(deviceBody({ interval: 0 }), [
+      oauthError("authorization_pending"),
+      { access_token: "tok" },
+    ]);
+    const slept: number[] = [];
+    await acquireDeviceSession(baseDeps(http, [], slept));
+    expect(slept).toEqual([1000, 1000]);
+  });
+
+  it("fails fast on a non-JSON token response instead of polling for the full lifetime", async () => {
+    const http = scriptedHttp(deviceBody(), [new SyntaxError("Unexpected token < in JSON")]);
+    const err = await acquireDeviceSession(baseDeps(http, [], [])).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect((err as Error).message).not.toContain("SECRET-DEVICE-CODE");
+    expect(http.requests).toHaveLength(2);
   });
 
   it("fails once the device code's local lifetime is exhausted", async () => {

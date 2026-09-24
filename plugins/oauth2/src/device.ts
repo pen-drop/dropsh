@@ -49,7 +49,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 async function requestDeviceAuthorization(deps: AcquireDeviceDeps): Promise<DeviceAuthorization> {
   const params = new URLSearchParams({ client_id: deps.clientId });
   if (deps.scope) params.set("scope", deps.scope);
-  let raw: string;
+  let body: Record<string, unknown>;
   try {
     const res = await deps.http.send({
       method: "POST",
@@ -57,8 +57,12 @@ async function requestDeviceAuthorization(deps: AcquireDeviceDeps): Promise<Devi
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
     });
-    raw = res.body;
+    body = JSON.parse(res.body) as Record<string, unknown>;
   } catch (err) {
+    if (err instanceof SyntaxError)
+      throw new AuthError(
+        `Device authorization response from ${deps.deviceAuthorizationUrl} is not valid JSON.`,
+      );
     const code = err instanceof HttpError ? readOAuthError(err.body) : undefined;
     throw new AuthError(
       `Device authorization request rejected (client_id "${deps.clientId}") at ` +
@@ -66,7 +70,6 @@ async function requestDeviceAuthorization(deps: AcquireDeviceDeps): Promise<Devi
       { reason: code ?? "request_failed", client_id: deps.clientId },
     );
   }
-  const body = JSON.parse(raw) as Record<string, unknown>;
   const str = (k: string): string => {
     const v = body[k];
     if (typeof v !== "string" || v.length === 0)
@@ -124,7 +127,7 @@ async function pollForToken(
 ): Promise<AuthSession> {
   const wait = deps._sleep ?? sleep;
   const deadline = deps.now() + auth.expires_in * 1000;
-  let intervalSec = auth.interval ?? DEFAULT_INTERVAL_SEC;
+  let intervalSec = Math.max(auth.interval ?? DEFAULT_INTERVAL_SEC, 1);
   const params = new URLSearchParams({
     grant_type: DEVICE_GRANT,
     device_code: auth.device_code,
@@ -149,7 +152,12 @@ async function pollForToken(
       return parseTokenResponse(res.body, deps.now);
     } catch (err) {
       if (err instanceof AuthError) throw err;
-      const code = err instanceof HttpError ? readOAuthError(err.body) : undefined;
+      if (!(err instanceof HttpError))
+        throw new AuthError(`Token endpoint response from ${deps.tokenUrl} is not valid.`, {
+          reason: "invalid_response",
+          client_id: deps.clientId,
+        });
+      const code = readOAuthError(err.body);
       if (code === "authorization_pending") continue;
       if (code === "slow_down") {
         intervalSec += SLOW_DOWN_INCREMENT_SEC;
