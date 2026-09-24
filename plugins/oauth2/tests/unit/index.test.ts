@@ -97,4 +97,28 @@ describe("oauth2Plugin", () => {
     expect(session.authProvider?.id).toBe("session");
     expect(pm.authProvider?.id).toBe("pm");
   });
+
+  describe("oauth2_device_code config", () => {
+    const valid = {
+      type: "oauth2_device_code",
+      client_id: "my-client",
+      device_authorization_url: "https://example.org/oauth/device_authorization",
+      token_url: "https://example.org/oauth/token",
+    } as const;
+
+    it("accepts a complete device profile", () => {
+      expect(() => oauth2Plugin(valid)).not.toThrow();
+    });
+
+    it("rejects a device profile without device_authorization_url", () => {
+      const { device_authorization_url: _omitted, ...without } = valid;
+      expect(() => oauth2Plugin(without as never)).toThrow(/device_authorization_url/);
+    });
+
+    it("rejects a device_authorization_url with an empty path segment", () => {
+      expect(() =>
+        oauth2Plugin({ ...valid, device_authorization_url: "https://example.org//oauth/device" }),
+      ).toThrow(/device_authorization_url/);
+    });
+  });
 });
