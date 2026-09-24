@@ -283,3 +283,94 @@ describe("oauth2 adapter — reactive renew()", () => {
     expect(cause?.details?.reason).toBe("secret_not_configured");
   });
 });
+
+describe("oauth2 provider — oauth2_device_code", () => {
+  const deviceCfg = {
+    type: "oauth2_device_code",
+    client_id: "my-client",
+    device_authorization_url: "https://example.org/oauth/device_authorization",
+    token_url: "https://example.org/oauth/token",
+  } as const;
+
+  it("logs in without a client_secret and never opens a browser", async () => {
+    const provider = oauth2Plugin(deviceCfg).authProvider!;
+    const bodies = [
+      {
+        device_code: "dc",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://example.org/activate",
+        expires_in: 600,
+        interval: 0,
+      },
+      { access_token: "tok", refresh_token: "rt", expires_in: 3600 },
+    ];
+    let call = 0;
+    const out: string[] = [];
+    let opened = 0;
+    const session = await provider.login(
+      ctx({
+        http: {
+          async send() {
+            return { status: 200, headers: {}, body: JSON.stringify(bodies[call++]) };
+          },
+        },
+        async prompt() {
+          throw new Error("the device flow must not prompt");
+        },
+        async openBrowser() {
+          opened++;
+        },
+        stdout: (s: string) => out.push(s),
+      }),
+    );
+    expect(session.access_token).toBe("tok");
+    expect(opened).toBe(0);
+    expect(out.join("\n")).toContain("ABCD-EFGH");
+  });
+
+  it("renews through the refresh_token grant, without a client_secret", async () => {
+    const provider = oauth2Plugin(deviceCfg).authProvider!;
+    const sent: string[] = [];
+    const adapter = provider.createAdapter(
+      { access_token: "old", refresh_token: "rt", expires_at: 0 },
+      {
+        http: {
+          async send(req) {
+            sent.push(req.body as string);
+            return {
+              status: 200,
+              headers: {},
+              body: JSON.stringify({ access_token: "new", expires_in: 3600 }),
+            };
+          },
+        },
+        now: () => 1_000_000,
+        save: async () => {},
+      },
+    );
+    const req = await adapter.apply({ method: "GET", url: "https://example.org/jsonapi" });
+    const form = new URLSearchParams(sent[0]);
+    expect(form.get("grant_type")).toBe("refresh_token");
+    expect(form.get("client_secret")).toBeNull();
+    expect(req.headers?.Authorization).toBe("Bearer new");
+  });
+
+  it("asks the user to log in again when no refresh token is stored", async () => {
+    const provider = oauth2Plugin(deviceCfg).authProvider!;
+    const adapter = provider.createAdapter(
+      { access_token: "old", expires_at: 0 },
+      {
+        http: {
+          async send() {
+            throw new Error("no token request must be made");
+          },
+        },
+        now: () => 1_000_000,
+        save: async () => {},
+      },
+    );
+    await expect(
+      adapter.apply({ method: "GET", url: "https://example.org/jsonapi" }),
+    ).rejects.toThrow(/dropsh auth login/);
+  });
+});

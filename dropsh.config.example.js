@@ -40,6 +40,15 @@ export default {
     //   // redirect_port: 8910,
     // }),
     //
+    // Device flow (RFC 8628) — for a remote machine with no local browser:
+    // oauth2Plugin({
+    //   type: 'oauth2_device_code',
+    //   client_id: 'my-client',
+    //   device_authorization_url: 'https://my-drupal.example.com/oauth/device_authorization',
+    //   token_url: 'https://my-drupal.example.com/oauth/token',
+    //   // scope: 'content',
+    // }),
+    //
     // Password grant:
     // oauth2Plugin({
     //   type: 'oauth2_password',

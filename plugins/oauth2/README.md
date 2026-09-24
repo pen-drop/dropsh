@@ -3,7 +3,7 @@
 OAuth 2.0 authentication provider for [dropsh](https://github.com/pen-drop/dropsh),
 the entity-agnostic CLI for Drupal 11 JSON:API.
 
-Adds an OAuth2 login option to `dropsh auth login`. Supports three grant types
+Adds an OAuth2 login option to `dropsh auth login`. Supports four grant types
 against Drupal's `simple_oauth` module.
 
 ## Install
@@ -45,6 +45,39 @@ dropsh auth login --provider oauth2_authcode
 dropsh auth status
 ```
 
+### Device flow (remote machine, no local browser)
+
+Use `oauth2_device_code` when dropsh runs where your browser is not — over SSH, in a container, on
+a build host. There is no callback listener, no redirect URI and no client secret: dropsh prints a
+URL and a short code, you confirm the login on any other device, and dropsh polls until it is done.
+
+```js
+oauth2Plugin({
+  type: "oauth2_device_code",
+  client_id: "my-client",
+  device_authorization_url: "https://my-drupal.example.com/oauth/device_authorization",
+  token_url: "https://my-drupal.example.com/oauth/token",
+  // scope: "content",
+}),
+```
+
+```bash
+dropsh auth login --provider oauth2_device_code
+
+Open https://my-drupal.example.com/oauth/device
+and enter this code:
+
+    ABCD-EFGH
+
+Waiting for confirmation ...
+```
+
+dropsh never opens a browser for this flow, so the URL and the code stay on screen for use on
+another device. Press Ctrl+C to cancel. The stored tokens behave like any other profile —
+`dropsh auth status`, `dropsh auth logout` and the automatic refresh all work unchanged. If the
+server issues no `refresh_token` for the device grant, an expired session asks for a full login
+again instead of renewing.
+
 ## Named profiles
 
 Every `oauth2Plugin` is one auth **profile**, identified by its `id`. `id` defaults
@@ -69,12 +102,14 @@ for `auth use`, `--auth-profile`, and selection precedence.
 | `oauth2_authcode`             | opens browser (PKCE, public client) | yes — via `refresh_token`     |
 | `oauth2_password`             | client secret + user password    | yes — if `client_secret` in config |
 | `oauth2_client_credentials`   | client secret                     | yes — if `client_secret` in config |
+| `oauth2_device_code`          | prints a URL + code, no browser  | yes — via `refresh_token`       |
 
 Config fields per grant (all accept the shared `id` and `default`):
 
 - `oauth2_authcode` — `client_id`, `token_url`, optional `scope`, `redirect_port`
 - `oauth2_password` — `client_id`, `token_url`, `username`, optional `scope`, `client_secret`
 - `oauth2_client_credentials` — `client_id`, `token_url`, optional `scope`, `client_secret`
+- `oauth2_device_code` — `client_id`, `device_authorization_url`, `token_url`, optional `scope`
 
 `client_secret` and the user `password` may be **prompted at login** and are never
 stored on disk. For unattended runs, put `client_secret` in config so dropsh can

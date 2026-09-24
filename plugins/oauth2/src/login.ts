@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import type { AuthSession, HttpClient } from "dropsh/plugin";
 import { AuthError } from "dropsh/plugin";
+import { parseTokenResponse } from "./token.js";
 
 const DEFAULT_PORT = 7432;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -139,17 +140,5 @@ export async function acquireAuthCodeSession(deps: AcquireAuthCodeDeps): Promise
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: params.toString(),
   });
-  const body = JSON.parse(res.body) as {
-    access_token?: unknown;
-    refresh_token?: unknown;
-    expires_in?: unknown;
-  };
-  if (typeof body.access_token !== "string")
-    throw new AuthError("Token endpoint returned no access_token");
-  const ttlSec = typeof body.expires_in === "number" ? body.expires_in : 3600;
-  return {
-    access_token: body.access_token,
-    ...(typeof body.refresh_token === "string" ? { refresh_token: body.refresh_token } : {}),
-    expires_at: deps.now() + ttlSec * 1000 - 5000,
-  };
+  return parseTokenResponse(res.body, deps.now);
 }

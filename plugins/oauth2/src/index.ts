@@ -39,6 +39,13 @@ export type OAuth2Config = OAuth2Common &
         scope?: string;
         redirect_port?: number;
       }
+    | {
+        type: "oauth2_device_code";
+        client_id: string;
+        device_authorization_url: string;
+        token_url: string;
+        scope?: string;
+      }
   );
 
 /**
@@ -53,26 +60,33 @@ export type OAuth2Config = OAuth2Common &
  * the scheme separator and must not be mistaken for the defect. A `token_url`
  * that does not parse as an absolute URL is left to the request layer.
  */
-function assertCanonicalTokenUrl(tokenUrl: string): void {
+function assertCanonicalUrl(field: string, value: string): void {
   let parsed: URL;
   try {
-    parsed = new URL(tokenUrl);
+    parsed = new URL(value);
   } catch {
     return;
   }
   if (!parsed.pathname.includes("//")) return;
   parsed.pathname = parsed.pathname.replace(/\/{2,}/g, "/");
   throw new ConfigError(
-    `oauth2Plugin: token_url must not contain an empty path segment — set it to ${parsed.href}`,
+    `oauth2Plugin: ${field} must not contain an empty path segment — set it to ${parsed.href}`,
   );
 }
 
 function validate(config: OAuth2Config): OAuth2Config {
   if (!config.client_id) throw new ConfigError("oauth2Plugin: client_id required");
   if (!config.token_url) throw new ConfigError("oauth2Plugin: token_url required");
-  assertCanonicalTokenUrl(config.token_url);
+  assertCanonicalUrl("token_url", config.token_url);
   if (config.type === "oauth2_password" && !config.username)
     throw new ConfigError("oauth2Plugin: username required for oauth2_password");
+  if (config.type === "oauth2_device_code") {
+    if (!config.device_authorization_url)
+      throw new ConfigError(
+        "oauth2Plugin: device_authorization_url required for oauth2_device_code",
+      );
+    assertCanonicalUrl("device_authorization_url", config.device_authorization_url);
+  }
   return config;
 }
 
