@@ -50,6 +50,11 @@ export interface AdapterRuntime {
   now(): number;
   /** Persist a refreshed session back to the active session slot. */
   save(session: AuthSession): Promise<void>;
+  /**
+   * Re-read the persisted session slot. Other processes sharing the slot may have
+   * renewed (and rotated the refresh token) since this adapter was created.
+   */
+  load?(): Promise<AuthSession | undefined>;
 }
 
 export interface AuthProvider {

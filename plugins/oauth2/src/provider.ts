@@ -218,12 +218,36 @@ export function oauth2Provider(cfg: OAuth2Config): AuthProvider {
         await rt.save(minted);
       }
 
+      // The session slot is shared by every process of this user (conductor, ui,
+      // agent CLI calls), and the server rotates the refresh token on each use.
+      // Adopt what another process stored instead of refreshing with a revoked token;
+      // returns true when the adopted access token is still valid.
+      async function adoptStored(): Promise<boolean> {
+        const stored = await rt.load?.();
+        if (
+          !stored ||
+          stored.access_token === current.access_token ||
+          typeof stored.refresh_token !== "string"
+        )
+          return false;
+        current = stored;
+        const expiresAt = typeof stored.expires_at === "number" ? stored.expires_at : 0;
+        return expiresAt - 30_000 > rt.now();
+      }
+
       async function renewSession(): Promise<void> {
         if (cfg.type === "oauth2_authcode" || cfg.type === "oauth2_device_code") {
+          if (await adoptStored()) return;
           const refresh = current.refresh_token;
           if (typeof refresh !== "string")
             throw new AuthError("Session expired. Run 'dropsh auth login'.");
-          await refreshAuthcode(refresh);
+          try {
+            await refreshAuthcode(refresh);
+          } catch (err) {
+            // Lost the race: another process rotated the token between load and post.
+            if (await adoptStored()) return;
+            throw err;
+          }
           return;
         }
         if (cfg.type === "oauth2_client_credentials") {
