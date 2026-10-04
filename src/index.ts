@@ -136,6 +136,8 @@ export async function resolveAuth(deps: ResolveAuthDeps): Promise<AuthAdapter> {
         http: deps.http,
         now: deps.now,
         save: (session) => writeProfile(deps.baseUrl, name, provider.id, session, deps.stateDir),
+        load: async () =>
+          (await readProfiles(deps.baseUrl, deps.stateDir))?.profiles[name]?.session,
       });
     }
     // No stored session for the chosen profile: a login-less provider carries its
