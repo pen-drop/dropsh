@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import type { AuthAdapter, AuthProvider } from "./auth/types.js";
 import type { AnyRenderer } from "./cli/render.js";
+import type { PluginCommandServices } from "./command-context.js";
 import type { HttpClient, HttpRequest } from "./http.js";
 import type { DropSHOperation } from "./jsonapi/client.js";
 import type { Operation } from "./schema/to-jsonschema.js";
@@ -73,7 +74,7 @@ export interface DropSHPlugin {
     ctx: PluginContext,
   ): Promise<unknown>;
   alterRequest?(req: HttpRequest, ctx: RequestContext): Promise<HttpRequest>;
-  registerCommands?(program: Command): void;
+  registerCommands?(program: Command, services: PluginCommandServices): void;
   renderers?: AnyRenderer[];
 }
 
