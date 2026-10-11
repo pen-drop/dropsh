@@ -599,6 +599,7 @@ shipped inside the `dropsh` npm tarball — each is a separately published packa
 | [`@dropsh/plugin-schemata`](plugins/schemata/README.md) | `schemataPlugin` | authoritative JSON Schema from Drupal `schemata` (legacy) |
 | [`@dropsh/plugin-canvas`](plugins/canvas/README.md) | `canvasPlugin` | Canvas component schemas from `jsonapi_sdc` |
 | [`@dropsh/plugin-display-builder`](plugins/display-builder/README.md) | `displayBuilderPlugin` | Display Builder operation schemas and metadata |
+| [`@dropsh/plugin-mcp`](plugins/mcp/README.md) | `mcpPlugin` | Model Context Protocol server (stdio and loopback HTTP) |
 
 Basic auth is not a separate package — its `basicAuthPlugin` factory ships in the
 core CLI's `dropsh/plugin` entry.
