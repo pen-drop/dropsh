@@ -359,6 +359,50 @@ describe("createToolHandlers policy", () => {
     expect(await handlers.list()).toEqual([]);
   });
 
+  it("omits create and update from tools/list without an authoritative schema", async () => {
+    const http = recordingHttp(defaultHandler);
+    const ctx = makeContext(http);
+    const handlers = createToolHandlers(options, ctx.getContext);
+    const listed = await handlers.list();
+    expect(listed.map((tool) => tool.name)).toEqual([
+      "list_entities",
+      "search",
+      "read",
+      "describe",
+    ]);
+    expect(listed.some((tool) => tool.name === "create" || tool.name === "update")).toBe(false);
+  });
+
+  it("rejects search limit 101, extra properties, and read without id before getContext", async () => {
+    const http = recordingHttp(defaultHandler);
+    const ctx = makeContext(http);
+    const handlers = createToolHandlers(options, ctx.getContext);
+    expect(
+      errorBody(
+        await handlers.call("search", { entityType: "node", bundle: "article", limit: 101 }),
+      ).code,
+    ).toBe("E_VALIDATION");
+    expect(
+      errorBody(
+        await handlers.call("search", { entityType: "node", bundle: "article", extra: true }),
+      ).code,
+    ).toBe("E_VALIDATION");
+    expect(
+      errorBody(await handlers.call("read", { entityType: "node", bundle: "article" })).code,
+    ).toBe("E_VALIDATION");
+    expect(
+      errorBody(
+        await handlers.call("describe", {
+          entityType: "node",
+          bundle: "article",
+          operation: "delete",
+        }),
+      ).code,
+    ).toBe("E_VALIDATION");
+    expect(ctx.calls).toBe(0);
+    expect(http.send).not.toHaveBeenCalled();
+  });
+
   it("rejects a disallowed bundle before getContext or HTTP", async () => {
     const http = recordingHttp(defaultHandler);
     const ctx = makeContext(http);

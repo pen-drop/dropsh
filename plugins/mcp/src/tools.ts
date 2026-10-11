@@ -145,10 +145,47 @@ function success(value: unknown): McpToolSuccess {
   const result: McpToolSuccess = {
     content: [{ type: "text", text: JSON.stringify(value) }],
   };
-  if (value !== null && typeof value === "object") {
+  if (isRecord(value)) {
     result.structuredContent = value;
   }
   return result;
+}
+
+function selectorEntries(options: McpOptions): SchemaEntry[] {
+  return options.bundles.map((raw) => {
+    const selector = parseBundleSelector(raw);
+    return { entityType: selector.entityType, bundle: selector.bundle, schema: {} };
+  });
+}
+
+function callArgumentSchema(tool: ToolName, entries: SchemaEntry[]): Record<string, unknown> {
+  if (tool === "create" || tool === "update") {
+    return {
+      type: "object",
+      oneOf: entries.map((entry) => {
+        const properties: Record<string, unknown> = {
+          entityType: { const: entry.entityType },
+          bundle: { const: entry.bundle },
+          payload: { type: "object" },
+        };
+        const required = ["entityType", "bundle", "payload"];
+        if (tool === "update") {
+          properties.id = { type: "string" };
+          required.splice(2, 0, "id");
+        }
+        return { type: "object", additionalProperties: false, required, properties };
+      }),
+    };
+  }
+  return buildInputSchema(tool, entries);
+}
+
+function validateCallArgs(
+  tool: ToolName,
+  options: McpOptions,
+  args: Record<string, unknown>,
+): void {
+  validatePayload(callArgumentSchema(tool, selectorEntries(options)), args, `mcp/${tool}`);
 }
 
 function resourceType(entityType: string, bundle: string): string {
@@ -289,17 +326,16 @@ async function dispatch(
   const tool = name as ToolName;
 
   if (tool === "list_entities") {
+    validateCallArgs(tool, options, args);
     const ctx = await getContext();
     return callListEntities(options, ctx);
   }
 
   const selector = parseSelector(options, args);
   if (isErrorResult(selector)) return selector;
+  validateCallArgs(tool, options, args);
 
   if (tool === "create" || tool === "update") {
-    if (tool === "update" && typeof args.id !== "string") {
-      throw new ValidationError("id is required");
-    }
     assertPayloadTarget(
       selector.entityType,
       selector.bundle,
@@ -331,7 +367,6 @@ async function dispatch(
 
   const ctx = await getContext();
   if (tool === "read") {
-    if (typeof args.id !== "string") throw new ValidationError("id is required");
     return emitCapture((emit) =>
       runRead(
         { target: `${selector.entityType}/${selector.bundle}/${args.id as string}` },
@@ -340,7 +375,7 @@ async function dispatch(
     );
   }
   if (tool === "search") {
-    const filters = Array.isArray(args.filters) ? args.filters.map((item) => String(item)) : [];
+    const filters = Array.isArray(args.filters) ? (args.filters as string[]) : [];
     const limit = typeof args.limit === "number" ? args.limit : 25;
     return emitCapture((emit) =>
       runSearch(
@@ -394,30 +429,43 @@ export function createToolHandlers(
           bundle: entry.bundle,
           schema: {},
         }));
-      const writeEntries: SchemaEntry[] = [];
-      for (const raw of options.bundles) {
-        const selector = parseBundleSelector(raw);
-        try {
-          const loaded = await loadWriteSchema(ctx, selector, "create");
-          writeEntries.push({
-            entityType: selector.entityType,
-            bundle: selector.bundle,
-            schema: loaded.schema,
-          });
-        } catch (err) {
-          if (err instanceof HttpError && (err.status === 403 || err.status === 404)) continue;
-          if (err instanceof ValidationError) continue;
-          throw err;
+      const needsCreate = advertised.includes("create");
+      const needsUpdate = advertised.includes("update");
+      const createEntries: SchemaEntry[] = [];
+      const updateEntries: SchemaEntry[] = [];
+      if (needsCreate || needsUpdate) {
+        for (const raw of options.bundles) {
+          const selector = parseBundleSelector(raw);
+          const push = async (operation: "create" | "update", bucket: SchemaEntry[]) => {
+            try {
+              const loaded = await loadWriteSchema(ctx, selector, operation);
+              bucket.push({
+                entityType: selector.entityType,
+                bundle: selector.bundle,
+                schema: loaded.schema,
+              });
+            } catch (err) {
+              if (err instanceof HttpError && (err.status === 403 || err.status === 404)) return;
+              if (err instanceof ValidationError) return;
+              throw err;
+            }
+          };
+          if (needsCreate) await push("create", createEntries);
+          if (needsUpdate) await push("update", updateEntries);
         }
       }
-      return advertised.map((name) => ({
-        name,
-        description: DESCRIPTIONS[name],
-        inputSchema: buildInputSchema(
+      const listed: McpTool[] = [];
+      for (const name of advertised) {
+        const entries =
+          name === "create" ? createEntries : name === "update" ? updateEntries : visible;
+        if (name !== "list_entities" && entries.length === 0) continue;
+        listed.push({
           name,
-          name === "create" || name === "update" ? writeEntries : visible,
-        ),
-      }));
+          description: DESCRIPTIONS[name],
+          inputSchema: buildInputSchema(name, entries),
+        });
+      }
+      return listed;
     },
     async call(name, args) {
       try {

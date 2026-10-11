@@ -211,6 +211,21 @@ function observingHttp(inner: HttpClient): {
 describe("integration: auth oauth2 device code", () => {
   it("completes the live device-code grant and reuses the saved session for a CLI read", async () => {
     const uuid = await createTestNode(`it-auth-device-${crypto.randomUUID()}`);
+    const unpublished = await runCli({
+      auth: { type: "basic", user: "admin", pass: "admin" },
+      args: [
+        "update",
+        `node/article_test/${uuid}`,
+        `--data=${JSON.stringify({
+          data: {
+            type: "node--article_test",
+            id: uuid,
+            attributes: { status: false },
+          },
+        })}`,
+      ],
+    });
+    expect(unpublished.code, unpublished.stderr || unpublished.stdout).toBe(0);
     const cfg = testConfig("plain");
     const device = oauth2DeviceCode("plain");
     const home = mkdtempSync(join(tmpdir(), "dropsh-device-home-"));
@@ -270,6 +285,12 @@ describe("integration: auth oauth2 device code", () => {
       const savedDeviceProfile = file?.profiles.oauth2_device_code;
       expect(savedDeviceProfile?.provider).toBe("oauth2_device_code");
       expect(savedDeviceProfile?.session.access_token).toEqual(expect.any(String));
+
+      const anonymous = await fetch(
+        `${cfg.url.replace(/\/$/, "")}/jsonapi/node/article_test/${uuid}`,
+        { headers: { Accept: "application/vnd.api+json" } },
+      );
+      expect(anonymous.status).not.toBe(200);
 
       const secondProcessRead = await runCli({
         site: "plain",

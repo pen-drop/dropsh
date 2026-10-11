@@ -231,7 +231,116 @@ describe("HTTP transport", () => {
   });
 });
 
+function articleSchemaPlugin(): DropSHPlugin {
+  return {
+    id: "jsonapi-schema",
+    requiredModules: [],
+    async extendSchema() {
+      return {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: {
+            type: "object",
+            properties: {
+              type: { type: "string" },
+              attributes: { type: "object" },
+            },
+          },
+        },
+      };
+    },
+  };
+}
+
 describe("stdio transport", () => {
+  it("lists all six tools over stdio with object-root input schemas", async () => {
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const http = recordingHttp((req) => {
+      const path = req.url.split("?")[0] ?? req.url;
+      if (path === "https://example.com/jsonapi") {
+        return {
+          status: 200,
+          body: JSON.stringify({
+            links: {
+              "node--article": {
+                href: "https://example.com/jsonapi/node/article",
+                meta: { title: "Article" },
+              },
+            },
+          }),
+        };
+      }
+      return { status: 200, body: JSON.stringify({ data: [] }) };
+    });
+    const running = serveStdio({
+      options: parseMcpOptions({
+        bundles: ["node/article"],
+        operations: ["list_entities", "search", "read", "create", "update", "describe"],
+      }),
+      getContext: makeGetContext(http, [articleSchemaPlugin()]),
+      markdown: new Map(),
+      stdin,
+      stdout,
+    });
+    closers.push(async () => {
+      stdin.end();
+      await running.catch(() => undefined);
+    });
+    const chunks: Buffer[] = [];
+    stdout.on("data", (c: Buffer) => chunks.push(c));
+    const send = (message: unknown) => {
+      stdin.write(`${JSON.stringify(message)}\n`);
+    };
+    send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "stdio-test", version: "0" },
+      },
+    });
+    await vi.waitFor(() => {
+      expect(Buffer.concat(chunks).toString("utf8")).toMatch(/"id":1/);
+    });
+    send({ jsonrpc: "2.0", method: "notifications/initialized" });
+    send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+    let listed: {
+      result?: { tools?: Array<{ name: string; inputSchema: Record<string, unknown> }> };
+    } = {};
+    await vi.waitFor(() => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      for (const line of text.split("\n").filter(Boolean)) {
+        const parsed = JSON.parse(line) as { id?: number; result?: { tools?: unknown } };
+        if (parsed.id === 2) listed = parsed as typeof listed;
+      }
+      expect(listed.result?.tools).toBeTruthy();
+    });
+    const tools = listed.result?.tools ?? [];
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "list_entities",
+      "search",
+      "read",
+      "create",
+      "update",
+      "describe",
+    ]);
+    for (const tool of tools) {
+      expect(tool.inputSchema.type).toBe("object");
+    }
+    const create = tools.find((tool) => tool.name === "create");
+    const update = tools.find((tool) => tool.name === "update");
+    expect(Array.isArray(create?.inputSchema.oneOf) && create.inputSchema.oneOf.length > 0).toBe(
+      true,
+    );
+    expect(Array.isArray(update?.inputSchema.oneOf) && update.inputSchema.oneOf.length > 0).toBe(
+      true,
+    );
+  });
+
   it("writes only JSON-RPC frames to stdout and no startup banner", async () => {
     const stdin = new PassThrough();
     const stdout = new PassThrough();
