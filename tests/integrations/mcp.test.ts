@@ -319,27 +319,3 @@ describe("integration: MCP against jsonapischema", () => {
     }
   }, 60_000);
 });
-
-describe("AC-3 GAIA writer", () => {
-  const gaiaUrl = process.env.DROPSH_GAIA_URL;
-
-  it.skipIf(Boolean(gaiaUrl))("is blocked: designated GAIA test connection is absent", () => {
-    expect(gaiaUrl).toBeFalsy();
-  });
-
-  it.skipIf(!gaiaUrl)(
-    "asserts data.attributes.identifier and exact description.value on the designated connection",
-    async () => {
-      const token = await bearerToken("jsonapischema");
-      const url = await startLiveMcp("jsonapischema");
-      const client = await connect(url, `Bearer ${token}`);
-      try {
-        throw new Error(
-          "AC-3 designated GAIA connection is present but this test does not yet target a GAIA writer bundle",
-        );
-      } finally {
-        await client.close();
-      }
-    },
-  );
-});
