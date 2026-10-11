@@ -24,7 +24,8 @@
     "drupal/simple_oauth": "^6",
     "drupal/simple_oauth_password_grant": "^2.1",
     "drupal/ui_patterns": "^2",
-    "drush/drush": "^13"
+    "drush/drush": "^13",
+    "e0ipso/simple_oauth_21": "^1.13"
   },
   "config": {
     "allow-plugins": {

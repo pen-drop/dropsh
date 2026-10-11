@@ -27,7 +27,16 @@ export type Auth =
       clientId: string;
       clientSecret: string;
       scope?: string;
-    };
+    }
+  | DeviceCodeAuth;
+
+export interface DeviceCodeAuth {
+  type: "oauth2_device_code";
+  clientId: string;
+  deviceAuthorizationUrl: string;
+  tokenUrl: string;
+  scope?: string;
+}
 
 export interface RunResult {
   code: number;
@@ -88,6 +97,13 @@ function pluginImport(plugin: string): { importLine: string; instantiation: stri
       instantiation: "displayBuilderPlugin()",
     };
   }
+  if (plugin === "mcp") {
+    return {
+      importLine: `import { mcpPlugin } from ${JSON.stringify(sourcePath)};`,
+      instantiation:
+        "mcpPlugin({ bundles: ['node/article_test'], operations: ['list_entities', 'search', 'read', 'create', 'update', 'describe'] })",
+    };
+  }
   throw new Error(`Unknown plugin '${plugin}'`);
 }
 
@@ -123,6 +139,16 @@ function renderConfig(url: string, auth: Auth, site: SiteName): string {
         `      client_secret: ${JSON.stringify(auth.clientSecret)},`,
         `      username: ${JSON.stringify(auth.user)},`,
         `      token_url: ${JSON.stringify(tokenUrl)},`,
+        ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
+        "    }),",
+      );
+    } else if (auth.type === "oauth2_device_code") {
+      pluginLines.push(
+        "    oauth2Plugin({",
+        "      type: 'oauth2_device_code',",
+        `      client_id: ${JSON.stringify(auth.clientId)},`,
+        `      device_authorization_url: ${JSON.stringify(auth.deviceAuthorizationUrl)},`,
+        `      token_url: ${JSON.stringify(auth.tokenUrl)},`,
         ...(auth.scope ? [`      scope: ${JSON.stringify(auth.scope)},`] : []),
         "    }),",
       );
@@ -175,6 +201,15 @@ function providerFor(url: string, auth: Auth): AuthProvider {
       client_secret: auth.clientSecret,
       username: auth.user,
       token_url: tokenUrl,
+      ...(auth.scope ? { scope: auth.scope } : {}),
+    }).authProvider as AuthProvider;
+  }
+  if (auth.type === "oauth2_device_code") {
+    return oauth2Plugin({
+      type: "oauth2_device_code",
+      client_id: auth.clientId,
+      device_authorization_url: auth.deviceAuthorizationUrl,
+      token_url: auth.tokenUrl,
       ...(auth.scope ? { scope: auth.scope } : {}),
     }).authProvider as AuthProvider;
   }
@@ -308,6 +343,19 @@ export function oauth2ClientCred(site: SiteName = "plain"): Auth {
     clientId: oauth.cc_client_id,
     clientSecret: oauth.cc_client_secret,
     scope: oauth.scope,
+  };
+}
+
+export function oauth2DeviceCode(site: SiteName = "plain"): DeviceCodeAuth {
+  const cfg = testConfig(site);
+  const oauth = oauth2Config(site);
+  const base = cfg.url.replace(/\/$/, "");
+  return {
+    type: "oauth2_device_code",
+    clientId: oauth.device_client_id,
+    deviceAuthorizationUrl: `${base}/oauth/device_authorization`,
+    tokenUrl: `${base}/oauth/token`,
+    scope: oauth.device_scope,
   };
 }
 

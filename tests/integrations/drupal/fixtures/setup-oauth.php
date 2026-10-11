@@ -9,27 +9,39 @@ function ensure_scope(): Oauth2Scope {
   $existing = $storage->loadByProperties(['name' => 'integration:content']);
   $scope = $existing ? reset($existing) : NULL;
 
+  $grant_types = [
+    'authorization_code' => [
+      'status' => TRUE,
+      'description' => 'Integration test authorization code scope',
+    ],
+    'password' => [
+      'status' => TRUE,
+      'description' => 'Integration test password grant scope',
+    ],
+    'client_credentials' => [
+      'status' => TRUE,
+      'description' => 'Integration test client credentials scope',
+    ],
+    'refresh_token' => [
+      'status' => TRUE,
+      'description' => 'Integration test refresh token scope',
+    ],
+  ];
+  if (\Drupal::moduleHandler()->moduleExists('simple_oauth_device_flow')) {
+    $grant_types['urn:ietf:params:oauth:grant-type:device_code'] = [
+      'status' => TRUE,
+      'description' => 'Integration test device code scope',
+    ];
+  }
+
+  // Device authorization persists the requested scope string as the
+  // oauth2_scope entity id (`integration_content`). Password/CC grants
+  // look the scope up by name (`integration:content`). Keep both stable.
   $values = [
+    'id' => 'integration_content',
     'name' => 'integration:content',
     'description' => 'Integration test content access',
-    'grant_types' => [
-      'authorization_code' => [
-        'status' => TRUE,
-        'description' => 'Integration test authorization code scope',
-      ],
-      'password' => [
-        'status' => TRUE,
-        'description' => 'Integration test password grant scope',
-      ],
-      'client_credentials' => [
-        'status' => TRUE,
-        'description' => 'Integration test client credentials scope',
-      ],
-      'refresh_token' => [
-        'status' => TRUE,
-        'description' => 'Integration test refresh token scope',
-      ],
-    ],
+    'grant_types' => $grant_types,
     'umbrella' => FALSE,
     // ROLE granularity grants OAuth tokens every permission of the
     // integration_editor role (CRUD + access schemata data models),
@@ -121,6 +133,24 @@ $authcode_id = ensure_consumer(
   ],
 );
 
+$device_id = NULL;
+if (\Drupal::moduleHandler()->moduleExists('simple_oauth_device_flow')) {
+  $device_id = ensure_consumer(
+    'tests-device',
+    'Integration Test (device code grant)',
+    // simple_oauth's AuthorizationServerFactory createInstance()s every
+    // consumer grant_types value as a plugin id. `device_code` is only the
+    // unused isClientEligible short name; including it makes the token
+    // endpoint throw "Grant type is not installed."
+    ['urn:ietf:params:oauth:grant-type:device_code'],
+    '',
+    [
+      'confidential' => FALSE,
+      'scopes' => [$scope->id()],
+    ],
+  );
+}
+
 echo 'CONSUMER_JSON:' . json_encode([
   'scope' => $scope->getName(),
   'password_client_id' => $password_id,
@@ -128,4 +158,5 @@ echo 'CONSUMER_JSON:' . json_encode([
   'cc_client_id' => $cc_id,
   'cc_client_secret' => $cc_secret,
   'authcode_client_id' => $authcode_id,
+  'device_client_id' => $device_id,
 ]) . "\n";
