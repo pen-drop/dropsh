@@ -10,7 +10,7 @@ import {
   McpError,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { AuthAdapter, CommandContext } from "dropsh/plugin";
+import { type AuthAdapter, type CommandContext, HttpError } from "dropsh/plugin";
 import type { McpOptions } from "./options.js";
 import { createToolHandlers } from "./tools.js";
 
@@ -31,8 +31,15 @@ export function createMcpServer(
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = await handlers.list();
-    return { tools };
+    try {
+      const tools = await handlers.list();
+      return { tools };
+    } catch (err) {
+      if (err instanceof HttpError) {
+        throw new McpError(ErrorCode.InternalError, err.message, { backendStatus: err.status });
+      }
+      throw err;
+    }
   });
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return (await handlers.call(

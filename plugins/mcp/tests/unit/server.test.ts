@@ -105,6 +105,14 @@ describe("createMcpServer", () => {
     expect(listed.tools.map((t) => t.name)).toEqual(["list_entities", "read"]);
   });
 
+  it("surfaces a backend 401 during tools/list as JSON-RPC data.backendStatus", async () => {
+    const http = recordingHttp(() => ({ status: 401, body: "{}" }));
+    const { client } = await connectClient(options, makeGetContext(http).getContext);
+    await expect(client.listTools()).rejects.toMatchObject({
+      data: { backendStatus: 401 },
+    });
+  });
+
   it("returns list_entities through the SDK client without a protocol error", async () => {
     const http = recordingHttp((req) => {
       const path = req.url.split("?")[0] ?? req.url;
