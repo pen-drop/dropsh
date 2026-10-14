@@ -80,7 +80,6 @@ async function startLiveMcp(site: "jsonapischema", options = OPTIONS): Promise<U
   const plugins = [jsonapiSchemaPlugin()];
   const started = await startMcpHttpServer({
     options,
-    markdown: new Map(),
     getContext: async (auth?: AuthAdapter): Promise<CommandContext> => {
       const adapter = auth ?? { apply: async (req: HttpRequest) => req };
       const http = createHttpClient({

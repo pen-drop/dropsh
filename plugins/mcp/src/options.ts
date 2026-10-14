@@ -14,7 +14,6 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 export interface McpOptions {
   bundles: string[];
   operations: ToolName[];
-  markdownDir?: string;
 }
 
 export interface BundleSelector {
@@ -72,14 +71,13 @@ export function parseMcpOptions(raw: unknown): McpOptions {
     operations.push(item as ToolName);
   }
 
-  const options: McpOptions = { bundles, operations };
   if (input.markdownDir !== undefined) {
-    if (typeof input.markdownDir !== "string" || input.markdownDir.length === 0) {
-      throw new ConfigError("mcpPlugin: markdownDir must be a non-empty string");
-    }
-    options.markdownDir = input.markdownDir;
+    throw new ConfigError(
+      "mcpPlugin: markdownDir is not supported; skills live in the Claude project",
+    );
   }
-  return options;
+
+  return { bundles, operations };
 }
 
 /** Empty allowlists expose no entity tools. */

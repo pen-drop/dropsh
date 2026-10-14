@@ -98,7 +98,6 @@ async function startServer(
   const started = await startMcpHttpServer({
     options: OPTIONS,
     getContext: makeGetContext(http, plugins),
-    markdown: new Map(),
   });
   closers.push(started.close);
   return { port: started.port, url: new URL(`http://127.0.0.1:${started.port}/mcp`) };
@@ -181,7 +180,6 @@ describe("HTTP transport", () => {
     const started = await startMcpHttpServer({
       options: OPTIONS,
       getContext: makeGetContext(http2, [cross]),
-      markdown: new Map(),
     });
     closers.push(started.close);
     await invokeOverHttp(new URL(`http://127.0.0.1:${started.port}/mcp`), "Bearer token-A");
@@ -280,7 +278,6 @@ describe("stdio transport", () => {
         operations: ["list_entities", "search", "read", "create", "update", "describe"],
       }),
       getContext: makeGetContext(http, [articleSchemaPlugin()]),
-      markdown: new Map(),
       stdin,
       stdout,
     });
@@ -349,7 +346,6 @@ describe("stdio transport", () => {
     const running = serveStdio({
       options: OPTIONS,
       getContext: makeGetContext(http),
-      markdown: new Map(),
       stdin,
       stdout,
       stderr,

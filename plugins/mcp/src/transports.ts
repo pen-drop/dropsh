@@ -101,13 +101,11 @@ function allowedOrigin(port: number): string {
 export async function startMcpHttpServer(opts: {
   options: McpOptions;
   getContext: (auth?: AuthAdapter) => Promise<CommandContext>;
-  markdown?: Map<string, string>;
   port?: number;
 }): Promise<{ port: number; close: () => Promise<void> }> {
-  const markdown = opts.markdown ?? new Map<string, string>();
   let actualPort = opts.port ?? 0;
   const server = createServer((req, res) => {
-    void handleHttp(req, res, opts.options, opts.getContext, markdown, actualPort);
+    void handleHttp(req, res, opts.options, opts.getContext, actualPort);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -129,7 +127,6 @@ async function handleHttp(
   res: ServerResponse,
   options: McpOptions,
   getContext: (auth?: AuthAdapter) => Promise<CommandContext>,
-  markdown: Map<string, string>,
   port: number,
 ): Promise<void> {
   try {
@@ -185,7 +182,7 @@ async function handleHttp(
       bindRequestAuth(ctx, auth.kind === "bearer" ? auth.value : undefined);
       return ctx;
     };
-    const mcp = createMcpServer(options, boundGetContext, markdown);
+    const mcp = createMcpServer(options, boundGetContext);
     // Stateless: omit sessionIdGenerator so the SDK disables session management.
     const transport = new StreamableHTTPServerTransport();
     const cleanup = () => {
@@ -203,12 +200,11 @@ async function handleHttp(
 export async function serveStdio(opts: {
   options: McpOptions;
   getContext: (auth?: AuthAdapter) => Promise<CommandContext>;
-  markdown?: Map<string, string>;
   stdin?: Readable;
   stdout?: Writable;
   stderr?: Writable;
 }): Promise<void> {
-  const mcp = createMcpServer(opts.options, opts.getContext, opts.markdown ?? new Map());
+  const mcp = createMcpServer(opts.options, opts.getContext);
   const transport = new StdioServerTransport(opts.stdin, opts.stdout);
   await mcp.connect(transport);
   await new Promise<void>((resolve) => {

@@ -60,7 +60,7 @@ async function connectClient(
   options: ReturnType<typeof parseMcpOptions>,
   getContext: (auth?: AuthAdapter) => Promise<CommandContext>,
 ) {
-  const server = createMcpServer(options, getContext, new Map());
+  const server = createMcpServer(options, getContext);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -76,7 +76,7 @@ describe("createMcpServer", () => {
   it("does not contact the backend when the server is constructed", () => {
     const http = recordingHttp(() => ({ status: 200, body: "{}" }));
     const ctx = makeGetContext(http);
-    createMcpServer(options, ctx.getContext, new Map());
+    createMcpServer(options, ctx.getContext);
     expect(ctx.calls).toBe(0);
     expect(http.send).not.toHaveBeenCalled();
   });
@@ -103,6 +103,7 @@ describe("createMcpServer", () => {
     const { client } = await connectClient(options, ctx.getContext);
     const listed = await client.listTools();
     expect(listed.tools.map((t) => t.name)).toEqual(["list_entities", "read"]);
+    expect(client.getServerCapabilities()).toEqual({ tools: {} });
   });
 
   it("surfaces a backend 401 during tools/list as JSON-RPC data.backendStatus", async () => {

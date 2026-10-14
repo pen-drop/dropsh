@@ -1,9 +1,7 @@
 import type { DropSHPlugin, PluginCommandServices } from "dropsh/plugin";
-import { loadMarkdown } from "./markdown.js";
 import { parseMcpOptions } from "./options.js";
 import { resolveServeMode, serveStdio, startMcpHttpServer } from "./transports.js";
 
-export { loadMarkdown } from "./markdown.js";
 export { parseMcpOptions } from "./options.js";
 export { createMcpServer } from "./server.js";
 export { buildInputSchema, createToolHandlers } from "./tools.js";
@@ -24,19 +22,16 @@ export function mcpPlugin(raw: unknown): DropSHPlugin {
         .option("--http <port>", "serve MCP over HTTP on 127.0.0.1")
         .action(async (flags: { stdio?: boolean; http?: string }) => {
           const mode = resolveServeMode(flags);
-          const markdown = await loadMarkdown(options.markdownDir);
           if (mode.type === "stdio") {
             await serveStdio({
               options,
               getContext: (auth) => services.getContext(auth),
-              markdown,
             });
             return;
           }
           const started = await startMcpHttpServer({
             options,
             getContext: (auth) => services.getContext(auth),
-            markdown,
             port: mode.port,
           });
           await new Promise<void>((resolve) => {

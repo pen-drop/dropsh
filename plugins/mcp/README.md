@@ -2,7 +2,8 @@
 
 Optional [Model Context Protocol](https://modelcontextprotocol.io) server for
 [dropsh](https://github.com/pen-drop/dropsh). It exposes six allowlisted JSON:API
-operations and a startup snapshot of Markdown files over stdio or loopback HTTP.
+operations over stdio or loopback HTTP. Skills stay in the client project; this
+plugin is the Drupal connection only.
 
 The package is not bundled in the `dropsh` tarball. Install it next to dropsh:
 
@@ -22,14 +23,13 @@ Create and update require an authoritative schema plugin such as
   with: {
     bundles: ["gaia_ticket/gaia_ticket", "node/article"],
     operations: ["list_entities", "search", "read", "create", "update", "describe"],
-    markdownDir: "./mcp-skills"
   }
 }
 ```
 
 `bundles` and `operations` are required arrays. Empty arrays expose no entity
-tools. There is no wildcard. `markdownDir` is optional and resolved against the
-process working directory.
+tools. There is no wildcard. `markdownDir` is rejected: skills live in the
+Claude project and call these tools.
 
 ## Transports
 
@@ -81,15 +81,3 @@ Create example:
 `payload` is a JSON:API document. `data.type` must match `entityType--bundle`.
 Update also requires `payload.data.id` to match `id`. Successful results return
 the unabridged JSON:API document, including backend identifiers.
-
-## Markdown prompts and resources
-
-When `markdownDir` is set, dropsh reads only direct, regular, non-symlink `.md`
-files at startup. `create-ticket.md` becomes prompt `create-ticket` and resource
-`dropsh://prompts/create-ticket`. Client strings are never used as filesystem
-paths. A missing or unreadable directory fails startup; omitting `markdownDir`
-yields empty lists.
-
-Files in that directory are published MCP content, not a private per-user
-filesystem. Connector UIs that display prompts or resources are client-dependent:
-protocol exposure does not prove claude.ai (or any other host) will show them.

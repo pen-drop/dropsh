@@ -3,18 +3,26 @@ import { describe, expect, it } from "vitest";
 import { parseMcpOptions } from "../../src/options.js";
 
 describe("parseMcpOptions", () => {
-  it("accepts required arrays and optional markdownDir", () => {
+  it("accepts required arrays", () => {
     expect(
       parseMcpOptions({
         bundles: ["node/article", "gaia_ticket/gaia_ticket"],
         operations: ["list_entities", "read", "create"],
-        markdownDir: "./mcp-skills",
       }),
     ).toEqual({
       bundles: ["node/article", "gaia_ticket/gaia_ticket"],
       operations: ["list_entities", "read", "create"],
-      markdownDir: "./mcp-skills",
     });
+  });
+
+  it("rejects markdownDir", () => {
+    expect(() =>
+      parseMcpOptions({
+        bundles: ["node/article"],
+        operations: ["read"],
+        markdownDir: "./mcp-skills",
+      }),
+    ).toThrow(/markdownDir is not supported/);
   });
 
   it("allows empty arrays", () => {
