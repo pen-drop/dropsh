@@ -1,0 +1,39 @@
+{
+  "name": "@dropsh/plugin-mcp",
+  "version": "0.7.5",
+  "type": "module",
+  "main": "./dist/plugins/mcp/src/index.js",
+  "types": "./dist/plugins/mcp/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/plugins/mcp/src/index.d.ts",
+      "default": "./dist/plugins/mcp/src/index.js"
+    }
+  },
+  "files": [
+    "dist/plugins/mcp/src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "dropsh": "*",
+    "zod": "^3.25 || ^4.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1"
+  },
+  "devDependencies": {
+    "dropsh": "workspace:*",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8",
+    "zod": "^3.25.0"
+  }
+}

@@ -19,6 +19,8 @@ install_site "$SITE_DIR" "$DB_NAME" "$URI" "standard" "dropsh-plain"
 enable_modules "$URI" \
   basic_auth jsonapi jsonapi_resources \
   simple_oauth simple_oauth_password_grant consumers
+enable_modules "$URI" \
+  simple_oauth_21 simple_oauth_device_flow
 
 restore_services_yml "$URI" "$SITE_DIR"
 make_jsonapi_writable "$URI"

@@ -5,14 +5,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { basicAuthPlugin } from "../../src/core/auth/basic.js";
+import * as sessionStore from "../../src/core/auth/session-store.js";
 import { readProfile, writeProfile, writeSession } from "../../src/core/auth/session-store.js";
+import type { AuthAdapter } from "../../src/core/auth/types.js";
+import { resolveConfigSource, resolveConnectionsDir } from "../../src/core/connections.js";
+import * as httpMod from "../../src/core/http.js";
 import type { JsonApiClient } from "../../src/core/jsonapi/client.js";
 import type { DropSHPlugin, DropSHPlugin as Plugin } from "../../src/core/plugin.js";
 import { toOperationVariant } from "../../src/core/schema/to-jsonschema.js";
-import {
-  resolveConfigSource,
-  resolveConnectionsDir,
-} from "../../src/core/connections.js";
 import {
   authStatus,
   buildProgram,
@@ -183,6 +183,62 @@ describe("buildProgram", () => {
     const names = p.commands.map((c) => c.name());
     expect(names).toContain("test-plugin-cmd");
     expect(registeredCommands).toEqual(["test-plugin-cmd"]);
+  });
+
+  it("passes PluginCommandServices so getContext(override) skips resolveAuth", async () => {
+    const anonymous: AuthAdapter = { apply: async (req) => req };
+    const observed: AuthAdapter[] = [];
+    const factory = vi.fn(async (auth?: AuthAdapter) => {
+      return {
+        client: fakeClient(),
+        plugins: [],
+        auth: auth ?? { apply: async (req) => req },
+        baseUrl: "https://example.com",
+        jsonapiPrefix: "/jsonapi",
+        cwd: ".",
+        http: { send: async () => ({ status: 200, headers: {}, body: "{}" }) },
+      } as CommandContext;
+    });
+    const plugin: DropSHPlugin = {
+      id: "context-probe",
+      requiredModules: [],
+      registerCommands(program, services) {
+        program.command("probe").action(async () => {
+          observed.push((await services.getContext(anonymous)).auth);
+        });
+      },
+    };
+    const p = buildProgram({ plugins: [plugin], contextFactory: factory, stdout: () => {} });
+    await p.parseAsync(["node", "dropsh", "probe"]);
+    expect(observed).toEqual([anonymous]);
+    expect(factory).toHaveBeenCalledWith(anonymous);
+    expect(factory).not.toHaveBeenCalledWith();
+  });
+
+  it("auth override skips session reads, keeps the connection, and disables write retries", async () => {
+    const anonymous: AuthAdapter = { apply: async (req) => req };
+    const readSpy = vi.spyOn(sessionStore, "readProfiles");
+    const httpSpy = vi.spyOn(httpMod, "createHttpClient");
+    let ctx: CommandContext | undefined;
+    const plugin: DropSHPlugin = {
+      id: "context-probe",
+      requiredModules: [],
+      registerCommands(program, services) {
+        program.command("probe").action(async () => {
+          ctx = await services.getContext(anonymous);
+        });
+      },
+    };
+    const config = fileURLToPath(new URL("./fixtures/config/valid.js", import.meta.url));
+    const p = buildProgram({ plugins: [plugin], stdout: () => {} });
+    await p.parseAsync(["node", "dropsh", "--config", config, "probe"]);
+    expect(ctx?.auth).toBe(anonymous);
+    expect(ctx?.baseUrl).toBe("https://example.com");
+    expect(ctx?.jsonapiPrefix).toBe("/jsonapi");
+    expect(readSpy).not.toHaveBeenCalled();
+    expect(httpSpy).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 0 }));
+    readSpy.mockRestore();
+    httpSpy.mockRestore();
   });
 
   it("resolveAuth builds an adapter from the stored session", async () => {

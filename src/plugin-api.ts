@@ -1,3 +1,12 @@
+export type { CreateArgs, CreateDeps } from "./commands/create.js";
+export { runCreate } from "./commands/create.js";
+export type { ReadArgs, ReadDeps } from "./commands/read.js";
+export { runRead } from "./commands/read.js";
+export { applyOperationSchemaPlugins } from "./commands/schema.js";
+export type { SearchArgs, SearchDeps } from "./commands/search.js";
+export { runSearch } from "./commands/search.js";
+export type { UpdateArgs, UpdateDeps } from "./commands/update.js";
+export { runUpdate } from "./commands/update.js";
 export type { BasicAuthConfig } from "./core/auth/basic.js";
 export { basicAuthPlugin, basicAuthProvider } from "./core/auth/basic.js";
 export type {
@@ -16,6 +25,7 @@ export type {
   RenderServices,
 } from "./core/cli/render.js";
 export { indexIncluded, isInteractive } from "./core/cli/render.js";
+export type { CommandContext, PluginCommandServices } from "./core/command-context.js";
 export type { Config, SiteConfig } from "./core/config.js";
 export { loadConfig } from "./core/config.js";
 export type {
@@ -60,5 +70,9 @@ export type {
   SchemaOperation,
 } from "./core/plugin.js";
 export { composePlugins } from "./core/plugin.js";
-export { AuthError, ConfigError, HttpError, PluginError } from "./errors.js";
-export type { CommandContext } from "./index.js";
+export { fetchCatalog } from "./core/schema/catalog.js";
+export { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
+export type { Operation } from "./core/schema/to-jsonschema.js";
+export { toOperationVariant } from "./core/schema/to-jsonschema.js";
+export { validatePayload } from "./core/schema/validate.js";
+export { AuthError, ConfigError, HttpError, PluginError, ValidationError } from "./errors.js";

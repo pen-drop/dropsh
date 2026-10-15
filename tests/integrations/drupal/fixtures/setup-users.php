@@ -13,6 +13,7 @@ if (!$role) {
 
 $permissions = [
   'access content',
+  'view own unpublished content',
   'create article_test content',
   'edit any article_test content',
   'delete any article_test content',

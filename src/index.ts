@@ -20,12 +20,7 @@ import {
   siteCacheRoot,
 } from "./commands/schema.js";
 import { runSearch } from "./commands/search.js";
-import {
-  assertUpdateTarget,
-  runUpdate,
-  type UpdateArgs,
-  type UpdateDeps,
-} from "./commands/update.js";
+import { assertUpdateTarget, runUpdate, type UpdateDeps } from "./commands/update.js";
 import { runUploadFile } from "./commands/upload-file.js";
 import {
   collectProviders,
@@ -39,6 +34,7 @@ import { createFileStore } from "./core/cache/file-store.js";
 import { createOutput } from "./core/cli/output.js";
 import { createPrompt } from "./core/cli/prompt.js";
 import type { RenderContext } from "./core/cli/render.js";
+import type { CommandContext, PluginCommandServices } from "./core/command-context.js";
 import { loadConfig } from "./core/config.js";
 import {
   type ConfigSource,
@@ -48,7 +44,7 @@ import {
 } from "./core/connections.js";
 import type { HttpClient } from "./core/http.js";
 import { createHttpClient } from "./core/http.js";
-import { createJsonApiClient, type JsonApiClient } from "./core/jsonapi/client.js";
+import { createJsonApiClient } from "./core/jsonapi/client.js";
 import { buildPayloadFromParameters } from "./core/params/from-parameters.js";
 import { describeFields, FIELD_PARAMETER_HELP, renderFieldsTable } from "./core/params/help.js";
 import { parseFieldArgs } from "./core/params/parse-args.js";
@@ -60,15 +56,7 @@ import { toOperationVariant } from "./core/schema/to-jsonschema.js";
 import { validatePayload } from "./core/schema/validate.js";
 import { AuthError, ConfigError, exitCodeFor, ValidationError } from "./errors.js";
 
-export interface CommandContext {
-  client: JsonApiClient;
-  http: HttpClient;
-  auth: AuthAdapter;
-  baseUrl: string;
-  jsonapiPrefix: string;
-  cwd: string;
-  plugins: DropSHPlugin[];
-}
+export type { CommandContext, PluginCommandServices } from "./core/command-context.js";
 
 /**
  * The payload-carrying half of `CreateArgs`/`UpdateArgs` — everything both write
@@ -78,7 +66,7 @@ type PayloadArgs = Pick<CreateArgs, "payload" | "dryRun" | "noValidate">;
 type WriteDeps = CreateDeps & UpdateDeps;
 
 export interface ProgramOptions {
-  contextFactory?: () => Promise<CommandContext>;
+  contextFactory?: (auth?: AuthAdapter) => Promise<CommandContext>;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
   setExitCode?: (code: number) => void;
@@ -195,16 +183,25 @@ export async function authStatus(deps: AuthStatusDeps): Promise<AuthStatusInfo> 
   return provider.status(rec.session);
 }
 
-async function defaultContext(configPath: string, profile?: string): Promise<CommandContext> {
+async function defaultContext(
+  configPath: string,
+  profile?: string,
+  authOverride?: AuthAdapter,
+): Promise<CommandContext> {
   const cfg = await loadConfig(configPath);
-  const http = createHttpClient({ timeoutMs: cfg.defaults.timeout_ms });
-  const auth = await resolveAuth({
-    baseUrl: cfg.site.base_url,
-    plugins: cfg.plugins,
-    http,
-    now: Date.now,
-    ...(profile !== undefined ? { profile } : {}),
+  const http = createHttpClient({
+    timeoutMs: cfg.defaults.timeout_ms,
+    ...(authOverride !== undefined ? { maxRetries: 0 } : {}),
   });
+  const auth =
+    authOverride ??
+    (await resolveAuth({
+      baseUrl: cfg.site.base_url,
+      plugins: cfg.plugins,
+      http,
+      now: Date.now,
+      ...(profile !== undefined ? { profile } : {}),
+    }));
   const pluginContext: PluginContext = {
     http,
     auth,
@@ -280,11 +277,18 @@ export function buildProgram(opts: ProgramOptions = {}): Command {
 
   const contextFactory =
     opts.contextFactory ??
-    (() => {
+    ((auth?: AuthAdapter) => {
       const profile =
         (program.opts().authProfile as string | undefined) ?? process.env.DROPSH_AUTH_PROFILE;
-      return defaultContext(currentConfigSource().path, profile);
+      return auth !== undefined
+        ? defaultContext(currentConfigSource().path, profile, auth)
+        : defaultContext(currentConfigSource().path, profile);
     });
+  const commandServices: PluginCommandServices = {
+    getContext: (auth?: AuthAdapter) =>
+      auth !== undefined ? contextFactory(auth) : contextFactory(),
+    stderr,
+  };
   const renderers = (opts.plugins ?? []).flatMap((p) => p.renderers ?? []);
   const output = createOutput({
     stdout,
@@ -787,7 +791,7 @@ Example:
 
   if (opts.plugins) {
     for (const plugin of opts.plugins) {
-      plugin.registerCommands?.(program);
+      plugin.registerCommands?.(program, commandServices);
     }
   }
 

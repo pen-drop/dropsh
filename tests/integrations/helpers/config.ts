@@ -49,10 +49,15 @@ const DDEV_PROJECT = resolveDdevProject();
 
 export interface OAuth2Config {
   scope: string;
+  /** simple_oauth_device_flow stores the device-authorization `scope` param as
+   * oauth2_scope entity id. The scope name `integration:content` machine-izes
+   * to `integration_content`; load(name) is null. */
+  device_scope: string;
   password_client_id: string;
   password_client_secret: string;
   cc_client_id: string;
   cc_client_secret: string;
+  device_client_id: string;
   user: string;
   pass: string;
 }
@@ -72,10 +77,12 @@ const TESTER = { user: "tester", pass: "tester-pw" };
 
 const OAUTH2 = {
   scope: "integration:content",
+  device_scope: "integration_content",
   password_client_id: "tests-password",
   password_client_secret: "tests-password-secret",
   cc_client_id: "tests-cc",
   cc_client_secret: "tests-cc-secret",
+  device_client_id: "tests-device",
   user: TESTER.user,
   pass: TESTER.pass,
 };
