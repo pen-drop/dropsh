@@ -18,6 +18,6 @@
 
 $ddev_project = getenv('DDEV_SITENAME') ?: 'dropsh-test';
 
-foreach (['schemata', 'jsonapischema', 'canvas', 'db'] as $subsite) {
+foreach (['schemata', 'jsonapischema', 'canvas', 'db', 'tools'] as $subsite) {
   $sites["$subsite.$ddev_project.ddev.site"] = $subsite;
 }

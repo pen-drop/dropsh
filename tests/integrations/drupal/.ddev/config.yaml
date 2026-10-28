@@ -11,3 +11,4 @@ additional_hostnames:
   - jsonapischema.dropsh-test
   - canvas.dropsh-test
   - db.dropsh-test
+  - tools.dropsh-test

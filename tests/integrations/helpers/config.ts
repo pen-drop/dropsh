@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type SiteName = "plain" | "schemata" | "jsonapischema" | "canvas" | "db";
+export type SiteName = "plain" | "schemata" | "jsonapischema" | "canvas" | "db" | "tools";
 
 const DDEV_DIR = join(dirname(fileURLToPath(import.meta.url)), "../drupal/.ddev");
 
@@ -124,7 +124,18 @@ const SITES: Record<SiteName, TestConfig> = {
     basic: TESTER,
     defaultAuth: "basic",
   },
+  tools: {
+    url: siteUrl("tools", DDEV_PROJECT),
+    basic: TESTER,
+    oauth2: OAUTH2,
+    // mcp_server's /mcp route accepts cookie and (via mcp_server_oauth) oauth2
+    // auth only, so tool calls default to OAuth Bearer.
+    defaultAuth: "oauth2_password",
+  },
 };
+
+/** MCP name of the Tool Belt tool the "tools" site exposes (fixtures/setup-tools.php). */
+export const TOOLS_FIXTURE_TOOL = "tool_api__entity_create";
 
 /** Coordinates for an integration subsite. Defaults to "plain". */
 export function testConfig(site: SiteName = "plain"): TestConfig {
