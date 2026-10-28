@@ -75,4 +75,12 @@ export { fetchJsonSchema } from "./core/schema/jsonschema-source.js";
 export type { Operation } from "./core/schema/to-jsonschema.js";
 export { toOperationVariant } from "./core/schema/to-jsonschema.js";
 export { validatePayload } from "./core/schema/validate.js";
-export { AuthError, ConfigError, HttpError, PluginError, ValidationError } from "./errors.js";
+export {
+  AuthError,
+  CliError,
+  ConfigError,
+  exitCodeFor,
+  HttpError,
+  PluginError,
+  ValidationError,
+} from "./errors.js";
