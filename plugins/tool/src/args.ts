@@ -1,6 +1,8 @@
 import { ValidationError } from "dropsh/plugin";
 
-function coerce(type: unknown, key: string, value: string): unknown {
+function coerce(declared: unknown, key: string, value: string): unknown {
+  // Tool API declares optional inputs as e.g. ["object", "null"]; coerce by the non-null type.
+  const type = Array.isArray(declared) ? declared.find((t) => t !== "null") : declared;
   if (type === "integer" || type === "number") {
     const n = Number(value);
     // Keep the string when it is not a number so schema validation names the error.

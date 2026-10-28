@@ -100,6 +100,12 @@ function mapError(err: unknown, url: string): unknown {
     return new HttpError(err.code ?? 0, err.message);
   }
   if (err instanceof McpError) return new HttpError(0, err.message, { code: err.code });
+  // Network failures (fetch's TypeError) exit like core HTTP errors, not like a tool error.
+  if (err instanceof TypeError) {
+    return new HttpError(0, `cannot reach MCP endpoint ${url}: ${err.message}`, {
+      cause: String(err.cause ?? err),
+    });
+  }
   return err;
 }
 

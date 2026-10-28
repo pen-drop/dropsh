@@ -137,6 +137,16 @@ describe("createToolClient call", () => {
     await client.close();
   });
 
+  it("maps an unreachable endpoint to an HttpError naming the URL", async () => {
+    const dead = await startTestMcpServer(TOOLS);
+    await dead.close();
+    const client = createToolClient({ auth, baseUrl: dead.baseUrl });
+    const err = await client.list().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpError);
+    expect((err as HttpError).message).toContain(`cannot reach MCP endpoint ${dead.baseUrl}/mcp`);
+    await client.close();
+  });
+
   it("can connect again after a failed initialize", async () => {
     let fail = true;
     const client = await clientFor({ statusFor: () => (fail ? 503 : undefined) });

@@ -43,6 +43,22 @@ describe("integration: dropsh tool", () => {
     expect(await searchByTitle(title)).toHaveLength(1);
   });
 
+  it("sets a nullable object input via --param", async () => {
+    const title = `it-tool-param-${crypto.randomUUID()}`;
+    const res = await runCli({
+      site: "tools",
+      args: [
+        "tool",
+        TOOLS_FIXTURE_TOOL,
+        "--param=entity_type_id=node",
+        "--param=bundle=article_test",
+        `--param=base_fields=${JSON.stringify({ title })}`,
+      ],
+    });
+    expect(res.code, res.stderr).toBe(0);
+    expect(await searchByTitle(title)).toHaveLength(1);
+  });
+
   it("rejects arguments that violate the input schema before sending (AC-2)", async () => {
     const title = `it-tool-invalid-${crypto.randomUUID()}`;
     const res = await runCli({

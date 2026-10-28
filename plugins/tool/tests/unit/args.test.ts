@@ -37,6 +37,16 @@ describe("buildArguments", () => {
     expect(buildArguments(SCHEMA, undefined, ["extra=1"])).toEqual({ extra: "1" });
   });
 
+  it("coerces by the non-null entry of a nullable type", () => {
+    const schema = {
+      properties: { o: { type: ["object", "null"] }, n: { type: ["integer", "null"] } },
+    };
+    expect(buildArguments(schema, undefined, ['o={"title":"p"}', "n=2"])).toEqual({
+      o: { title: "p" },
+      n: 2,
+    });
+  });
+
   it("rejects a --param without '='", () => {
     expect(() => buildArguments(SCHEMA, undefined, ["a"])).toThrow(ValidationError);
   });
