@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Orchestrate the dropsh integration test fixture.
 #
-# Starts a single DDEV project (dropsh-test) that hosts four Drupal sites
+# Starts a single DDEV project (dropsh-test) that hosts several Drupal sites
 # via the multisite feature; each site is an isolated integration scenario:
 #
 #   plain         — https://dropsh-test.ddev.site               (jsonapi + simple_oauth)
@@ -9,6 +9,7 @@
 #   jsonapischema — https://jsonapischema.dropsh-test.ddev.site (jsonapi + jsonapi_schema)
 #   canvas        — https://canvas.dropsh-test.ddev.site        (jsonapi + canvas)
 #   db            — https://db.dropsh-test.ddev.site            (jsonapi + display_builder)
+#   tools         — https://tools.dropsh-test.ddev.site         (tool + mcp_server + mcp_server_oauth)
 #
 # Each site has its own database; each scenario is provisioned by its own
 # bin/init-<name>.sh script. Coordinates (URLs, credentials) are static and
@@ -34,6 +35,7 @@ bash "${BIN_DIR}/init-schemata.sh"
 bash "${BIN_DIR}/init-jsonapi-schema.sh"
 bash "${BIN_DIR}/init-canvas.sh"
 bash "${BIN_DIR}/init-db.sh"
+bash "${BIN_DIR}/init-tools.sh"
 
 cat <<EOF
 
@@ -43,6 +45,7 @@ Multisite fixture ready:
   jsonapischema https://jsonapischema.dropsh-test.ddev.site
   canvas        https://canvas.dropsh-test.ddev.site
   db            https://db.dropsh-test.ddev.site
+  tools         https://tools.dropsh-test.ddev.site
 
 Run: pnpm run test:integration
 EOF

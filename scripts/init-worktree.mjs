@@ -41,6 +41,7 @@ const localYaml = [
   `  - jsonapischema.${name}`,
   `  - canvas.${name}`,
   `  - db.${name}`,
+  `  - tools.${name}`,
   "",
 ].join("\n");
 writeFileSync(join(ddevDir, "config.local.yaml"), localYaml);

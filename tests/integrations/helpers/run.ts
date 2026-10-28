@@ -61,6 +61,8 @@ export interface RunOptions {
    * has already created a fresh home for this auth and runCli reuses it.
    */
   home?: string;
+  /** Plugins loaded in addition to the site's own (e.g. "tool" against "plain"). */
+  extraPlugins?: string[];
 }
 
 const PLUGIN_BY_SITE: Record<SiteName, string | null> = {
@@ -69,6 +71,7 @@ const PLUGIN_BY_SITE: Record<SiteName, string | null> = {
   jsonapischema: "jsonapi-schema",
   canvas: "canvas",
   db: "display-builder",
+  tools: "tool",
 };
 
 function pluginImport(plugin: string): { importLine: string; instantiation: string } {
@@ -97,6 +100,12 @@ function pluginImport(plugin: string): { importLine: string; instantiation: stri
       instantiation: "displayBuilderPlugin()",
     };
   }
+  if (plugin === "tool") {
+    return {
+      importLine: `import { toolPlugin } from ${JSON.stringify(sourcePath)};`,
+      instantiation: "toolPlugin()",
+    };
+  }
   if (plugin === "mcp") {
     return {
       importLine: `import { mcpPlugin } from ${JSON.stringify(sourcePath)};`,
@@ -115,13 +124,18 @@ function pluginImport(plugin: string): { importLine: string; instantiation: stri
  * client_credentials grants; the user *password* (password grant) stays a
  * runtime credential and is never written here.
  */
-function renderConfig(url: string, auth: Auth, site: SiteName): string {
+function renderConfig(
+  url: string,
+  auth: Auth,
+  site: SiteName,
+  extraPlugins: string[] = [],
+): string {
   const oauthSrc = pathToFileURL(resolve("plugins/oauth2/src/index.js")).href;
   const basicSrc = pathToFileURL(resolve("src/core/auth/basic.js")).href;
   const tokenUrl = `${url.replace(/\/$/, "")}/oauth/token`;
 
   const sitePlugin = PLUGIN_BY_SITE[site];
-  const pluginExtras = sitePlugin ? pluginImport(sitePlugin) : null;
+  const pluginExtras = [...(sitePlugin ? [sitePlugin] : []), ...extraPlugins].map(pluginImport);
 
   const importLines: string[] = [];
   const pluginLines: string[] = [];
@@ -165,9 +179,9 @@ function renderConfig(url: string, auth: Auth, site: SiteName): string {
     }
   }
 
-  if (pluginExtras) {
-    importLines.push(pluginExtras.importLine);
-    pluginLines.push(`    ${pluginExtras.instantiation},`);
+  for (const extra of pluginExtras) {
+    importLines.push(extra.importLine);
+    pluginLines.push(`    ${extra.instantiation},`);
   }
 
   return [
@@ -285,7 +299,7 @@ export async function runCli(opts: RunOptions): Promise<RunResult> {
 
   const dir = mkdtempSync(join(tmpdir(), "dropsh-it-"));
   const cfgPath = join(dir, "dropsh.config.mjs");
-  writeFileSync(cfgPath, renderConfig(url, auth, site), "utf8");
+  writeFileSync(cfgPath, renderConfig(url, auth, site, opts.extraPlugins), "utf8");
 
   return await new Promise<RunResult>((resolve) => {
     const child = spawn("node", ["--import", "tsx/esm", "bin/dropsh-src", ...opts.args], {

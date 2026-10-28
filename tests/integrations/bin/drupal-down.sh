@@ -8,4 +8,4 @@ DRUPAL_DIR="$ROOT/tests/integrations/drupal"
 cd "$DRUPAL_DIR"
 ddev delete -Oy || true
 rm -f .test-config.json .ddev/config.local.yaml .plain-oauth.json
-rm -rf web/sites/sites.php web/sites/schemata web/sites/canvas web/sites/db
+rm -rf web/sites/sites.php web/sites/schemata web/sites/canvas web/sites/db web/sites/tools
