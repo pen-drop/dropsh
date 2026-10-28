@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "noEmit": false
+    "noEmit": false,
+    "paths": {
+      "dropsh/plugin": ["./src/plugin-api.ts"],
+      "dropsh": ["./src/index.ts"]
+    }
   },
   "include": ["src", "tests"]
 }

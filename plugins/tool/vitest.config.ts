@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "dropsh/plugin": resolve(dropshRoot, "src/plugin-api.ts"),
+      dropsh: resolve(dropshRoot, "src/index.ts"),
     },
   },
   test: {

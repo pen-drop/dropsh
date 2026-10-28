@@ -1,3 +1,4 @@
+export { readDataArg } from "./commands/_data.js";
 export type { CreateArgs, CreateDeps } from "./commands/create.js";
 export { runCreate } from "./commands/create.js";
 export type { ReadArgs, ReadDeps } from "./commands/read.js";
